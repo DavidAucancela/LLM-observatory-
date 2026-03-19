@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(grep:*)",
+      "Bash(npx vite:*)",
+      "Bash(node:*)",
+      "Bash(echo exit: $?:*)",
+      "Bash(rm:*)",
+      "Bash(psql:*)",
+      "Bash(PGPASSWORD=admin psql:*)",
+      "Bash(pkill:*)",
+      "Bash(PGPASSWORD=admin node:*)",
+      "Bash(npx kill-port 3001)",
+      "Bash(netstat -ano)",
+      "Bash(xargs taskkill /PID /F)",
+      "Bash(npx kill-port:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd:*)",
+      "Bash(echo DATABASE_URL from env: $DATABASE_URL:*)",
+      "Bash(netstat:*)"
+    ]
+  }
+}
