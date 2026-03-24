@@ -9,9 +9,40 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar { width: 6px; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-.dark ::-webkit-scrollbar-thumb { background: #4b5563; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+
+/* ── Sidebar gradient ── */
+.sidebar-gradient {
+  background: linear-gradient(180deg, #0f172a 0%, #0c1524 100%);
+}
+
+/* ── Metric gradient strips ── */
+.gradient-blue   { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.gradient-green  { background: linear-gradient(135deg, #10b981, #059669); }
+.gradient-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.gradient-orange { background: linear-gradient(135deg, #f97316, #f59e0b); }
+.gradient-red    { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn 0.25s ease-out; }
+
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+.animate-pulse-bar { animation: pulse-bar 1.4s ease-in-out infinite; }
+
+/* ── Chart grid lines ── */
+.dark .recharts-cartesian-grid line { stroke: #1e293b; }
+.recharts-cartesian-grid line      { stroke: #f1f5f9; }
