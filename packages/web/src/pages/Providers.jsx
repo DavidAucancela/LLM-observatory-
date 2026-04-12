@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Wallet } from 'lucide-react';
 import ProviderBadge from '../components/ProviderBadge';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { useApi } from '../hooks/useApi';
 
 function formatDate(str) {
   return new Date(str).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -27,10 +26,11 @@ export default function Providers() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ provider: 'anthropic', amount_usd: '', note: '' });
   const [submitting, setSubmitting] = useState(false);
+  const { apiFetch } = useApi();
 
   const fetchData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/balances?range=all`);
+      const res = await apiFetch(`/api/balances?range=all`);
       setData(await res.json());
     } catch (err) { console.error(err); }
   };
@@ -41,7 +41,7 @@ export default function Providers() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await fetch(`${API_URL}/api/balances`, {
+      await apiFetch(`/api/balances`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, amount_usd: parseFloat(form.amount_usd) }),
@@ -54,7 +54,7 @@ export default function Providers() {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`${API_URL}/api/balances/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/balances/${id}`, { method: 'DELETE' });
     fetchData();
   };
 

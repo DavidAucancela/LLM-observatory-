@@ -20,7 +20,22 @@
       "Bash(taskkill:*)",
       "Bash(cmd:*)",
       "Bash(echo DATABASE_URL from env: $DATABASE_URL:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Read(//Users/david/.orbstack/**)",
+      "Read(//Users/david/.docker/**)",
+      "Bash(awk '{print $11}')",
+      "Bash(DOCKER_HOST=unix:///var/run/docker.sock docker ps:*)",
+      "Bash(python3 -c \"import sys,json; print\\(json.dumps\\(json.load\\(sys.stdin\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK' if 'total_cost' in d else json.dumps\\(d\\)\\)\")",
+      "Bash(xargs kill:*)",
+      "Bash(kill -9 49722)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose stop:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose exec:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker exec llm-observatory--api-1:*)"
     ]
   }
 }

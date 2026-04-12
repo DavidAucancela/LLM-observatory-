@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, AlertTriangle, DollarSign } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { useApi } from '../hooks/useApi';
 
 const PERIOD_LABELS = { daily: 'Diario', weekly: 'Semanal', monthly: 'Mensual' };
 const PERIOD_COLORS = { daily: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20', weekly: 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20', monthly: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' };
@@ -11,10 +10,11 @@ export default function Budgets() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', limit_usd: '', period: 'monthly' });
   const [submitting, setSubmitting] = useState(false);
+  const { apiFetch } = useApi();
 
   const fetchBudgets = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/budgets`);
+      const res = await apiFetch(`/api/budgets`);
       const data = await res.json();
       setBudgets(data.data || []);
     } catch (err) { console.error(err); }
@@ -26,9 +26,8 @@ export default function Budgets() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await fetch(`${API_URL}/api/budgets`, {
+      await apiFetch(`/api/budgets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, limit_usd: parseFloat(form.limit_usd) }),
       });
       setForm({ name: '', limit_usd: '', period: 'monthly' });
@@ -39,7 +38,7 @@ export default function Budgets() {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`${API_URL}/api/budgets/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' });
     fetchBudgets();
   };
 

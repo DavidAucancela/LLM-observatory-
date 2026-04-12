@@ -11,8 +11,7 @@ import {
 import KPICard from '../components/KPICard';
 import ProviderBadge from '../components/ProviderBadge';
 import { useSocket } from '../hooks/useSocket';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { useApi } from '../hooks/useApi';
 
 function fmt(n) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -73,11 +72,18 @@ function SectionTitle({ children, subtitle, icon: Icon }) {
   );
 }
 
+function calcDelta(current, previous) {
+  const c = parseFloat(current);
+  const p = parseFloat(previous);
+  if (!p || p === 0) return null;
+  return ((c - p) / p) * 100;
+}
+
 export default function Dashboard() {
-  const [range, setRange] = useState('7d');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [useCustom, setUseCustom] = useState(false);
+  const [range, setRange] = useState(() => localStorage.getItem('dash-range') || '7d');
+  const [customStart, setCustomStart] = useState(() => localStorage.getItem('dash-custom-start') || '');
+  const [customEnd, setCustomEnd]     = useState(() => localStorage.getItem('dash-custom-end') || '');
+  const [useCustom, setUseCustom]     = useState(() => localStorage.getItem('dash-use-custom') === 'true');
   const [summary, setSummary] = useState(null);
   const [balances, setBalances] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +92,7 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
   const { connected, on } = useSocket();
+  const { apiFetch } = useApi();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -94,9 +101,9 @@ export default function Dashboard() {
         ? `start=${customStart}T00:00:00&end=${customEnd}T23:59:59`
         : `range=${range}`;
       const [sumRes, balRes, projRes] = await Promise.all([
-        fetch(`${API_URL}/api/metrics/summary?${sumParams}`),
-        fetch(`${API_URL}/api/balances?range=all`),
-        fetch(`${API_URL}/api/metrics/projection`)
+        apiFetch(`/api/metrics/summary?${sumParams}`),
+        apiFetch(`/api/balances?range=all`),
+        apiFetch(`/api/metrics/projection`)
       ]);
       setSummary(await sumRes.json());
       setBalances(await balRes.json());
@@ -117,7 +124,7 @@ export default function Dashboard() {
     setSyncing(true);
     setSyncMsg(null);
     try {
-      const res = await fetch(`${API_URL}/api/sync/anthropic`, { method: 'POST' });
+      const res = await apiFetch(`/api/sync/anthropic`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setSyncMsg({ ok: true, text: 'Sync iniciado — los datos se actualizarán en segundos' });
@@ -132,7 +139,13 @@ export default function Dashboard() {
     }
   };
 
-  const s = summary?.summary;
+  const s    = summary?.summary;
+  const prev = summary?.prev_summary;
+
+  const deltaRequests = calcDelta(s?.total_requests, prev?.total_requests);
+  const deltaTokens   = calcDelta(s?.total_tokens,   prev?.total_tokens);
+  const deltaCost     = calcDelta(s?.total_cost_usd,  prev?.total_cost_usd);
+  const deltaLatency  = calcDelta(s?.avg_latency_ms,  prev?.avg_latency_ms);
 
   const timeSeriesRaw = summary?.time_series || [];
   const hourMap = {};
@@ -177,12 +190,14 @@ export default function Dashboard() {
           {/* Date picker */}
           {useCustom ? (
             <div className="flex items-center gap-2">
-              <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              <input type="date" value={customStart}
+                onChange={e => { setCustomStart(e.target.value); localStorage.setItem('dash-custom-start', e.target.value); }}
                 className="text-sm border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
               <span className="text-slate-300 dark:text-slate-600">→</span>
-              <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              <input type="date" value={customEnd}
+                onChange={e => { setCustomEnd(e.target.value); localStorage.setItem('dash-custom-end', e.target.value); }}
                 className="text-sm border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-              <button onClick={() => setUseCustom(false)}
+              <button onClick={() => { setUseCustom(false); localStorage.setItem('dash-use-custom', 'false'); }}
                 className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                 ✕
               </button>
@@ -191,7 +206,15 @@ export default function Dashboard() {
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <select value={range}
-                onChange={e => { if (e.target.value === 'custom') setUseCustom(true); else setRange(e.target.value); }}
+                onChange={e => {
+                  if (e.target.value === 'custom') {
+                    setUseCustom(true);
+                    localStorage.setItem('dash-use-custom', 'true');
+                  } else {
+                    setRange(e.target.value);
+                    localStorage.setItem('dash-range', e.target.value);
+                  }
+                }}
                 className="text-sm border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
                 <option value="24h">Últimas 24h</option>
                 <option value="7d">Últimos 7 días</option>
@@ -321,23 +344,29 @@ export default function Dashboard() {
           value={loading ? '–' : fmt(s?.total_requests || 0)}
           subtitle={`${s?.error_count || 0} errores`}
           icon={Activity} color="blue"
+          delta={loading ? null : deltaRequests}
         />
         <KPICard
           title="Total Tokens"
           value={loading ? '–' : fmt(s?.total_tokens || 0)}
           subtitle={`In: ${fmt(s?.total_input_tokens || 0)} / Out: ${fmt(s?.total_output_tokens || 0)}`}
           icon={Zap} color="purple"
+          delta={loading ? null : deltaTokens}
         />
         <KPICard
           title="Costo Total"
           value={loading ? '–' : `$${parseFloat(s?.total_cost_usd || 0).toFixed(3)}`}
           subtitle={`Promedio: $${parseFloat(s?.avg_cost_usd || 0).toFixed(5)}/req`}
           icon={DollarSign} color="green"
+          delta={loading ? null : deltaCost}
+          deltaInverse
         />
         <KPICard
           title="Latencia Promedio"
           value={loading ? '–' : `${Math.round(s?.avg_latency_ms || 0)}ms`}
           icon={Clock} color="orange"
+          delta={loading ? null : deltaLatency}
+          deltaInverse
         />
       </div>
 

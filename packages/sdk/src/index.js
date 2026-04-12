@@ -1,25 +1,51 @@
 const Anthropic = require('@anthropic-ai/sdk');
 
-// Cost per million tokens (USD) - as of 2025
-const MODEL_PRICING = {
-  'claude-opus-4-6': { input: 15.0, output: 75.0 },
-  'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
-  'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
-  'claude-3-opus-20240229': { input: 15.0, output: 75.0 },
-  'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
-  'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
-  'default': { input: 3.0, output: 15.0 }
+// Cost per million tokens (USD) — April 2026
+const ANTHROPIC_PRICING = {
+  'claude-opus-4-6':             { input: 15.00, output: 75.00 },
+  'claude-sonnet-4-6':           { input:  3.00, output: 15.00 },
+  'claude-haiku-4-5-20251001':   { input:  0.80, output:  4.00 },
+  'claude-3-5-sonnet-20241022':  { input:  3.00, output: 15.00 },
+  'claude-3-5-haiku-20241022':   { input:  0.80, output:  4.00 },
+  'claude-3-opus-20240229':      { input: 15.00, output: 75.00 },
+  'claude-3-haiku-20240307':     { input:  0.25, output:  1.25 },
+};
+
+const OPENAI_PRICING = {
+  'gpt-4o':        { input:  2.50, output: 10.00 },
+  'gpt-4o-mini':   { input:  0.15, output:  0.60 },
+  'gpt-4-turbo':   { input: 10.00, output: 30.00 },
+  'gpt-4':         { input: 30.00, output: 60.00 },
+  'gpt-3.5-turbo': { input:  0.50, output:  1.50 },
+  'o1':            { input: 15.00, output: 60.00 },
+  'o1-mini':       { input:  3.00, output: 12.00 },
+  'o3-mini':       { input:  1.10, output:  4.40 },
+  'o3':            { input: 10.00, output: 40.00 },
 };
 
 function calculateCost(model, inputTokens, outputTokens) {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING['default'];
+  const pricing = ANTHROPIC_PRICING[model];
+  if (!pricing) {
+    console.warn(`[LLM Observatory] Unknown Anthropic model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+}
+
+function calculateOpenAICost(model, inputTokens, outputTokens) {
+  const pricing = OPENAI_PRICING[model];
+  if (!pricing) {
+    console.warn(`[LLM Observatory] Unknown OpenAI model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
   return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 }
 
 class MonitoredAnthropic {
   constructor(options = {}) {
-    const { observatoryUrl = 'http://localhost:3001', apiKey, ...anthropicOptions } = options;
+    const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...anthropicOptions } = options;
     this.observatoryUrl = observatoryUrl;
+    this.tags = tags; // e.g. { project: 'checkout', env: 'prod' }
     this.client = new Anthropic({ apiKey, ...anthropicOptions });
     this.messages = this._buildMessagesProxy();
   }
@@ -41,10 +67,9 @@ class MonitoredAnthropic {
         }
 
         const latencyMs = Date.now() - startTime;
-
-        const inputTokens = response?.usage?.input_tokens || 0;
+        const inputTokens  = response?.usage?.input_tokens  || 0;
         const outputTokens = response?.usage?.output_tokens || 0;
-        const totalTokens = inputTokens + outputTokens;
+        const totalTokens  = inputTokens + outputTokens;
         const costUsd = calculateCost(params.model, inputTokens, outputTokens);
 
         const tools = params.tools?.map(t => t.name) || [];
@@ -52,7 +77,7 @@ class MonitoredAnthropic {
           ? params.messages[0].content.substring(0, 200)
           : JSON.stringify(params.messages?.[0]?.content || '').substring(0, 200);
 
-        // Fire and forget - don't block caller
+        // Fire and forget — never block the caller
         self._sendMetric({
           model: params.model,
           input_tokens: inputTokens,
@@ -62,7 +87,8 @@ class MonitoredAnthropic {
           latency_ms: latencyMs,
           status_code: statusCode,
           tools_used: tools,
-          prompt_preview: promptPreview
+          prompt_preview: promptPreview,
+          tags: self.tags,
         }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
         if (error) throw error;
@@ -82,28 +108,11 @@ class MonitoredAnthropic {
   }
 }
 
-const OPENAI_PRICING = {
-  'gpt-4o': { input: 2.5, output: 10.0 },
-  'gpt-4o-mini': { input: 0.15, output: 0.6 },
-  'gpt-4-turbo': { input: 10.0, output: 30.0 },
-  'gpt-4': { input: 30.0, output: 60.0 },
-  'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
-  'o1': { input: 15.0, output: 60.0 },
-  'o1-mini': { input: 1.1, output: 4.4 },
-  'o3-mini': { input: 1.1, output: 4.4 },
-  'default': { input: 2.5, output: 10.0 }
-};
-
-function calculateOpenAICost(model, inputTokens, outputTokens) {
-  const pricing = OPENAI_PRICING[model] || OPENAI_PRICING['default'];
-  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
-}
-
 class MonitoredOpenAI {
   constructor(options = {}) {
-    const { observatoryUrl = 'http://localhost:3001', apiKey, ...openaiOptions } = options;
+    const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...openaiOptions } = options;
     this.observatoryUrl = observatoryUrl;
-    // Lazy-load openai to avoid hard dependency
+    this.tags = tags;
     const OpenAI = require('openai');
     this.client = new OpenAI({ apiKey, ...openaiOptions });
     this.chat = { completions: { create: this._createCompletion.bind(this) } };
@@ -122,10 +131,10 @@ class MonitoredOpenAI {
       error = err;
     }
 
-    const latencyMs = Date.now() - startTime;
-    const inputTokens = response?.usage?.prompt_tokens || 0;
+    const latencyMs    = Date.now() - startTime;
+    const inputTokens  = response?.usage?.prompt_tokens     || 0;
     const outputTokens = response?.usage?.completion_tokens || 0;
-    const totalTokens = inputTokens + outputTokens;
+    const totalTokens  = inputTokens + outputTokens;
     const costUsd = calculateOpenAICost(params.model, inputTokens, outputTokens);
 
     const firstMsg = params.messages?.[0];
@@ -143,7 +152,8 @@ class MonitoredOpenAI {
       latency_ms: latencyMs,
       status_code: statusCode,
       tools_used: params.tools?.map(t => t.function?.name || t.name) || [],
-      prompt_preview: promptPreview
+      prompt_preview: promptPreview,
+      tags: this.tags,
     }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
     if (error) throw error;
@@ -161,4 +171,11 @@ class MonitoredOpenAI {
   }
 }
 
-module.exports = { MonitoredAnthropic, MonitoredOpenAI, calculateCost, calculateOpenAICost, MODEL_PRICING, OPENAI_PRICING };
+module.exports = {
+  MonitoredAnthropic,
+  MonitoredOpenAI,
+  calculateCost,
+  calculateOpenAICost,
+  ANTHROPIC_PRICING,
+  OPENAI_PRICING
+};

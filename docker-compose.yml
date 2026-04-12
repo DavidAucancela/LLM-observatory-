@@ -7,10 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-llm_observatory}
-    # Port 5432 not exposed — access only via internal network
-    # Uncomment below only for local debugging:
-    # ports:
-    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,6 +24,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-llm_observatory}
       PORT: 3001
       NODE_ENV: production
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      AUTH_EMAIL: ${AUTH_EMAIL}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
     depends_on:
       postgres:
         condition: service_healthy

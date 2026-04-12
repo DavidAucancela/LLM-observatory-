@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Clock, DollarSign, Zap, Hash, CheckCircle, XCircle, Wrench } from 'lucide-react';
+import { X, Clock, DollarSign, Zap, Hash, CheckCircle, XCircle, Wrench, Tag } from 'lucide-react';
 import ProviderBadge from './ProviderBadge';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -100,6 +100,23 @@ export default function RequestDrawer({ requestId, onClose }) {
                   <div className="flex flex-wrap gap-1.5">
                     {JSON.parse(data.tools_used).map(t => (
                       <span key={t} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-xs font-mono">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {data.tags && Object.keys(data.tags).length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Tag className="w-3.5 h-3.5 text-slate-400" />
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Tags</p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(data.tags).map(([k, v]) => (
+                      <span key={k} className="px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 rounded-full text-xs font-mono">
+                        {k}: {String(v)}
+                      </span>
                     ))}
                   </div>
                 </div>

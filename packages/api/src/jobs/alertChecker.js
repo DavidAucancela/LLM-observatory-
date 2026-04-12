@@ -59,11 +59,12 @@ async function checkAlerts() {
 
       if (current < threshold) continue;
 
-      // Don't re-trigger within 6 hours
+      // Don't re-trigger within debounce window (configurable per rule, default 6h)
       if (rule.last_triggered_at) {
         const lastTriggered = new Date(rule.last_triggered_at);
         const hoursSince = (Date.now() - lastTriggered.getTime()) / 3600000;
-        if (hoursSince < 6) continue;
+        const debounce = parseInt(rule.debounce_hours, 10) || 6;
+        if (hoursSince < debounce) continue;
       }
 
       const success = await sendDiscordAlert(rule.discord_webhook_url, rule.provider, current, threshold);

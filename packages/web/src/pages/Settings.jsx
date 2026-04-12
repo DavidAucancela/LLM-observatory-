@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   Key, CheckCircle, XCircle, Loader, Trash2, Save, Eye, EyeOff,
-  Bell, Plus, RefreshCw, History, Shield, Settings as SettingsIcon
+  Bell, Plus, RefreshCw, History, Shield, Info
 } from 'lucide-react';
 import ProviderBadge from '../components/ProviderBadge';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
-const PROVIDERS = ['anthropic', 'openai'];
+import { useApi } from '../hooks/useApi';
 
 // ── StatusBadge ────────────────────────────────────────────────────────────────
 function StatusBadge({ isValid, lastTested }) {
   if (isValid === null || isValid === undefined || !lastTested) {
-    return <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">Sin verificar</span>;
+    return (
+      <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+        Sin verificar
+      </span>
+    );
   }
   if (isValid) {
     return (
@@ -27,127 +29,267 @@ function StatusBadge({ isValid, lastTested }) {
   );
 }
 
-// ── CredentialCard ─────────────────────────────────────────────────────────────
-function CredentialCard({ provider, credential, onSaved, onDeleted }) {
-  const [apiKey, setApiKey]         = useState('');
-  const [showKey, setShowKey]       = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [testing, setTesting]       = useState(false);
-  const [testResult, setTestResult] = useState(null);
-
-  const handleSave = async () => {
-    if (!apiKey.trim()) return;
-    setSaving(true);
-    setTestResult(null);
-    try {
-      const res = await fetch(`${API_URL}/api/credentials`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, api_key: apiKey.trim() }),
-      });
-      if ((await res.json()).success) { setApiKey(''); onSaved(); }
-    } finally { setSaving(false); }
-  };
+// ── CredentialRow — single key in the list ─────────────────────────────────────
+function CredentialRow({ cred, onDeleted, onTested }) {
+  const { apiFetch } = useApi();
+  const [testing, setTesting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleTest = async () => {
     setTesting(true);
-    setTestResult(null);
     try {
-      const res  = await fetch(`${API_URL}/api/credentials/${provider}/test`, { method: 'POST' });
+      const res = await apiFetch(`/api/credentials/${cred.id}/test`, { method: 'POST' });
       const data = await res.json();
-      setTestResult(data.valid ? 'ok' : 'fail');
-      onSaved();
-    } catch { setTestResult('fail'); }
+      onTested(cred.id, data.valid);
+    } catch {}
     finally { setTesting(false); }
   };
 
   const handleDelete = async () => {
-    if (!confirm(`¿Eliminar credencial de ${provider}?`)) return;
-    await fetch(`${API_URL}/api/credentials/${provider}`, { method: 'DELETE' });
-    onDeleted();
+    if (!confirm(`¿Eliminar la key "${cred.label}"?`)) return;
+    setDeleting(true);
+    try {
+      await apiFetch(`/api/credentials/${cred.id}`, { method: 'DELETE' });
+      onDeleted(cred.id);
+    } finally { setDeleting(false); }
   };
 
-  const isConfigured = !!credential;
+  return (
+    <div className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{cred.label}</span>
+          <StatusBadge isValid={cred.is_valid} lastTested={cred.last_tested_at} />
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <ProviderBadge provider={cred.provider} />
+          <span className="text-xs font-mono text-slate-400">{cred.key_hint}</span>
+          {cred.last_tested_at && (
+            <span className="text-xs text-slate-400">
+              · probada {new Date(cred.last_tested_at).toLocaleDateString('es-ES')}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button onClick={handleTest} disabled={testing}
+          className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors">
+          {testing ? <Loader className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+          Probar
+        </button>
+        <button onClick={handleDelete} disabled={deleting}
+          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-40">
+          {deleting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── AddKeyForm — inline form to add a new key ──────────────────────────────────
+function AddKeyForm({ onSaved, onCancel }) {
+  const { apiFetch } = useApi();
+  const [form, setForm]     = useState({ provider: 'anthropic', key_type: 'sdk', label: '', value: '' });
+  const [showVal, setShowVal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.label.trim() || !form.value.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await apiFetch('/api/credentials', {
+        method: 'POST',
+        body: JSON.stringify(form)
+      });
+      const data = await res.json();
+      if (res.ok) { onSaved(data.data); }
+      else {
+        const msg = Array.isArray(data.error)
+          ? data.error.map(e => e.message).join(', ')
+          : (data.error || 'Error al guardar');
+        setError(msg);
+      }
+    } catch { setError('Error de conexión'); }
+    finally { setSaving(false); }
+  };
+
+  const placeholder = form.provider === 'anthropic'
+    ? (form.key_type === 'admin' ? 'sk-ant-admin-…' : 'sk-ant-api03-…')
+    : (form.key_type === 'admin' ? 'sk-admin-…'     : 'sk-proj-…');
 
   return (
+    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 mt-2">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+            Proveedor
+          </label>
+          <select value={form.provider} onChange={e => set('provider', e.target.value)}
+            className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+            <option value="anthropic">Anthropic</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+            Tipo
+          </label>
+          <select value={form.key_type} onChange={e => set('key_type', e.target.value)}
+            className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+            <option value="sdk">SDK</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+          Etiqueta
+        </label>
+        <input type="text" value={form.label} onChange={e => set('label', e.target.value)}
+          placeholder="p. ej. Proyecto Principal, Producción…"
+          className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+          API Key
+        </label>
+        <div className="relative">
+          <input type={showVal ? 'text' : 'password'} value={form.value} onChange={e => set('value', e.target.value)}
+            placeholder={placeholder}
+            className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 pr-10 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          <button type="button" onClick={() => setShowVal(v => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            {showVal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{error}</p>
+      )}
+
+      <div className="flex gap-2">
+        <button onClick={handleSave} disabled={!form.label.trim() || !form.value.trim() || saving}
+          className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white text-sm rounded-lg hover:bg-slate-700 dark:hover:bg-blue-500 disabled:opacity-40 transition-colors font-medium">
+          {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Guardar key
+        </button>
+        <button onClick={onCancel}
+          className="px-4 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── CredentialsSection ─────────────────────────────────────────────────────────
+function CredentialsSection() {
+  const { apiFetch } = useApi();
+  const [credentials, setCredentials] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [showForm, setShowForm]       = useState(false);
+
+  const fetchCredentials = async () => {
+    try {
+      const res  = await apiFetch('/api/credentials');
+      const data = await res.json();
+      setCredentials(data.credentials || []);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchCredentials(); }, []);
+
+  const handleDeleted = (id) => setCredentials(cs => cs.filter(c => c.id !== id));
+  const handleTested  = (id, isValid) => setCredentials(cs =>
+    cs.map(c => c.id === id ? { ...c, is_valid: isValid, last_tested_at: new Date().toISOString() } : c)
+  );
+  const handleSaved = (newCred) => {
+    setCredentials(cs => [newCred, ...cs]);
+    setShowForm(false);
+  };
+
+  const sdkKeys   = credentials.filter(c => c.key_type === 'sdk');
+  const adminKeys = credentials.filter(c => c.key_type === 'admin');
+
+  const KeyGroup = ({ title, description, keys, icon: Icon, accentClass }) => (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-card">
-      {/* Header strip */}
-      <div className={`h-1 w-full ${provider === 'anthropic' ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'}`} />
-
+      <div className={`h-1 w-full ${accentClass}`} />
       <div className="p-5">
-        <div className="flex items-start justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              provider === 'anthropic' ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'
-            }`}>
-              <Key className={`w-4 h-4 ${provider === 'anthropic' ? 'text-amber-500' : 'text-emerald-500'}`} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <ProviderBadge provider={provider} />
-                {isConfigured && <StatusBadge isValid={credential.is_valid} lastTested={credential.last_tested_at} />}
-              </div>
-              {isConfigured
-                ? <p className="text-xs text-slate-400 mt-1 font-mono">{credential.key_hint}</p>
-                : <p className="text-xs text-slate-400 mt-1">No configurada</p>
-              }
-            </div>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </div>
-          {isConfigured && (
-            <button onClick={handleDelete}
-              className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              title="Eliminar credencial">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
-              {isConfigured ? 'Reemplazar API Key' : 'API Key'}
-            </label>
-            <div className="relative">
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder={provider === 'anthropic' ? 'sk-ant-api03-…' : 'sk-proj-…'}
-                className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2.5 pr-10 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
-              />
-              <button type="button" onClick={() => setShowKey(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{description}</p>
           </div>
-
-          <div className="flex gap-2">
-            <button onClick={handleSave} disabled={!apiKey.trim() || saving}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white text-sm rounded-lg hover:bg-slate-700 dark:hover:bg-blue-500 disabled:opacity-40 transition-colors font-medium">
-              {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              Guardar
-            </button>
-            {isConfigured && (
-              <button onClick={handleTest} disabled={testing}
-                className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors">
-                {testing ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                Probar conexión
-              </button>
-            )}
-          </div>
-
-          {testResult === 'ok' && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-lg">
-              <CheckCircle className="w-3.5 h-3.5" /> Conexión exitosa — API key válida
-            </p>
-          )}
-          {testResult === 'fail' && (
-            <p className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1.5 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
-              <XCircle className="w-3.5 h-3.5" /> Conexión fallida — verifica la key
-            </p>
-          )}
         </div>
+        {loading ? (
+          <div className="h-12 bg-slate-100 dark:bg-slate-700 rounded-lg animate-pulse" />
+        ) : keys.length === 0 ? (
+          <p className="text-xs text-slate-400 py-2 text-center border border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+            Sin keys configuradas
+          </p>
+        ) : (
+          <div>
+            {keys.map(cred => (
+              <CredentialRow key={cred.id} cred={cred} onDeleted={handleDeleted} onTested={handleTested} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <Key className="w-4 h-4 text-slate-400" /> Credenciales
+          </h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Gestiona las API keys para el SDK y la sincronización de historial
+          </p>
+        </div>
+        <button onClick={() => setShowForm(v => !v)}
+          className="flex items-center gap-1.5 text-sm px-3.5 py-2 bg-slate-900 dark:bg-blue-600 text-white rounded-lg hover:bg-slate-700 dark:hover:bg-blue-500 transition-colors font-medium">
+          <Plus className="w-3.5 h-3.5" /> Agregar key
+        </button>
+      </div>
+
+      {showForm && (
+        <AddKeyForm onSaved={handleSaved} onCancel={() => setShowForm(false)} />
+      )}
+
+      <KeyGroup
+        title="SDK Keys"
+        description="Usadas en tus proyectos con MonitoredAnthropic / MonitoredOpenAI para registrar métricas"
+        keys={sdkKeys}
+        icon={Shield}
+        accentClass="bg-gradient-to-r from-blue-400 to-blue-500"
+      />
+
+      <KeyGroup
+        title="Admin Keys"
+        description="Para sincronizar historial de uso. Anthropic: console.anthropic.com › Settings › Admin Keys"
+        keys={adminKeys}
+        icon={Key}
+        accentClass="bg-gradient-to-r from-violet-400 to-violet-500"
+      />
+
+      <div className="flex items-start gap-2 text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg px-3 py-2.5">
+        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-blue-400" />
+        <span>
+          Las keys se almacenan cifradas (AES-256-CBC) en la base de datos. Nunca se muestran completas.
+        </span>
       </div>
     </div>
   );
@@ -155,11 +297,12 @@ function CredentialCard({ provider, credential, onSaved, onDeleted }) {
 
 // ── AlertsSection ──────────────────────────────────────────────────────────────
 function AlertsSection() {
+  const { apiFetch } = useApi();
   const [rules, setRules]         = useState([]);
   const [history, setHistory]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [showForm, setShowForm]   = useState(false);
-  const [form, setForm]           = useState({ provider: 'all', threshold_usd: '', discord_webhook_url: '' });
+  const [form, setForm]           = useState({ provider: 'all', threshold_usd: '', discord_webhook_url: '', debounce_hours: '6' });
   const [saving, setSaving]       = useState(false);
   const [testingId, setTestingId] = useState(null);
   const [testMsg, setTestMsg]     = useState({});
@@ -167,8 +310,8 @@ function AlertsSection() {
   const fetchData = async () => {
     try {
       const [r, h] = await Promise.all([
-        fetch(`${API_URL}/api/alerts/rules`).then(r => r.json()),
-        fetch(`${API_URL}/api/alerts/history`).then(r => r.json()),
+        apiFetch('/api/alerts/rules').then(r => r.json()),
+        apiFetch('/api/alerts/history').then(r => r.json()),
       ]);
       setRules(r.rules || []);
       setHistory(h.history || []);
@@ -180,31 +323,29 @@ function AlertsSection() {
     if (!form.threshold_usd || !form.discord_webhook_url) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/alerts/rules`, {
+      const res = await apiFetch('/api/alerts/rules', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, threshold_usd: parseFloat(form.threshold_usd) }),
+        body: JSON.stringify({ ...form, threshold_usd: parseFloat(form.threshold_usd), debounce_hours: parseInt(form.debounce_hours, 10) || 6 })
       });
       if ((await res.json()).success) {
         setShowForm(false);
-        setForm({ provider: 'all', threshold_usd: '', discord_webhook_url: '' });
+        setForm({ provider: 'all', threshold_usd: '', discord_webhook_url: '', debounce_hours: '6' });
         fetchData();
       }
     } finally { setSaving(false); }
   };
 
   const toggleEnabled = async (rule) => {
-    await fetch(`${API_URL}/api/alerts/rules/${rule.id}`, {
+    await apiFetch(`/api/alerts/rules/${rule.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: !rule.enabled }),
+      body: JSON.stringify({ enabled: !rule.enabled })
     });
     fetchData();
   };
 
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar esta regla?')) return;
-    await fetch(`${API_URL}/api/alerts/rules/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/alerts/rules/${id}`, { method: 'DELETE' });
     fetchData();
   };
 
@@ -212,9 +353,12 @@ function AlertsSection() {
     setTestingId(id);
     setTestMsg({});
     try {
-      const res  = await fetch(`${API_URL}/api/alerts/rules/${id}/test`, { method: 'POST' });
+      const res  = await apiFetch(`/api/alerts/rules/${id}/test`, { method: 'POST' });
       const data = await res.json();
-      setTestMsg({ [id]: data.success ? { ok: true, text: 'Enviado a Discord ✓' } : { ok: false, text: 'Error al enviar' } });
+      setTestMsg({ [id]: data.success
+        ? { ok: true,  text: 'Enviado a Discord ✓' }
+        : { ok: false, text: 'Error al enviar' }
+      });
     } finally { setTestingId(null); }
   };
 
@@ -234,7 +378,7 @@ function AlertsSection() {
       </div>
 
       {showForm && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-card animate-fade-in">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-card">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Proveedor</label>
@@ -252,6 +396,21 @@ function AlertsSection() {
                 placeholder="10.00"
                 className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
+              Debounce (horas)
+              <span className="ml-1 normal-case font-normal text-slate-400">— mínimo entre alertas repetidas</span>
+            </label>
+            <select value={form.debounce_hours} onChange={e => setForm(f => ({ ...f, debounce_hours: e.target.value }))}
+              className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="1">1 hora</option>
+              <option value="2">2 horas</option>
+              <option value="6">6 horas (por defecto)</option>
+              <option value="12">12 horas</option>
+              <option value="24">24 horas</option>
+              <option value="48">48 horas</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Discord Webhook URL</label>
@@ -293,6 +452,7 @@ function AlertsSection() {
                     : <ProviderBadge provider={rule.provider} />
                   }
                   <span className="text-xs text-slate-400">· Límite: <strong className="text-slate-700 dark:text-slate-300">${parseFloat(rule.threshold_usd).toFixed(2)}/día</strong></span>
+                  <span className="text-xs text-slate-400">· Debounce: <strong className="text-slate-600 dark:text-slate-400">{rule.debounce_hours || 6}h</strong></span>
                 </div>
                 <p className="text-xs text-slate-400 font-mono truncate">{rule.discord_webhook_url.slice(0, 50)}…</p>
                 {rule.last_triggered_at && (
@@ -335,7 +495,7 @@ function AlertsSection() {
               <div key={h.id} className="px-5 py-3 flex items-center gap-3 text-xs">
                 {h.success
                   ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                  : <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                  : <XCircle    className="w-3.5 h-3.5 text-red-500    flex-shrink-0" />
                 }
                 <span className="text-slate-500 capitalize">{h.provider}</span>
                 <span className="text-slate-700 dark:text-slate-300 font-semibold">${parseFloat(h.current_value).toFixed(4)}</span>
@@ -350,110 +510,36 @@ function AlertsSection() {
   );
 }
 
-// ── OpenAI Balance ─────────────────────────────────────────────────────────────
-function OpenAIBalance({ hasKey }) {
-  const [balance, setBalance] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
-
-  const fetchBalance = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res  = await fetch(`${API_URL}/api/credentials/openai/balance`);
-      const data = await res.json();
-      if (data.balance) setBalance(data.balance);
-      else setError(data.error || 'No disponible');
-    } catch { setError('Error de conexión'); }
-    finally { setLoading(false); }
-  };
-
-  if (!hasKey) return null;
-
-  return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-        <Key className="w-4 h-4 text-slate-400" /> Saldo OpenAI
-      </h2>
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 shadow-card">
-        {balance ? (
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/50">
-              <span className="text-slate-500">Consumo este mes ({balance.month})</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">${parseFloat(balance.cost_usd).toFixed(4)}</span>
-            </div>
-            <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/50">
-              <span className="text-slate-500">Tokens entrada</span>
-              <span className="text-slate-700 dark:text-slate-300 tabular-nums">{balance.input_tokens?.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between py-1.5">
-              <span className="text-slate-500">Tokens salida</span>
-              <span className="text-slate-700 dark:text-slate-300 tabular-nums">{balance.output_tokens?.toLocaleString()}</span>
-            </div>
-          </div>
-        ) : error ? (
-          <p className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">{error}</p>
-        ) : (
-          <p className="text-xs text-slate-400">Haz clic en "Consultar" para ver el saldo</p>
-        )}
-        <button onClick={fetchBalance} disabled={loading}
-          className="mt-4 flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg disabled:opacity-40 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors font-medium">
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Consultando…' : 'Consultar saldo'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── SyncSection ────────────────────────────────────────────────────────────────
-function SyncSection({ credentials, fetchCredentials }) {
-  const [logs, setLogs]             = useState([]);
-  const [adminKey, setAdminKey]     = useState('');
-  const [showKey, setShowKey]       = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [syncing, setSyncing]       = useState(false);
-  const [syncingOai, setSyncingOai] = useState(false);
-  const [syncMsg, setSyncMsg]       = useState(null);
-  const [syncDays, setSyncDays]     = useState('30');
-
-  const adminCred  = credentials.find(c => c.provider === 'anthropic_admin');
-  const openaiCred = credentials.find(c => c.provider === 'openai');
+function SyncSection() {
+  const { apiFetch } = useApi();
+  const [logs, setLogs]         = useState([]);
+  const [syncing, setSyncing]   = useState({ anthropic: false, openai: false });
+  const [syncMsg, setSyncMsg]   = useState(null);
+  const [syncDays, setSyncDays] = useState('30');
 
   const fetchLogs = async () => {
-    const res  = await fetch(`${API_URL}/api/sync/logs`);
-    const data = await res.json();
-    setLogs(data.logs || []);
+    try {
+      const res  = await apiFetch('/api/sync/logs');
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch {}
   };
   useEffect(() => { fetchLogs(); }, []);
 
-  const handleSaveAdmin = async () => {
-    if (!adminKey.trim()) return;
-    setSaving(true);
-    try {
-      await fetch(`${API_URL}/api/credentials`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'anthropic_admin', api_key: adminKey.trim() }),
-      });
-      setAdminKey('');
-      fetchCredentials();
-    } finally { setSaving(false); }
-  };
-
   const handleSync = async (provider) => {
-    const setS = provider === 'openai' ? setSyncingOai : setSyncing;
-    setS(true);
+    setSyncing(s => ({ ...s, [provider]: true }));
     setSyncMsg(null);
     try {
-      const res  = await fetch(`${API_URL}/api/sync/${provider}?days=${syncDays}`, { method: 'POST' });
+      const res  = await apiFetch(`/api/sync/${provider}?days=${syncDays}`, { method: 'POST' });
       const data = await res.json();
       setSyncMsg(data.success
-        ? { ok: true, text: 'Sync iniciado — los datos aparecerán en segundos' }
-        : { ok: false, text: data.error });
+        ? { ok: true,  text: `Sync de ${provider} iniciado — los datos aparecerán en segundos` }
+        : { ok: false, text: data.error || data.detail || 'Error al iniciar sync' }
+      );
       setTimeout(fetchLogs, 5000);
     } catch { setSyncMsg({ ok: false, text: 'Error de conexión' }); }
-    finally { setS(false); }
+    finally { setSyncing(s => ({ ...s, [provider]: false })); }
   };
 
   const statusDot = (s) => {
@@ -466,65 +552,47 @@ function SyncSection({ credentials, fetchCredentials }) {
     <div className="space-y-4">
       <div>
         <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <RefreshCw className="w-4 h-4 text-slate-400" /> Sincronización de datos
+          <RefreshCw className="w-4 h-4 text-slate-400" /> Sincronización de historial
         </h2>
-        <p className="text-xs text-slate-400 mt-0.5">Importa uso real desde las APIs de Anthropic y OpenAI</p>
+        <p className="text-xs text-slate-400 mt-0.5">
+          Importa uso real desde las APIs de Anthropic y OpenAI. Requiere Admin Keys configuradas arriba.
+        </p>
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-card">
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
-            Anthropic Admin API Key
-            {adminCred && <span className="font-mono font-normal ml-2 text-slate-400">· {adminCred.key_hint}</span>}
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input type={showKey ? 'text' : 'password'} value={adminKey}
-                onChange={e => setAdminKey(e.target.value)}
-                placeholder="sk-ant-admin…"
-                className="w-full text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2.5 pr-10 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-colors" />
-              <button type="button" onClick={() => setShowKey(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <button onClick={handleSaveAdmin} disabled={!adminKey.trim() || saving}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white text-sm rounded-lg disabled:opacity-40 hover:bg-slate-700 dark:hover:bg-blue-500 transition-colors">
-              {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            </button>
+        <div className="flex items-center gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+              Días a importar
+            </label>
+            <select value={syncDays} onChange={e => setSyncDays(e.target.value)}
+              className="text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="7">7 días</option>
+              <option value="30">30 días</option>
+              <option value="60">60 días</option>
+              <option value="90">90 días</option>
+            </select>
           </div>
-          <p className="text-xs text-slate-400 mt-1.5">
-            Obtén tu Admin key en Console → Settings → Admin keys (sk-ant-admin…)
-          </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <select value={syncDays} onChange={e => setSyncDays(e.target.value)}
-            className="text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
-            <option value="7">7 días</option>
-            <option value="30">30 días</option>
-            <option value="60">60 días</option>
-            <option value="90">90 días</option>
-            <option value="180">180 días</option>
-          </select>
-          <button onClick={() => handleSync('anthropic')} disabled={syncing || !adminCred}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-blue-600 text-white text-sm rounded-lg disabled:opacity-40 transition-colors font-medium hover:bg-slate-700 dark:hover:bg-blue-500">
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando…' : 'Sync Anthropic'}
-          </button>
-          <button onClick={() => handleSync('openai')} disabled={syncingOai || !openaiCred}
-            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white text-sm rounded-lg disabled:opacity-40 transition-colors font-medium hover:bg-emerald-800">
-            <RefreshCw className={`w-3.5 h-3.5 ${syncingOai ? 'animate-spin' : ''}`} />
-            {syncingOai ? 'Sincronizando…' : 'Sync OpenAI'}
-          </button>
-          {!adminCred && <span className="text-xs text-slate-400">Guarda tu Admin key primero</span>}
+        <div className="flex gap-2 flex-wrap">
+          {['anthropic', 'openai'].map(provider => (
+            <button key={provider} onClick={() => handleSync(provider)} disabled={syncing[provider]}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 transition-colors font-medium">
+              <ProviderBadge provider={provider} />
+              {syncing[provider]
+                ? <Loader className="w-3.5 h-3.5 animate-spin" />
+                : <RefreshCw className="w-3.5 h-3.5" />
+              }
+              Sincronizar {provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}
+            </button>
+          ))}
         </div>
 
         {syncMsg && (
-          <p className={`text-xs font-medium flex items-center gap-1.5 px-3 py-2 rounded-lg ${
-            syncMsg.ok ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
-          }`}>
-            {syncMsg.ok ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+          <p className={`text-xs px-3 py-2 rounded-lg ${syncMsg.ok
+            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+            : 'text-red-500 bg-red-50 dark:bg-red-900/20'}`}>
             {syncMsg.text}
           </p>
         )}
@@ -532,17 +600,26 @@ function SyncSection({ credentials, fetchCredentials }) {
 
       {logs.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-card">
-          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/70">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Historial de syncs</p>
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700/50">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Historial de sync
+            </p>
           </div>
           <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-            {logs.slice(0, 5).map(log => (
+            {logs.slice(0, 8).map(log => (
               <div key={log.id} className="px-5 py-3 flex items-center gap-3 text-xs">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot(log.status)}`} />
-                <span className="text-slate-700 dark:text-slate-300 capitalize font-semibold">{log.status}</span>
-                {log.records_imported > 0 && <span className="text-slate-500">{log.records_imported} registros</span>}
-                {log.error_message && <span className="text-red-500 truncate">{log.error_message}</span>}
-                <span className="ml-auto text-slate-400">{new Date(log.started_at).toLocaleString('es-ES')}</span>
+                <span className="capitalize text-slate-700 dark:text-slate-300 font-medium">{log.provider}</span>
+                <span className="text-slate-400">{log.status}</span>
+                {log.records_synced > 0 && (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">+{log.records_synced} registros</span>
+                )}
+                {log.error_message && (
+                  <span className="text-red-500 truncate max-w-[200px]" title={log.error_message}>{log.error_message}</span>
+                )}
+                <span className="ml-auto text-slate-400">
+                  {new Date(log.started_at).toLocaleString('es-ES')}
+                </span>
               </div>
             ))}
           </div>
@@ -552,103 +629,20 @@ function SyncSection({ credentials, fetchCredentials }) {
   );
 }
 
-// ── Main Settings ──────────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'credentials', label: 'Credenciales', icon: Key },
-  { id: 'sync',        label: 'Sincronización', icon: RefreshCw },
-  { id: 'alerts',      label: 'Alertas', icon: Bell },
-];
-
+// ── Main Settings page ─────────────────────────────────────────────────────────
 export default function Settings() {
-  const [credentials, setCredentials] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState('credentials');
-
-  const fetchCredentials = async () => {
-    try {
-      const res  = await fetch(`${API_URL}/api/credentials`);
-      const data = await res.json();
-      setCredentials(data.credentials || []);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { fetchCredentials(); }, []);
-
-  const getCredential = (provider) => credentials.find(c => c.provider === provider) || null;
-
   return (
-    <div className="p-6 max-w-3xl mx-auto animate-fade-in space-y-6">
-
-      {/* Header */}
+    <div className="p-6 max-w-2xl mx-auto space-y-8">
       <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-          <SettingsIcon className="w-5 h-5 text-slate-400" />
-          Configuración
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Credenciales, sincronización y alertas</p>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Ajustes</h1>
+        <p className="text-sm text-slate-400 mt-1">Credenciales, alertas y sincronización</p>
       </div>
 
-      {/* Security notice */}
-      <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 flex items-start gap-3">
-        <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          <strong>Seguridad:</strong> Las API keys se encriptan con AES-256 antes de guardarse y nunca se devuelven completas.
-        </p>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-              activeTab === id
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      <div className="animate-fade-in" key={activeTab}>
-        {activeTab === 'credentials' && (
-          <section className="space-y-4">
-            {loading ? (
-              <div className="space-y-4">
-                {PROVIDERS.map(p => (
-                  <div key={p} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 animate-pulse h-44" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {PROVIDERS.map(provider => (
-                  <CredentialCard
-                    key={provider}
-                    provider={provider}
-                    credential={getCredential(provider)}
-                    onSaved={fetchCredentials}
-                    onDeleted={fetchCredentials}
-                  />
-                ))}
-              </div>
-            )}
-            <OpenAIBalance hasKey={!!getCredential('openai')} />
-          </section>
-        )}
-
-        {activeTab === 'sync' && (
-          <SyncSection credentials={credentials} fetchCredentials={fetchCredentials} />
-        )}
-
-        {activeTab === 'alerts' && (
-          <AlertsSection />
-        )}
-      </div>
+      <CredentialsSection />
+      <hr className="border-slate-200 dark:border-slate-700/50" />
+      <SyncSection />
+      <hr className="border-slate-200 dark:border-slate-700/50" />
+      <AlertsSection />
     </div>
   );
 }

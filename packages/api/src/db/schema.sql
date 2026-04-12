@@ -1,3 +1,22 @@
+-- ── users ─────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+  id                  SERIAL PRIMARY KEY,
+  email               VARCHAR(255) NOT NULL UNIQUE,
+  password_hash       TEXT NOT NULL,
+  role                VARCHAR(20)  NOT NULL DEFAULT 'admin',
+  is_active           BOOLEAN      NOT NULL DEFAULT false,
+  activation_token    TEXT,
+  reset_token         TEXT,
+  reset_token_expires TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  last_login_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email      ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_reset      ON users(reset_token)        WHERE reset_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_activation ON users(activation_token)   WHERE activation_token IS NOT NULL;
+
+-- ── api_calls ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS api_calls (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -10,13 +29,17 @@ CREATE TABLE IF NOT EXISTS api_calls (
   latency_ms INTEGER NOT NULL DEFAULT 0,
   status_code INTEGER NOT NULL DEFAULT 200,
   tools_used JSONB DEFAULT '[]'::jsonb,
-  prompt_preview VARCHAR(200)
+  prompt_preview VARCHAR(200),
+  prompt_full TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_calls_timestamp ON api_calls(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_api_calls_model ON api_calls(model);
 CREATE INDEX IF NOT EXISTS idx_api_calls_provider ON api_calls(provider);
+-- Composite index for the summary/filter queries (timestamp + provider + model)
+CREATE INDEX IF NOT EXISTS idx_api_calls_filter ON api_calls(timestamp DESC, provider, model);
 
+-- ── budgets ────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS budgets (
   id SERIAL PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -25,6 +48,7 @@ CREATE TABLE IF NOT EXISTS budgets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── provider_balances ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS provider_balances (
   id SERIAL PRIMARY KEY,
   provider VARCHAR(50) NOT NULL,
@@ -33,9 +57,13 @@ CREATE TABLE IF NOT EXISTS provider_balances (
   recharged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── provider_credentials ───────────────────────────────────────────────────────
+-- Supports multiple keys per provider, separated by key_type: 'sdk' or 'admin'
 CREATE TABLE IF NOT EXISTS provider_credentials (
   id SERIAL PRIMARY KEY,
-  provider VARCHAR(50) UNIQUE NOT NULL,
+  provider VARCHAR(50) NOT NULL,
+  key_type VARCHAR(10) NOT NULL DEFAULT 'sdk',
+  label VARCHAR(100),
   api_key_encrypted TEXT NOT NULL,
   key_hint VARCHAR(30),
   is_valid BOOLEAN,
@@ -44,10 +72,22 @@ CREATE TABLE IF NOT EXISTS provider_credentials (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Feature 4: prompt_full column
-ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS prompt_full TEXT;
+-- Drop the old single-provider unique constraint if it exists (migration from v1)
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'provider_credentials_provider_key'
+    AND conrelid = 'provider_credentials'::regclass
+  ) THEN
+    ALTER TABLE provider_credentials DROP CONSTRAINT provider_credentials_provider_key;
+  END IF;
+END $$;
 
--- Feature 1: Alert rules
+-- Add new columns to existing tables (idempotent migrations)
+ALTER TABLE provider_credentials ADD COLUMN IF NOT EXISTS key_type VARCHAR(10) NOT NULL DEFAULT 'sdk';
+ALTER TABLE provider_credentials ADD COLUMN IF NOT EXISTS label VARCHAR(100);
+
+-- ── alert_rules ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS alert_rules (
   id SERIAL PRIMARY KEY,
   provider VARCHAR(50) NOT NULL DEFAULT 'all',
@@ -55,9 +95,13 @@ CREATE TABLE IF NOT EXISTS alert_rules (
   threshold_usd DECIMAL(10,2) NOT NULL,
   discord_webhook_url TEXT NOT NULL,
   enabled BOOLEAN DEFAULT true,
+  debounce_hours INTEGER NOT NULL DEFAULT 6,
   last_triggered_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration: add debounce_hours to existing installations
+ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS debounce_hours INTEGER NOT NULL DEFAULT 6;
 
 CREATE TABLE IF NOT EXISTS alert_history (
   id SERIAL PRIMARY KEY,
@@ -69,15 +113,21 @@ CREATE TABLE IF NOT EXISTS alert_history (
   success BOOLEAN
 );
 
--- Feature 2: Sync logs
+-- ── sync_logs ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS sync_logs (
   id SERIAL PRIMARY KEY,
-  provider VARCHAR(50) NOT NULL,
-  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  records_imported INTEGER DEFAULT 0,
-  date_range_start TIMESTAMPTZ,
-  date_range_end TIMESTAMPTZ,
+  provider VARCHAR(20) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'running',
-  error_message TEXT
+  records_synced INTEGER DEFAULT 0,
+  error_message TEXT,
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
 );
+
+-- Add missing columns to sync_logs if upgrading from older schema
+ALTER TABLE sync_logs ADD COLUMN IF NOT EXISTS records_synced INTEGER DEFAULT 0;
+ALTER TABLE sync_logs ADD COLUMN IF NOT EXISTS date_range_start TIMESTAMPTZ;
+ALTER TABLE sync_logs ADD COLUMN IF NOT EXISTS date_range_end TIMESTAMPTZ;
+
+-- ── tags on api_calls (project/env metadata from SDK) ─────────────────────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '{}'::jsonb;

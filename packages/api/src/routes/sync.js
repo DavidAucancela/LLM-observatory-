@@ -9,9 +9,10 @@ const PRICING = {
     'claude-opus-4-6': { input: 15.0, output: 75.0 },
     'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
     'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
-    'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
     'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
-    default: { input: 3.0, output: 15.0 }
+    'claude-3-5-haiku-20241022': { input: 0.8, output: 4.0 },
+    'claude-3-opus-20240229': { input: 15.0, output: 75.0 },
+    'claude-3-haiku-20240307': { input: 0.25, output: 1.25 }
   },
   openai: {
     'gpt-4o': { input: 2.5, output: 10.0 },
@@ -20,15 +21,19 @@ const PRICING = {
     'gpt-4': { input: 30.0, output: 60.0 },
     'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
     'o1': { input: 15.0, output: 60.0 },
-    'o1-mini': { input: 1.1, output: 4.4 },
+    'o1-mini': { input: 3.0, output: 12.0 },
     'o3-mini': { input: 1.1, output: 4.4 },
-    default: { input: 2.5, output: 10.0 }
+    'o3': { input: 10.0, output: 40.0 }
   }
 };
 
 function calcCost(provider, model, inputTokens, outputTokens) {
-  const table = PRICING[provider] || PRICING.anthropic;
-  const pricing = table[model] || table.default;
+  const table = PRICING[provider] || {};
+  const pricing = table[model];
+  if (!pricing) {
+    console.warn(`[sync] Unknown model pricing: ${provider}/${model} — cost set to $0`);
+    return 0;
+  }
   return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 }
 
@@ -87,7 +92,7 @@ async function syncOpenAI(apiKey, days) {
     if (page) url.searchParams.set('page', page);
 
     const res = await fetch(url.toString(), {
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
     });
     if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
 
@@ -100,13 +105,11 @@ async function syncOpenAI(apiKey, days) {
   return { buckets: allBuckets, startTs, endTs };
 }
 
-async function importBuckets(buckets, provider, syncId) {
+async function importBuckets(buckets, provider) {
   let imported = 0;
   const tag = `sync:${provider}`;
 
   for (const bucket of buckets) {
-    // Anthropic: bucket.starting_at + bucket.results[]
-    // OpenAI:    bucket.start_time  + bucket.results[]
     const timestamp = bucket.starting_at || new Date(bucket.start_time * 1000).toISOString();
 
     for (const result of (bucket.results || [])) {
@@ -126,6 +129,7 @@ async function importBuckets(buckets, provider, syncId) {
 
       const costUsd = calcCost(provider, model, inputTokens, outputTokens);
 
+      // Deduplication: same timestamp + model + provider + tag
       const existing = await pool.query(
         `SELECT id FROM api_calls WHERE timestamp = $1 AND model = $2 AND provider = $3 AND prompt_preview = $4`,
         [timestamp, model, provider, tag]
@@ -143,29 +147,42 @@ async function importBuckets(buckets, provider, syncId) {
   return imported;
 }
 
-router.post('/:provider', async (req, res) => {
+// POST /api/sync/:provider — start historical sync using admin key
+router.post('/:provider', async (req, res, next) => {
   const { provider } = req.params;
   const days = parseInt(req.query.days) || 30;
 
   if (!['anthropic', 'openai'].includes(provider)) {
-    return res.status(400).json({ error: 'Provider no soportado' });
+    return res.status(400).json({ error: 'Proveedor no soportado. Usa: anthropic, openai' });
   }
 
-  const credProvider = provider === 'anthropic' ? 'anthropic_admin' : 'openai';
+  // Require an admin key for sync — never use SDK keys
   const credRow = await pool.query(
-    `SELECT api_key_encrypted FROM provider_credentials WHERE provider = $1`, [credProvider]
+    `SELECT api_key_encrypted FROM provider_credentials
+     WHERE provider = $1 AND key_type = 'admin'
+     ORDER BY created_at DESC LIMIT 1`,
+    [provider]
   );
+
   if (!credRow.rows.length) {
-    return res.status(400).json({ error: `No se encontró API key de ${provider}. Configúrala en Settings.` });
+    return res.status(400).json({
+      error: `Admin key not configured for this provider. Add it in Settings.`,
+      detail: provider === 'anthropic'
+        ? 'Para Anthropic: genera una Admin Key en console.anthropic.com > Settings > Admin Keys'
+        : 'Para OpenAI: usa una key con permisos de organización'
+    });
   }
 
   const apiKey = decrypt(credRow.rows[0].api_key_encrypted);
+
   const logRow = await pool.query(
-    `INSERT INTO sync_logs (provider, status) VALUES ($1, 'running') RETURNING id`, [provider]
+    `INSERT INTO sync_logs (provider, status) VALUES ($1, 'running') RETURNING id`,
+    [provider]
   );
   const syncId = logRow.rows[0].id;
 
-  res.json({ success: true, sync_id: syncId, message: 'Sync iniciado' });
+  // Respond immediately, run sync in background
+  res.json({ success: true, sync_id: syncId, message: 'Sync iniciado en background' });
 
   ;(async () => {
     try {
@@ -179,40 +196,45 @@ router.post('/:provider', async (req, res) => {
         endStr = new Date(result.endTs * 1000).toISOString();
       }
 
-      const imported = await importBuckets(buckets, provider, syncId);
+      const imported = await importBuckets(buckets, provider);
 
       await pool.query(
-        `UPDATE sync_logs SET status = 'success', completed_at = NOW(), records_imported = $1, date_range_start = $2, date_range_end = $3 WHERE id = $4`,
+        `UPDATE sync_logs
+         SET status = 'success', completed_at = NOW(), records_synced = $1,
+             date_range_start = $2, date_range_end = $3
+         WHERE id = $4`,
         [imported, startStr, endStr, syncId]
       );
-      console.log(`${provider} sync complete: ${imported} records imported`);
+      console.log(`[sync] ${provider} complete: ${imported} records imported`);
     } catch (err) {
       await pool.query(
         `UPDATE sync_logs SET status = 'error', completed_at = NOW(), error_message = $1 WHERE id = $2`,
         [err.message, syncId]
       );
-      console.error('Sync error:', err.message);
+      console.error('[sync] Error:', err.message);
     }
   })();
 });
 
-router.get('/logs', async (req, res) => {
+// GET /api/sync/logs — list recent sync operations
+router.get('/logs', async (req, res, next) => {
   try {
     const result = await pool.query('SELECT * FROM sync_logs ORDER BY started_at DESC LIMIT 20');
     res.json({ logs: result.rows });
   } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+    next(err);
   }
 });
 
-router.get('/status', async (req, res) => {
+// GET /api/sync/status — latest sync status per provider
+router.get('/status', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT DISTINCT ON (provider) * FROM sync_logs ORDER BY provider, started_at DESC`
     );
     res.json({ status: result.rows });
   } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
+    next(err);
   }
 });
 
