@@ -55,6 +55,42 @@ class MonitoredAnthropic {
     return {
       create: async (params) => {
         const startTime = Date.now();
+        const promptPreview = typeof params.messages?.[0]?.content === 'string'
+          ? params.messages[0].content.substring(0, 200)
+          : JSON.stringify(params.messages?.[0]?.content || '').substring(0, 200);
+        const tools = params.tools?.map(t => t.name) || [];
+
+        // Streaming path — capture usage from finalMessage() after caller consumes stream
+        if (params.stream) {
+          let stream;
+          try {
+            stream = await self.client.messages.create(params);
+          } catch (err) {
+            self._sendMetric({
+              model: params.model, input_tokens: 0, output_tokens: 0, total_tokens: 0,
+              cost_usd: 0, latency_ms: Date.now() - startTime, status_code: err.status || 500,
+              tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+            }).catch(() => {});
+            throw err;
+          }
+
+          stream.finalMessage().then(finalMsg => {
+            const inputTokens  = finalMsg.usage?.input_tokens  || 0;
+            const outputTokens = finalMsg.usage?.output_tokens || 0;
+            self._sendMetric({
+              model: params.model,
+              input_tokens: inputTokens, output_tokens: outputTokens,
+              total_tokens: inputTokens + outputTokens,
+              cost_usd: calculateCost(params.model, inputTokens, outputTokens),
+              latency_ms: Date.now() - startTime, status_code: 200,
+              tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+            }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+          }).catch(err => console.warn('[LLM Observatory] Streaming metric capture failed:', err.message));
+
+          return stream;
+        }
+
+        // Non-streaming path
         let response;
         let statusCode = 200;
         let error = null;
@@ -66,29 +102,16 @@ class MonitoredAnthropic {
           error = err;
         }
 
-        const latencyMs = Date.now() - startTime;
         const inputTokens  = response?.usage?.input_tokens  || 0;
         const outputTokens = response?.usage?.output_tokens || 0;
-        const totalTokens  = inputTokens + outputTokens;
-        const costUsd = calculateCost(params.model, inputTokens, outputTokens);
 
-        const tools = params.tools?.map(t => t.name) || [];
-        const promptPreview = typeof params.messages?.[0]?.content === 'string'
-          ? params.messages[0].content.substring(0, 200)
-          : JSON.stringify(params.messages?.[0]?.content || '').substring(0, 200);
-
-        // Fire and forget — never block the caller
         self._sendMetric({
           model: params.model,
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          total_tokens: totalTokens,
-          cost_usd: costUsd,
-          latency_ms: latencyMs,
-          status_code: statusCode,
-          tools_used: tools,
-          prompt_preview: promptPreview,
-          tags: self.tags,
+          input_tokens: inputTokens, output_tokens: outputTokens,
+          total_tokens: inputTokens + outputTokens,
+          cost_usd: calculateCost(params.model, inputTokens, outputTokens),
+          latency_ms: Date.now() - startTime, status_code: statusCode,
+          tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
         }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
         if (error) throw error;
@@ -98,7 +121,6 @@ class MonitoredAnthropic {
   }
 
   async _sendMetric(data) {
-    const fetch = (await import('node-fetch')).default;
     await fetch(`${this.observatoryUrl}/api/metrics`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -120,6 +142,32 @@ class MonitoredOpenAI {
 
   async _createCompletion(params) {
     const startTime = Date.now();
+    const firstMsg = params.messages?.[0];
+    const promptPreview = typeof firstMsg?.content === 'string'
+      ? firstMsg.content.substring(0, 200)
+      : JSON.stringify(firstMsg?.content || '').substring(0, 200);
+    const tools = params.tools?.map(t => t.function?.name || t.name) || [];
+
+    // Streaming path — wrap the async iterable to capture the final usage chunk
+    if (params.stream) {
+      let stream;
+      try {
+        // include_usage ensures the final chunk carries token counts
+        const streamParams = { ...params, stream_options: { include_usage: true, ...params.stream_options } };
+        stream = await this.client.chat.completions.create(streamParams);
+      } catch (err) {
+        this._sendMetric({
+          provider: 'openai', model: params.model, input_tokens: 0, output_tokens: 0,
+          total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
+          status_code: err.status || 500, tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+        }).catch(() => {});
+        throw err;
+      }
+
+      return this._wrapOpenAIStream(stream, startTime, params, tools, promptPreview);
+    }
+
+    // Non-streaming path
     let response;
     let statusCode = 200;
     let error = null;
@@ -131,37 +179,46 @@ class MonitoredOpenAI {
       error = err;
     }
 
-    const latencyMs    = Date.now() - startTime;
     const inputTokens  = response?.usage?.prompt_tokens     || 0;
     const outputTokens = response?.usage?.completion_tokens || 0;
-    const totalTokens  = inputTokens + outputTokens;
-    const costUsd = calculateOpenAICost(params.model, inputTokens, outputTokens);
-
-    const firstMsg = params.messages?.[0];
-    const promptPreview = typeof firstMsg?.content === 'string'
-      ? firstMsg.content.substring(0, 200)
-      : JSON.stringify(firstMsg?.content || '').substring(0, 200);
 
     this._sendMetric({
-      provider: 'openai',
-      model: params.model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      total_tokens: totalTokens,
-      cost_usd: costUsd,
-      latency_ms: latencyMs,
-      status_code: statusCode,
-      tools_used: params.tools?.map(t => t.function?.name || t.name) || [],
-      prompt_preview: promptPreview,
-      tags: this.tags,
+      provider: 'openai', model: params.model,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+      cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
     }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
     if (error) throw error;
     return response;
   }
 
+  async* _wrapOpenAIStream(stream, startTime, params, tools, promptPreview) {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    try {
+      for await (const chunk of stream) {
+        if (chunk.usage) {
+          inputTokens  = chunk.usage.prompt_tokens     || 0;
+          outputTokens = chunk.usage.completion_tokens || 0;
+        }
+        yield chunk;
+      }
+    } finally {
+      this._sendMetric({
+        provider: 'openai', model: params.model,
+        input_tokens: inputTokens, output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
+        latency_ms: Date.now() - startTime, status_code: 200,
+        tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+      }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+    }
+  }
+
   async _sendMetric(data) {
-    const fetch = (await import('node-fetch')).default;
     await fetch(`${this.observatoryUrl}/api/metrics`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

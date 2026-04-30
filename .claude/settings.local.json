@@ -35,7 +35,9 @@
       "Bash(docker-compose up:*)",
       "Bash(docker-compose exec:*)",
       "Bash(docker-compose down:*)",
-      "Bash(docker exec llm-observatory--api-1:*)"
+      "Bash(docker exec llm-observatory--api-1:*)",
+      "Bash(kill %1)",
+      "Bash(npm run *)"
     ]
   }
 }

@@ -13,6 +13,7 @@ function getResend() {
 
 const FROM    = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 const APP_URL = process.env.APP_URL    || 'http://localhost:5173';
+const API_URL = process.env.API_URL    || 'http://localhost:3001';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const base = (content) => `
@@ -63,7 +64,7 @@ const linkNote = (href) =>
 
 // ── sendActivationEmail ───────────────────────────────────────────────────────
 async function sendActivationEmail(to, token) {
-  const link = `${APP_URL}/activate?token=${token}`;
+  const link = `${API_URL}/api/auth/activate?token=${token}`;
 
   const html = base(`
     <h2 style="margin:0 0 8px;color:#0f172a;font-size:20px">Activa tu cuenta</h2>

@@ -32,11 +32,23 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+    let res;
+    try {
+      res = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+    } catch {
+      throw new Error('No se pudo conectar con el servidor. Verifica que la API esté activa.');
+    }
+
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text();
+      throw new Error(`El servidor devolvió una respuesta inesperada (${res.status}): ${text.substring(0, 120)}`);
+    }
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas');
 

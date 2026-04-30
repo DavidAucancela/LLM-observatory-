@@ -2,7 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 
 // ── Validate required environment variables before anything else ───────────────
-const required = ['DATABASE_URL', 'ENCRYPTION_KEY', 'JWT_SECRET', 'AUTH_EMAIL', 'AUTH_PASSWORD_HASH'];
+const required = ['DATABASE_URL', 'ENCRYPTION_KEY', 'JWT_SECRET'];
 const missing = required.filter(k => !process.env[k]);
 if (missing.length) {
   console.error(`❌ Missing required environment variables: ${missing.join(', ')}`);
@@ -81,6 +81,11 @@ app.use('/api/credentials', credentialsRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/sync', syncRouter);
 
+// ── 404 handler — must be after all routes ────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: `Ruta no encontrada: ${req.method} ${req.path}` });
+});
+
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   logger.error(err.message, err.stack);
@@ -107,10 +112,39 @@ async function startServer() {
     logger.error('DB migration failed:', err.message);
   }
 
+  if (process.env.AUTH_EMAIL && process.env.AUTH_PASSWORD_HASH) {
+    try {
+      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [process.env.AUTH_EMAIL]);
+      if (!existing.rows.length) {
+        await pool.query(
+          `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, 'admin', true)`,
+          [process.env.AUTH_EMAIL, process.env.AUTH_PASSWORD_HASH]
+        );
+        logger.info(`✅ Admin user created: ${process.env.AUTH_EMAIL}`);
+      }
+    } catch (err) {
+      logger.error('Admin user setup failed:', err.message);
+    }
+  }
+
   // Cron: check alerts every hour
   cron.schedule('0 * * * *', () => {
     logger.info('Running scheduled alert check...');
     checkAlerts();
+  });
+
+  // Cron: data retention — delete records older than DATA_RETENTION_DAYS (default 90) at 02:00 daily
+  cron.schedule('0 2 * * *', async () => {
+    const days = Math.max(1, parseInt(process.env.DATA_RETENTION_DAYS || '90', 10));
+    try {
+      const result = await pool.query(
+        `DELETE FROM api_calls WHERE timestamp < NOW() - ($1 || ' days')::interval`,
+        [days]
+      );
+      if (result.rowCount > 0) logger.info(`Data retention: deleted ${result.rowCount} records older than ${days} days`);
+    } catch (err) {
+      logger.error('Data retention job failed:', err.message);
+    }
   });
 
   server.listen(port, () => logger.info(`🚀 API server running on port ${port}`));

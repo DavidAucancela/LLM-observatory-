@@ -28,7 +28,9 @@ function ProtectedRoute({ children }) {
 }
 
 function AppShell() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem('dark-mode') === 'true'
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('sidebar-collapsed') === 'true'
   );
@@ -40,12 +42,17 @@ function AppShell() {
     });
   };
 
+  const toggleDarkMode = (value) => {
+    localStorage.setItem('dark-mode', String(value));
+    setDarkMode(value);
+  };
+
   return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
         <Sidebar
           darkMode={darkMode}
-          setDarkMode={setDarkMode}
+          setDarkMode={toggleDarkMode}
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
         />

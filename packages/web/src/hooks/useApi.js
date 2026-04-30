@@ -29,12 +29,24 @@ export function useApi() {
       ...(tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {})
     };
 
-    const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    let res;
+    try {
+      res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    } catch (networkErr) {
+      throw new Error('No se pudo conectar con el servidor. Verifica que la API esté activa.');
+    }
 
     if (res.status === 401) {
       logoutRef.current();
       window.location.href = '/login';
       throw new Error('Sesión expirada — redirigiendo al login');
+    }
+
+    // Guard against HTML error pages (proxy errors, unmatched routes, etc.)
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json') && !contentType.includes('text/csv')) {
+      const text = await res.text();
+      throw new Error(`El servidor devolvió una respuesta inesperada (${res.status}): ${text.substring(0, 120)}`);
     }
 
     return res;
