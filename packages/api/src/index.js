@@ -114,14 +114,13 @@ async function startServer() {
 
   if (process.env.AUTH_EMAIL && process.env.AUTH_PASSWORD_HASH) {
     try {
-      const existing = await pool.query('SELECT id FROM users WHERE email = $1', [process.env.AUTH_EMAIL]);
-      if (!existing.rows.length) {
-        await pool.query(
-          `INSERT INTO users (email, password_hash, role, is_active) VALUES ($1, $2, 'admin', true)`,
-          [process.env.AUTH_EMAIL, process.env.AUTH_PASSWORD_HASH]
-        );
-        logger.info(`✅ Admin user created: ${process.env.AUTH_EMAIL}`);
-      }
+      await pool.query(
+        `INSERT INTO users (email, password_hash, role, is_active)
+         VALUES ($1, $2, 'admin', true)
+         ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+        [process.env.AUTH_EMAIL, process.env.AUTH_PASSWORD_HASH]
+      );
+      logger.info(`✅ Admin user synced: ${process.env.AUTH_EMAIL}`);
     } catch (err) {
       logger.error('Admin user setup failed:', err.message);
     }
