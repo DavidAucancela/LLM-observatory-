@@ -52,9 +52,23 @@ router.post('/register', async (req, res, next) => {
   try {
     const { email, password } = RegisterSchema.parse(req.body);
 
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length)
-      return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
+    const existing = await pool.query('SELECT id, is_active FROM users WHERE email = $1', [email]);
+
+    if (existing.rows.length) {
+      const user = existing.rows[0];
+      // Account exists and is already active — don't reveal it exists (enumeration protection)
+      if (user.is_active)
+        return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
+
+      // Account exists but was never activated — regenerate token and resend
+      const token = crypto.randomBytes(32).toString('hex');
+      await pool.query(
+        `UPDATE users SET activation_token = $1 WHERE id = $2`,
+        [token, user.id]
+      );
+      await sendActivationEmail(email, token);
+      return res.status(201).json({ message: 'Cuenta creada. Revisa tu email para activarla.' });
+    }
 
     const hash  = await bcrypt.hash(password, 12);
     const token = crypto.randomBytes(32).toString('hex');
