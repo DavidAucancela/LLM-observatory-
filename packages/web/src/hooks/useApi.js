@@ -29,11 +29,18 @@ export function useApi() {
       ...(tokenRef.current ? { Authorization: `Bearer ${tokenRef.current}` } : {})
     };
 
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 20000);
+
     let res;
     try {
-      res = await fetch(`${API_URL}${path}`, { ...options, headers });
+      res = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
     } catch (networkErr) {
+      if (networkErr.name === 'AbortError')
+        throw new Error('La solicitud tardó demasiado. Verifica que la API esté activa.');
       throw new Error('No se pudo conectar con el servidor. Verifica que la API esté activa.');
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (res.status === 401) {
