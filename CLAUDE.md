@@ -76,6 +76,13 @@ Frontend build-time:
 VITE_API_URL=http://localhost:3001   # Empty string for Docker (nginx proxy handles it)
 ```
 
+Email (Resend) y URLs públicas:
+```bash
+RESEND_API_KEY=<resend api key>
+EMAIL_FROM=noreply@tudominio.com
+APP_URL=http://localhost:5173   # URL pública del frontend — usada en links de email (activación y reset)
+```
+
 Docker/Railway internal networking:
 ```bash
 API_INTERNAL_URL=http://api.railway.internal:3001
