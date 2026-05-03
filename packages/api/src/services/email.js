@@ -1,14 +1,20 @@
 const { Resend } = require('resend');
 
-// Lazy init — avoids crash at startup when RESEND_API_KEY is not yet configured
 let _resend = null;
 function getResend() {
-  if (!_resend) {
-    if (!process.env.RESEND_API_KEY)
-      throw new Error('RESEND_API_KEY is not configured. Email sending is unavailable.');
-    _resend = new Resend(process.env.RESEND_API_KEY);
-  }
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
   return _resend;
+}
+
+function logEmailToConsole(subject, to, link) {
+  const SEP = '═'.repeat(60);
+  console.log(`\n${SEP}`);
+  console.log(`  📧  EMAIL (modo consola — RESEND_API_KEY no configurado)`);
+  console.log(`${SEP}`);
+  console.log(`  Para:    ${to}`);
+  console.log(`  Asunto:  ${subject}`);
+  console.log(`  Link:    ${link}`);
+  console.log(`${SEP}\n`);
 }
 
 const FROM    = process.env.EMAIL_FROM || 'onboarding@resend.dev';
@@ -79,6 +85,11 @@ async function sendActivationEmail(to, token) {
     ${linkNote(link)}
   `);
 
+  if (!process.env.RESEND_API_KEY) {
+    logEmailToConsole('Activa tu cuenta — LLM Observatory', to, link);
+    return;
+  }
+
   const { error } = await getResend().emails.send({
     from:    FROM,
     to,
@@ -112,6 +123,11 @@ async function sendPasswordResetEmail(to, token) {
       </p>
     </div>
   `);
+
+  if (!process.env.RESEND_API_KEY) {
+    logEmailToConsole('Restablece tu contraseña — LLM Observatory', to, link);
+    return;
+  }
 
   const { error } = await getResend().emails.send({
     from:    FROM,

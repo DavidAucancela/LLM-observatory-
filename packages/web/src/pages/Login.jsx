@@ -111,6 +111,13 @@ export default function Login() {
           </button>
         </form>
 
+        <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+          Don't have an account?{' '}
+          <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+            Create one
+          </Link>
+        </div>
+
         <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
           LLM Observatory · internal tooling
         </div>
