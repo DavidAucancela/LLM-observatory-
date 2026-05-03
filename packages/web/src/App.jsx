@@ -1,29 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
-import Requests from './pages/Requests';
-import Models from './pages/Models';
-import Budgets from './pages/Budgets';
-import Providers from './pages/Providers';
+import Activity from './pages/Activity';
+import Finance from './pages/Finance';
 import Settings from './pages/Settings';
 import Login          from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
+import { useApi } from './hooks/useApi';
 
-// Redirects to /login if not authenticated; shows spinner while loading auth state
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="theme-light obs-login-root">
+        <div className="dot dot-pulse" style={{ background: 'var(--accent)', width: 10, height: 10 }} />
       </div>
     );
   }
-
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 }
 
@@ -31,41 +27,43 @@ function AppShell() {
   const [darkMode, setDarkMode] = useState(
     () => localStorage.getItem('dark-mode') === 'true'
   );
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem('sidebar-collapsed') === 'true'
-  );
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
-      localStorage.setItem('sidebar-collapsed', String(!prev));
-      return !prev;
-    });
-  };
+  const [liveProviders, setLiveProviders] = useState([]);
+  const { apiFetch } = useApi();
 
   const toggleDarkMode = (value) => {
     localStorage.setItem('dark-mode', String(value));
     setDarkMode(value);
   };
 
+  useEffect(() => {
+    apiFetch('/api/credentials')
+      .then(r => r.json())
+      .then(data => {
+        const providers = [...new Set((data.data || []).map(c => c.provider))];
+        setLiveProviders(providers);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
-    <div className={darkMode ? 'dark' : ''}>
-      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+    <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
+      <div className="obs-root">
         <Sidebar
           darkMode={darkMode}
           setDarkMode={toggleDarkMode}
-          collapsed={sidebarCollapsed}
-          onToggle={toggleSidebar}
+          liveProviders={liveProviders}
         />
-        <main className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/"          element={<Dashboard />} />
-            <Route path="/requests"  element={<Requests />} />
-            <Route path="/models"    element={<Models />} />
-            <Route path="/providers" element={<Providers />} />
-            <Route path="/budgets"   element={<Budgets />} />
-            <Route path="/settings"  element={<Settings />} />
-          </Routes>
-        </main>
+        <Routes>
+          <Route path="/"          element={<Dashboard />} />
+          <Route path="/activity"  element={<Activity />} />
+          <Route path="/finance"   element={<Finance />} />
+          <Route path="/settings"  element={<Settings />} />
+          {/* Legacy redirects */}
+          <Route path="/requests"  element={<Navigate to="/activity" replace />} />
+          <Route path="/models"    element={<Navigate to="/activity?tab=models" replace />} />
+          <Route path="/providers" element={<Navigate to="/finance" replace />} />
+          <Route path="/budgets"   element={<Navigate to="/finance?tab=budgets" replace />} />
+        </Routes>
       </div>
     </div>
   );

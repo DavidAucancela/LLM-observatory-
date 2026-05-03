@@ -131,3 +131,7 @@ ALTER TABLE sync_logs ADD COLUMN IF NOT EXISTS date_range_end TIMESTAMPTZ;
 
 -- ── tags on api_calls (project/env metadata from SDK) ─────────────────────────
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '{}'::jsonb;
+
+-- ── api_key_hint on api_calls (links metric to originating credential) ─────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS api_key_hint VARCHAR(30);
+CREATE INDEX IF NOT EXISTS idx_api_calls_key_hint ON api_calls(api_key_hint) WHERE api_key_hint IS NOT NULL;

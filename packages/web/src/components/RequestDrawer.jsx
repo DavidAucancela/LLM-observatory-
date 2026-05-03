@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { X, Clock, DollarSign, Zap, Hash, CheckCircle, XCircle, Wrench, Tag } from 'lucide-react';
 import ProviderBadge from './ProviderBadge';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
-
-function Field({ label, value, mono }) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-sm text-slate-800 dark:text-slate-200 ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</p>
-    </div>
-  );
-}
 
 export default function RequestDrawer({ requestId, onClose }) {
   const [data, setData] = useState(null);
@@ -34,106 +24,108 @@ export default function RequestDrawer({ requestId, onClose }) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/30 dark:bg-black/50 z-40" onClick={onClose} />
-
-      {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-lg bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-2.5">
-            <h2 className="font-semibold text-slate-900 dark:text-white">Detalle de Request</h2>
-            {data && <span className="text-xs text-slate-400 font-mono">#{data.id}</span>}
+      <div className="obs-drawer-backdrop" onClick={onClose} />
+      <div className="obs-drawer">
+        <div className="obs-drawer-header">
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Request detail</div>
+            {data && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                #{data.id}
+              </div>
+            )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-            <X className="w-4 h-4 text-slate-500" />
+          <button className="obs-btn obs-btn-ghost" style={{ padding: '4px 6px' }} onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="obs-drawer-body">
           {loading ? (
-            <div className="space-y-4 animate-pulse">
-              {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-slate-100 dark:bg-slate-800 rounded-lg" />)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="obs-skeleton" style={{ height: 36, borderRadius: 4 }} />
+              ))}
             </div>
           ) : data ? (
             <>
-              {/* Status + provider */}
-              <div className="flex items-center gap-3">
-                <ProviderBadge provider={data.provider} />
-                <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${data.status_code === 200 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
-                  {data.status_code === 200 ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                  {data.status_code}
-                </span>
-                <span className="text-xs text-slate-400">{new Date(data.timestamp).toLocaleString('es-ES')}</span>
+              <div className="obs-drawer-section">
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>Metadata</div>
+                <dl className="meta-grid">
+                  <dt>Time</dt>
+                  <dd>{new Date(data.timestamp).toLocaleString('en-GB', { hour12: false })}</dd>
+                  <dt>Provider</dt>
+                  <dd><ProviderBadge provider={data.provider} /></dd>
+                  <dt>Model</dt>
+                  <dd style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.model}</dd>
+                  <dt>Latency</dt>
+                  <dd>{data.latency_ms}ms</dd>
+                  <dt>Status</dt>
+                  <dd style={{ color: data.status_code === 200 ? 'var(--success)' : 'var(--error)' }}>
+                    {data.status_code} {data.status_code === 200 ? 'OK' : 'Error'}
+                  </dd>
+                  {data.stop_reason && <><dt>Stop reason</dt><dd>{data.stop_reason}</dd></>}
+                </dl>
               </div>
 
-              {/* KPIs */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { icon: Zap, label: 'Tokens', value: parseInt(data.total_tokens).toLocaleString(), sub: `${data.input_tokens} in / ${data.output_tokens} out` },
-                  { icon: DollarSign, label: 'Costo', value: `$${parseFloat(data.cost_usd).toFixed(6)}`, sub: '' },
-                  { icon: Clock, label: 'Latencia', value: `${data.latency_ms}ms`, sub: '' }
-                ].map(({ icon: Icon, label, value, sub }) => (
-                  <div key={label} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-center">
-                    <Icon className="w-4 h-4 text-slate-400 mx-auto mb-1" />
-                    <p className="text-xs text-slate-400">{label}</p>
-                    <p className="font-bold text-slate-800 dark:text-white text-sm">{value}</p>
-                    {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-                  </div>
-                ))}
+              <div className="obs-drawer-section">
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>Token breakdown</div>
+                <dl className="meta-grid">
+                  <dt>Input</dt>
+                  <dd>{parseInt(data.input_tokens || 0).toLocaleString()}</dd>
+                  {data.cache_read_tokens > 0 && <><dt>Cache read</dt><dd>{parseInt(data.cache_read_tokens).toLocaleString()}</dd></>}
+                  {data.cache_write_tokens > 0 && <><dt>Cache write</dt><dd>{parseInt(data.cache_write_tokens).toLocaleString()}</dd></>}
+                  <dt>Output</dt>
+                  <dd>{parseInt(data.output_tokens || 0).toLocaleString()}</dd>
+                  <dt>Total cost</dt>
+                  <dd>${parseFloat(data.cost_usd).toFixed(6)}</dd>
+                </dl>
               </div>
 
-              {/* Model */}
-              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Modelo</p>
-                <p className="font-mono text-sm text-slate-800 dark:text-slate-200">{data.model}</p>
-              </div>
+              {data.tools_used && (() => {
+                try {
+                  const tools = JSON.parse(data.tools_used);
+                  if (tools.length > 0) return (
+                    <div className="obs-drawer-section">
+                      <div className="obs-section-label" style={{ marginBottom: 8 }}>Tools used</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {tools.map(t => <span key={t} className="kchip">{t}</span>)}
+                      </div>
+                    </div>
+                  );
+                } catch {}
+                return null;
+              })()}
 
-              {/* Tools */}
-              {data.tools_used && JSON.parse(data.tools_used || '[]').length > 0 && (
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Tools usadas</p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {JSON.parse(data.tools_used).map(t => (
-                      <span key={t} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-xs font-mono">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tags */}
               {data.tags && Object.keys(data.tags).length > 0 && (
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Tag className="w-3.5 h-3.5 text-slate-400" />
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Tags</p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="obs-drawer-section">
+                  <div className="obs-section-label" style={{ marginBottom: 8 }}>Tags</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {Object.entries(data.tags).map(([k, v]) => (
-                      <span key={k} className="px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 rounded-full text-xs font-mono">
-                        {k}: {String(v)}
-                      </span>
+                      <span key={k} className="kchip">{k}: {String(v)}</span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Prompt */}
-              <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Prompt</p>
-                <div className="bg-slate-950 rounded-xl p-4 max-h-64 overflow-y-auto">
-                  <p className="text-sm text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">
-                    {data.prompt_full || data.prompt_preview || '(sin preview disponible)'}
-                  </p>
+              <div className="obs-drawer-section">
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>Prompt preview</div>
+                <div style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55,
+                  color: 'var(--muted)', padding: 10,
+                  background: 'var(--hover)', borderRadius: 4,
+                  maxHeight: 160, overflow: 'auto',
+                }}>
+                  {data.prompt_full || data.prompt_preview || '(no preview available)'}
                 </div>
               </div>
             </>
           ) : (
-            <p className="text-slate-400 text-sm">No se pudo cargar el detalle.</p>
+            <div className="obs-empty">
+              <div className="obs-empty-title">Could not load request</div>
+            </div>
           )}
         </div>
       </div>

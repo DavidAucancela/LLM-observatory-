@@ -16,6 +16,7 @@ const MetricSchema = z.object({
   tools_used:    z.array(z.string()).default([]),
   prompt_preview:z.string().max(200).optional(),
   tags:          z.record(z.unknown()).optional().default({}),
+  api_key_hint:  z.string().max(30).optional(),
 });
 
 // ── POST / — SDK ingest (public, no auth) ─────────────────────────────────────
@@ -25,8 +26,8 @@ router.post('/', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO api_calls
          (provider, model, input_tokens, output_tokens, total_tokens,
-          cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+          cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         data.provider, data.model,
         data.input_tokens, data.output_tokens, data.total_tokens,
@@ -34,6 +35,7 @@ router.post('/', async (req, res) => {
         JSON.stringify(data.tools_used),
         data.prompt_preview || null,
         JSON.stringify(data.tags || {}),
+        data.api_key_hint || null,
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);

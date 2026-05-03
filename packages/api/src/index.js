@@ -112,6 +112,26 @@ async function startServer() {
     logger.error('DB migration failed:', err.message);
   }
 
+  // Clean up orphan test/sync records for providers with no configured credentials
+  try {
+    const r1 = await pool.query(
+      `DELETE FROM api_calls
+       WHERE prompt_preview = 'test:sdk_integration'
+       AND provider NOT IN (SELECT DISTINCT provider FROM provider_credentials)`
+    );
+    const r2 = await pool.query(
+      `DELETE FROM api_calls
+       WHERE prompt_preview LIKE 'sync:%'
+       AND provider NOT IN (
+         SELECT DISTINCT provider FROM provider_credentials WHERE key_type = 'admin'
+       )`
+    );
+    if (r1.rowCount + r2.rowCount > 0)
+      logger.info(`🧹 Cleaned ${r1.rowCount + r2.rowCount} orphan records`);
+  } catch (err) {
+    logger.error('Orphan cleanup failed:', err.message);
+  }
+
   if (process.env.AUTH_EMAIL && process.env.AUTH_PASSWORD_HASH) {
     try {
       await pool.query(

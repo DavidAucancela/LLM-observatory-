@@ -23,6 +23,11 @@ const OPENAI_PRICING = {
   'o3':            { input: 10.00, output: 40.00 },
 };
 
+function maskKey(key) {
+  if (!key || key.length < 12) return null;
+  return key.substring(0, 8) + '…' + key.slice(-4);
+}
+
 function calculateCost(model, inputTokens, outputTokens) {
   const pricing = ANTHROPIC_PRICING[model];
   if (!pricing) {
@@ -45,7 +50,8 @@ class MonitoredAnthropic {
   constructor(options = {}) {
     const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...anthropicOptions } = options;
     this.observatoryUrl = observatoryUrl;
-    this.tags = tags; // e.g. { project: 'checkout', env: 'prod' }
+    this.tags = tags;
+    this.apiKeyHint = maskKey(apiKey || anthropicOptions.apiKey || process.env.ANTHROPIC_API_KEY);
     this.client = new Anthropic({ apiKey, ...anthropicOptions });
     this.messages = this._buildMessagesProxy();
   }
@@ -70,6 +76,7 @@ class MonitoredAnthropic {
               model: params.model, input_tokens: 0, output_tokens: 0, total_tokens: 0,
               cost_usd: 0, latency_ms: Date.now() - startTime, status_code: err.status || 500,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+              api_key_hint: self.apiKeyHint,
             }).catch(() => {});
             throw err;
           }
@@ -84,6 +91,7 @@ class MonitoredAnthropic {
               cost_usd: calculateCost(params.model, inputTokens, outputTokens),
               latency_ms: Date.now() - startTime, status_code: 200,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+              api_key_hint: self.apiKeyHint,
             }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
           }).catch(err => console.warn('[LLM Observatory] Streaming metric capture failed:', err.message));
 
@@ -112,6 +120,7 @@ class MonitoredAnthropic {
           cost_usd: calculateCost(params.model, inputTokens, outputTokens),
           latency_ms: Date.now() - startTime, status_code: statusCode,
           tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+          api_key_hint: self.apiKeyHint,
         }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
         if (error) throw error;
@@ -135,6 +144,7 @@ class MonitoredOpenAI {
     const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...openaiOptions } = options;
     this.observatoryUrl = observatoryUrl;
     this.tags = tags;
+    this.apiKeyHint = maskKey(apiKey || openaiOptions.apiKey || process.env.OPENAI_API_KEY);
     const OpenAI = require('openai');
     this.client = new OpenAI({ apiKey, ...openaiOptions });
     this.chat = { completions: { create: this._createCompletion.bind(this) } };
@@ -160,6 +170,7 @@ class MonitoredOpenAI {
           provider: 'openai', model: params.model, input_tokens: 0, output_tokens: 0,
           total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
           status_code: err.status || 500, tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+          api_key_hint: this.apiKeyHint,
         }).catch(() => {});
         throw err;
       }
@@ -189,6 +200,7 @@ class MonitoredOpenAI {
       cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
       latency_ms: Date.now() - startTime, status_code: statusCode,
       tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+      api_key_hint: this.apiKeyHint,
     }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
     if (error) throw error;
@@ -214,6 +226,7 @@ class MonitoredOpenAI {
         cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
         latency_ms: Date.now() - startTime, status_code: 200,
         tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+        api_key_hint: this.apiKeyHint,
       }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
     }
   }

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Observatory — Design</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #f4f5f7; font-family: 'Inter', sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+<script type="text/babel" src="component-sheet.jsx"></script>
+
+<script type="text/babel">
+const W = 1280;
+const H = 800;
+
+function App() {
+  return (
+    <DesignCanvas title="LLM Observatory">
+      <DCSection id="overview" title="01 · Overview">
+        <DCArtboard id="ov-light" label="Overview · Light" width={W} height={H}>
+          <Overview theme="light" />
+        </DCArtboard>
+        <DCArtboard id="ov-dark" label="Overview · Dark" width={W} height={H}>
+          <Overview theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="activity" title="02–03 · Activity">
+        <DCArtboard id="act-req-light" label="Requests + Drawer · Light" width={W} height={H}>
+          <ActivityRequests theme="light" />
+        </DCArtboard>
+        <DCArtboard id="act-req-dark" label="Requests + Drawer · Dark" width={W} height={H}>
+          <ActivityRequests theme="dark" />
+        </DCArtboard>
+        <DCArtboard id="act-mod-light" label="Models · Light" width={W} height={H}>
+          <ActivityModels theme="light" />
+        </DCArtboard>
+        <DCArtboard id="act-mod-dark" label="Models · Dark" width={W} height={H}>
+          <ActivityModels theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="finance" title="04–05 · Finance">
+        <DCArtboard id="fin-bal-light" label="Balances · Light" width={W} height={H}>
+          <FinanceBalances theme="light" />
+        </DCArtboard>
+        <DCArtboard id="fin-bal-dark" label="Balances · Dark" width={W} height={H}>
+          <FinanceBalances theme="dark" />
+        </DCArtboard>
+        <DCArtboard id="fin-bud-light" label="Budgets · Light" width={W} height={H}>
+          <FinanceBudgets theme="light" />
+        </DCArtboard>
+        <DCArtboard id="fin-bud-dark" label="Budgets · Dark" width={W} height={H}>
+          <FinanceBudgets theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="settings" title="06–08 · Settings">
+        <DCArtboard id="set-keys-light" label="Keys · Light" width={W} height={H}>
+          <SettingsKeys theme="light" />
+        </DCArtboard>
+        <DCArtboard id="set-keys-dark" label="Keys · Dark" width={W} height={H}>
+          <SettingsKeys theme="dark" />
+        </DCArtboard>
+        <DCArtboard id="set-sync-light" label="Sync · Light" width={W} height={H}>
+          <SettingsSync theme="light" />
+        </DCArtboard>
+        <DCArtboard id="set-sync-dark" label="Sync · Dark" width={W} height={H}>
+          <SettingsSync theme="dark" />
+        </DCArtboard>
+        <DCArtboard id="set-alerts-light" label="Alerts · Light" width={W} height={H}>
+          <SettingsAlerts theme="light" />
+        </DCArtboard>
+        <DCArtboard id="set-alerts-dark" label="Alerts · Dark" width={W} height={H}>
+          <SettingsAlerts theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="auth" title="09 · Login">
+        <DCArtboard id="login-light" label="Login · Light" width={W} height={H}>
+          <Login theme="light" />
+        </DCArtboard>
+        <DCArtboard id="login-dark" label="Login · Dark" width={W} height={H}>
+          <Login theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="empty" title="10 · Empty state">
+        <DCArtboard id="empty-light" label="Overview · Empty · Light" width={W} height={H}>
+          <OverviewEmpty theme="light" />
+        </DCArtboard>
+        <DCArtboard id="empty-dark" label="Overview · Empty · Dark" width={W} height={H}>
+          <OverviewEmpty theme="dark" />
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="components" title="Component sheet">
+        <DCArtboard id="cmp-light" label="Components · Light" width={1280} height={1100}>
+          <ComponentSheet theme="light" />
+        </DCArtboard>
+        <DCArtboard id="cmp-dark" label="Components · Dark" width={1280} height={1100}>
+          <ComponentSheet theme="dark" />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

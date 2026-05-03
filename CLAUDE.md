@@ -100,6 +100,8 @@ API_INTERNAL_URL=http://api.railway.internal:3001
 - Anthropic: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001, claude-3-opus, claude-3-5-sonnet, claude-3-haiku
 - OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo, o1, o1-mini, o3-mini
 
+**`api_key_hint` in metrics:** Both `MonitoredAnthropic` and `MonitoredOpenAI` compute `maskKey(apiKey)` in the constructor and include it as `api_key_hint` in every metric POST. This links each `api_calls` record to the credential that generated it.
+
 ### `packages/api`
 
 **Entry point:** `src/index.js`
@@ -126,13 +128,17 @@ src/
 ```
 
 **Database tables:**
-- `api_calls` — All metric records (main table)
+- `api_calls` — All metric records. Key columns: `api_key_hint` (links to credential), `prompt_preview` (`sync:provider` for admin sync imports, `test:sdk_integration` for SDK ping tests)
 - `budgets` — Spending limits (daily/weekly/monthly)
 - `provider_balances` — Balance recharge tracking
-- `provider_credentials` — Encrypted API keys
+- `provider_credentials` — Encrypted API keys (`key_type`: `sdk` | `admin`)
 - `alert_rules` — Discord alert configs with thresholds
 - `alert_history` — Alert audit log
 - `sync_logs` — Data sync history
+
+**Data integrity — cascade delete:** `DELETE /api/credentials/:id` automatically deletes all `api_calls` where `api_key_hint = key_hint`. Admin key deletions also remove `sync:provider` records.
+
+**Orphan cleanup on startup:** `index.js` deletes `test:sdk_integration` records for providers with no credentials, and `sync:*` records for providers with no admin key.
 
 **Time series logic:** `DATE_TRUNC('hour')` for ≤7d ranges, `DATE_TRUNC('day')` for >7d.
 
@@ -144,24 +150,43 @@ src/
 
 **Entry point:** `src/main.jsx`
 
-**Pages (react-router-dom v6):**
-- `/` → `Dashboard.jsx` — KPIs, time series charts, provider breakdown, projections
-- `/requests` → `Requests.jsx` — Paginated table, filtering, detail drawer, CSV export
-- `/models` → `Models.jsx` — Model comparison, cost breakdown, efficiency metrics
-- `/providers` → `Providers.jsx` — Provider balance tracking, recharge management
-- `/budgets` → `Budgets.jsx` — Budget creation, progress bars, warnings
-- `/settings` → `Settings.jsx` — Credentials, API key testing, alert rules
+**Pages (react-router-dom v6) — 4 páginas con tabs:**
+- `/` → `Dashboard.jsx` — KPI strip con sparklines, MultiLineChart tokens over time, provider breakdown, proyección mensual
+- `/activity` → `Activity.jsx` — Tab **Requests** (tabla paginada, filtros, drawer, CSV export) + Tab **Models** (HBar chart, tabla comparativa)
+- `/finance` → `Finance.jsx` — Tab **Balances** (saldo por provider, historial recargas) + Tab **Budgets** (límites de gasto con progress bars)
+- `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord)
+
+**Redirects legacy:** `/requests` → `/activity`, `/models` → `/activity?tab=models`, `/providers` → `/finance`, `/budgets` → `/finance?tab=budgets`
+
+**Páginas que ya no están en rutas** (archivos existen pero sin ruta): `Requests.jsx`, `Models.jsx`, `Providers.jsx`, `Budgets.jsx`
 
 **Key components:**
-- `Sidebar.jsx` — Navigation + dark mode toggle
-- `KPICard.jsx` — Reusable metric card
-- `ProviderBadge.jsx` — Anthropic/OpenAI badge
-- `RequestDrawer.jsx` — Detail view for individual API calls
+- `Sidebar.jsx` — 220px fijo, 4 nav items, indicador borde izquierdo, provider status con dots pulsantes, sin collapse
+- `ProviderBadge.jsx` — dot cuadrado amber/green. Props: `provider` (lowercase), `size` (`sm`|`lg`)
+- `RequestDrawer.jsx` — Panel derecho con metadata, token breakdown, prompt preview
+- `Sparkline.jsx` — SVG sparkline inline (sin Recharts)
+- `MultiLineChart.jsx` — SVG multi-línea con gridlines y tick labels
+- `HBar.jsx` — Barra horizontal: label | barra | valor
 - `hooks/useSocket.js` — Socket.io connection and event listeners
 
 **Real-time pattern:** `useSocket` hook listens for `new-metric` event → triggers summary refetch.
 
-**Styling:** Tailwind CSS with custom brand colors (see `tailwind.config.js`). Dark mode via Tailwind `class` strategy.
+**Sistema de diseño:** CSS custom properties en `index.css` — NO usar clase `dark` de Tailwind. Usar `.theme-light` / `.theme-dark` en el div raíz. Variables: `--page`, `--surface`, `--border`, `--text`, `--muted`, `--accent`, `--anthropic`, `--openai`. Fuentes: Inter (sans) + JetBrains Mono (mono via `var(--font-mono)`).
+
+**Layout obligatorio por página:**
+```jsx
+<main className="obs-main">
+  <div className="obs-header">...</div>   // 56px
+  <div className="obs-content">...</div>  // flex:1, scroll interno
+</main>
+```
+
+**Tabs dentro de página:**
+```jsx
+<div className="obs-tabbar">
+  <button className={`obs-tab${tab==='x'?' active':''}`} onClick={()=>setTab('x')}>X</button>
+</div>
+```
 
 ---
 
@@ -180,15 +205,16 @@ src/
 | `/api/balances` | GET/POST | Balance tracking |
 | `/api/balances/:id` | DELETE | Remove balance record |
 | `/api/credentials` | GET/POST | Credential management |
-| `/api/credentials/:provider/test` | POST | Test API key validity |
-| `/api/credentials/:provider/key` | GET | Decrypt key (internal) |
-| `/api/credentials/:provider` | DELETE | Remove credential |
+| `/api/credentials/:id/test` | POST | Validate key against provider API |
+| `/api/credentials/:id/ping` | POST | Idempotent SDK test metric (replaces previous) |
+| `/api/credentials/:id` | DELETE | Remove credential + cascade delete its api_calls |
 | `/api/credentials/openai/balance` | GET | Fetch OpenAI usage |
 | `/api/alerts/rules` | GET/POST | Alert rule management |
 | `/api/alerts/rules/:id` | PUT/DELETE | Update/delete rule |
 | `/api/alerts/history` | GET | Alert audit log |
 | `/api/alerts/rules/:id/test` | POST | Send test Discord alert |
-| `/api/sync/:provider` | POST | Start historical sync |
+| `/api/sync/:provider` | POST | Start historical sync (requires admin key) |
+| `/api/sync/:provider/data` | DELETE | Delete ALL api_calls for provider (sync + SDK) |
 | `/api/sync/logs` | GET | Sync history |
 | `/api/sync/status` | GET | Latest sync status |
 | `/health` | GET | Health check |
@@ -232,6 +258,12 @@ The web Dockerfile uses `entrypoint.sh` for runtime environment variable substit
 - **Time zone:** All timestamps stored as `TIMESTAMPTZ`. Always use timezone-aware comparisons.
 - **Cost precision:** Use `DECIMAL(10,6)` for costs. Don't round until display layer.
 - **Encryption key:** Default key exists in code but should always be overridden via `ENCRYPTION_KEY` env var in production.
+- **api_key_hint linkage:** Every metric must carry `api_key_hint` (set by SDK). Never remove this field — it's the only link between `api_calls` and `provider_credentials`.
+- **Dashboard Sync button:** Only calls `fetchAll()` (local DB refresh). Never call `POST /api/sync/:provider` from the dashboard header — that requires an admin key and belongs in Settings → Sync tab only.
+- **Dashboard provider filter:** Dashboard reads configured providers from `/api/credentials` and filters projection/chart series to only show those providers. Don't hardcode `['anthropic', 'openai']` in UI loops.
+- **Dark mode:** Use `theme-light` / `theme-dark` CSS classes (CSS custom properties), NOT Tailwind's `dark` class strategy. The App.jsx shell applies `className={darkMode ? 'theme-dark' : 'theme-light'}` on the root div.
+- **New page pattern:** Every new page must render `<main className="obs-main">` with `obs-header` + `obs-content` children. Use `obs-tabbar` + `obs-tab` for sub-navigation within a page.
+- **CSS classes:** Use `.obs-btn`, `.obs-btn-primary`, `.obs-table`, `.obs-section-label`, `.obs-field`, `.obs-input`, `.obs-select`, `.kchip`, `.vbadge`, `.tsw`, `.iprog-bar/.iprog-fill`, `.dot/.dot-pulse` from `index.css`. Do not create new Tailwind utility classes for these patterns.
 
 ---
 

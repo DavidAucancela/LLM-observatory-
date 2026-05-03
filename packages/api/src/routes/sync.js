@@ -216,6 +216,23 @@ router.post('/:provider', async (req, res, next) => {
   })();
 });
 
+// DELETE /api/sync/:provider/data — delete all api_calls for a provider
+router.delete('/:provider/data', async (req, res, next) => {
+  const { provider } = req.params;
+  if (!['anthropic', 'openai'].includes(provider)) {
+    return res.status(400).json({ error: 'Proveedor no soportado' });
+  }
+  try {
+    const result = await pool.query(
+      `DELETE FROM api_calls WHERE provider = $1`,
+      [provider]
+    );
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/sync/logs — list recent sync operations
 router.get('/logs', async (req, res, next) => {
   try {

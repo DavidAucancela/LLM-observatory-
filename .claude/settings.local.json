@@ -37,7 +37,11 @@
       "Bash(docker-compose down:*)",
       "Bash(docker exec llm-observatory--api-1:*)",
       "Bash(kill %1)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(open *)"
     ]
   }
 }

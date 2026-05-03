@@ -46,6 +46,40 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// POST /api/credentials/:id/ping — idempotent test metric (replaces previous one)
+router.post('/:id/ping', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+
+    const row = await pool.query(
+      'SELECT provider, key_hint FROM provider_credentials WHERE id = $1',
+      [id]
+    );
+    if (!row.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
+
+    const { provider, key_hint } = row.rows[0];
+    const model = provider === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gpt-4o-mini';
+
+    // Replace any existing test record for this key
+    await pool.query(
+      `DELETE FROM api_calls WHERE provider = $1 AND prompt_preview = 'test:sdk_integration' AND api_key_hint = $2`,
+      [provider, key_hint]
+    );
+
+    const result = await pool.query(
+      `INSERT INTO api_calls (provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, prompt_preview, api_key_hint)
+       VALUES ($1, $2, 12, 24, 36, 0.0001, 123, 200, 'test:sdk_integration', $3) RETURNING *`,
+      [provider, model, key_hint]
+    );
+
+    if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/credentials/:id/test — validate a specific key by ID
 router.post('/:id/test', async (req, res, next) => {
   try {
@@ -114,17 +148,34 @@ router.post('/:id/test', async (req, res, next) => {
   }
 });
 
-// DELETE /api/credentials/:id — delete a specific credential by ID
+// DELETE /api/credentials/:id — delete credential and cascade its associated metrics
 router.delete('/:id', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
 
-    const result = await pool.query(
-      'DELETE FROM provider_credentials WHERE id = $1 RETURNING id',
+    const credResult = await pool.query(
+      'SELECT provider, key_type, key_hint FROM provider_credentials WHERE id = $1',
       [id]
     );
-    if (!result.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
+    if (!credResult.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
+
+    const { provider, key_type, key_hint } = credResult.rows[0];
+
+    // Delete metrics linked to this specific key
+    if (key_hint) {
+      await pool.query('DELETE FROM api_calls WHERE api_key_hint = $1', [key_hint]);
+    }
+
+    // Admin keys: also delete sync-imported records for this provider
+    if (key_type === 'admin') {
+      await pool.query(
+        `DELETE FROM api_calls WHERE provider = $1 AND prompt_preview = $2`,
+        [provider, `sync:${provider}`]
+      );
+    }
+
+    await pool.query('DELETE FROM provider_credentials WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (err) {
     next(err);
