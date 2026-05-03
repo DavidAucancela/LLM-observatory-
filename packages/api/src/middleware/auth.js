@@ -36,4 +36,11 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware };
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Se requiere rol administrador' });
+  }
+  next();
+}
+
+module.exports = { authMiddleware, requireAdmin };

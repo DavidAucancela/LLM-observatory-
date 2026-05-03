@@ -41,7 +41,24 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(open *)"
+      "Bash(open *)",
+      "Bash(mkdir -p \"/Users/david/Documents/Projects/LLM observatory/LLM-observatory-/packages/sdk-python/llm_observatory\")",
+      "Bash(mkdir -p \"/Users/david/Documents/Projects/LLM observatory/LLM-observatory-/packages/sdk-python/tests\")",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -m pip install --upgrade pip -q)",
+      "Bash(python3 -m pip install -e \"/Users/david/Documents/Projects/LLM observatory/LLM-observatory-/packages/sdk-python[dev]\" -q)",
+      "Bash(brew list *)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/opt/homebrew/bin/python3.12 -m pip install -e \"/Users/david/Documents/Projects/LLM observatory/LLM-observatory-/packages/sdk-python[dev]\" -q)",
+      "Bash(/opt/homebrew/bin/python3.12 -m pip install -e \"/Users/david/Documents/Projects/LLM observatory/LLM-observatory-/packages/sdk-python[dev]\" -q --break-system-packages)",
+      "Bash(/opt/homebrew/bin/python3.12 -m pip install anthropic pytest pytest-asyncio --break-system-packages -q)",
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/test_pricing.py -v)",
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/test_anthropic.py -v)",
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/test_openai.py -v)",
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/ -v)",
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/ -q)"
     ]
   }
 }

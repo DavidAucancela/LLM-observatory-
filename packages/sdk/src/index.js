@@ -23,6 +23,18 @@ const OPENAI_PRICING = {
   'o3':            { input: 10.00, output: 40.00 },
 };
 
+async function _postMetric(url, data) {
+  const body = JSON.stringify(data);
+  const headers = { 'Content-Type': 'application/json' };
+  try {
+    await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
+  } catch (firstErr) {
+    // One retry after 1 s — still inside fire-and-forget, never blocks the caller
+    await new Promise(r => setTimeout(r, 1000));
+    await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
+  }
+}
+
 function maskKey(key) {
   if (!key || key.length < 12) return null;
   return key.substring(0, 8) + '…' + key.slice(-4);
@@ -130,12 +142,7 @@ class MonitoredAnthropic {
   }
 
   async _sendMetric(data) {
-    await fetch(`${this.observatoryUrl}/api/metrics`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-      signal: AbortSignal.timeout(5000)
-    });
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data);
   }
 }
 
@@ -232,12 +239,7 @@ class MonitoredOpenAI {
   }
 
   async _sendMetric(data) {
-    await fetch(`${this.observatoryUrl}/api/metrics`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-      signal: AbortSignal.timeout(5000)
-    });
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data);
   }
 }
 

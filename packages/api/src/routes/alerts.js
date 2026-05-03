@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const pool = require('../db/pool');
 const { sendDiscordAlert } = require('../jobs/alertChecker');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.get('/rules', async (req, res) => {
   }
 });
 
-router.post('/rules', async (req, res) => {
+router.post('/rules', requireAdmin, async (req, res) => {
   try {
     const data = RuleSchema.parse(req.body);
     const result = await pool.query(
@@ -36,7 +37,7 @@ router.post('/rules', async (req, res) => {
   }
 });
 
-router.put('/rules/:id', async (req, res) => {
+router.put('/rules/:id', requireAdmin, async (req, res) => {
   try {
     const { enabled, threshold_usd, discord_webhook_url, debounce_hours } = req.body;
     const sets = [];
@@ -54,7 +55,7 @@ router.put('/rules/:id', async (req, res) => {
   }
 });
 
-router.delete('/rules/:id', async (req, res) => {
+router.delete('/rules/:id', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM alert_rules WHERE id = $1', [req.params.id]);
     res.json({ success: true });
@@ -77,7 +78,7 @@ router.get('/history', async (req, res) => {
   }
 });
 
-router.post('/rules/:id/test', async (req, res) => {
+router.post('/rules/:id/test', requireAdmin, async (req, res) => {
   try {
     const rule = await pool.query('SELECT * FROM alert_rules WHERE id = $1', [req.params.id]);
     if (!rule.rows.length) return res.status(404).json({ error: 'Rule not found' });

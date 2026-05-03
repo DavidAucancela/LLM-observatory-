@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const pool = require('../db/pool');
 const { encrypt, decrypt, maskKey } = require('../db/crypto');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST /api/credentials — add a new credential
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const { provider, key_type, label, value } = CredentialSchema.parse(req.body);
     const encrypted = encrypt(value);
@@ -47,7 +48,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // POST /api/credentials/:id/ping — idempotent test metric (replaces previous one)
-router.post('/:id/ping', async (req, res, next) => {
+router.post('/:id/ping', requireAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
@@ -81,7 +82,7 @@ router.post('/:id/ping', async (req, res, next) => {
 });
 
 // POST /api/credentials/:id/test — validate a specific key by ID
-router.post('/:id/test', async (req, res, next) => {
+router.post('/:id/test', requireAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
@@ -149,7 +150,7 @@ router.post('/:id/test', async (req, res, next) => {
 });
 
 // DELETE /api/credentials/:id — delete credential and cascade its associated metrics
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });

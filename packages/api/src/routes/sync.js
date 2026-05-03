@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { decrypt } = require('../db/crypto');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -148,7 +149,7 @@ async function importBuckets(buckets, provider) {
 }
 
 // POST /api/sync/:provider — start historical sync using admin key
-router.post('/:provider', async (req, res, next) => {
+router.post('/:provider', requireAdmin, async (req, res, next) => {
   const { provider } = req.params;
   const days = parseInt(req.query.days) || 30;
 
@@ -217,7 +218,7 @@ router.post('/:provider', async (req, res, next) => {
 });
 
 // DELETE /api/sync/:provider/data — delete all api_calls for a provider
-router.delete('/:provider/data', async (req, res, next) => {
+router.delete('/:provider/data', requireAdmin, async (req, res, next) => {
   const { provider } = req.params;
   if (!['anthropic', 'openai'].includes(provider)) {
     return res.status(400).json({ error: 'Proveedor no soportado' });

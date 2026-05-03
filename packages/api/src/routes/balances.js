@@ -1,6 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const pool = require('../db/pool');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -51,7 +52,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const data = BalanceSchema.parse(req.body);
     const result = await pool.query(
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM provider_balances WHERE id = $1', [req.params.id]);
     res.json({ success: true });
