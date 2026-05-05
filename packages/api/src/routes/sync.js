@@ -5,6 +5,13 @@ const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(id));
+}
+
 const PRICING = {
   anthropic: {
     'claude-opus-4-6': { input: 15.0, output: 75.0 },
@@ -58,7 +65,7 @@ async function syncAnthropic(adminKey, days) {
     url.searchParams.set('limit', '31');
     if (nextPage) url.searchParams.set('page', nextPage);
 
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       headers: { 'x-api-key': adminKey, 'anthropic-version': '2023-06-01' }
     });
     if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
@@ -92,7 +99,7 @@ async function syncOpenAI(apiKey, days) {
     url.searchParams.set('limit', 31);
     if (page) url.searchParams.set('page', page);
 
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
     });
     if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);

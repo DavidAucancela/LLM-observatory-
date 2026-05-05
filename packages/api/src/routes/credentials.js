@@ -6,6 +6,13 @@ const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(id));
+}
+
 const CredentialSchema = z.object({
   provider: z.enum(['anthropic', 'openai']),
   key_type: z.enum(['sdk', 'admin']),
@@ -101,7 +108,7 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
     if (provider === 'anthropic') {
       if (key_type === 'admin') {
         // Admin keys: test against usage report endpoint
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           'https://api.anthropic.com/v1/organizations/usage_report/messages?limit=1',
           { headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' } }
         );
@@ -112,7 +119,7 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
         }
       } else {
         // SDK keys: test against models endpoint
-        const response = await fetch('https://api.anthropic.com/v1/models', {
+        const response = await fetchWithTimeout('https://api.anthropic.com/v1/models', {
           headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
         });
         valid = response.status === 200;
@@ -122,7 +129,7 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
       if (key_type === 'admin') {
         // Admin/org keys: test against org usage endpoint
         const startOfMonth = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `https://api.openai.com/v1/organization/usage/completions?start_time=${startOfMonth}&limit=1`,
           { headers: { Authorization: `Bearer ${apiKey}` } }
         );
@@ -130,7 +137,7 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
         if (!valid) errorMsg = `OpenAI Organization API respondió con ${response.status}`;
       } else {
         // SDK keys: test against models endpoint
-        const response = await fetch('https://api.openai.com/v1/models', {
+        const response = await fetchWithTimeout('https://api.openai.com/v1/models', {
           headers: { Authorization: `Bearer ${apiKey}` }
         });
         valid = response.status === 200;
@@ -199,7 +206,7 @@ router.get('/openai/balance', async (req, res, next) => {
     const startOfMonth = Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000);
     const url = `https://api.openai.com/v1/organization/usage/completions?start_time=${startOfMonth}&bucket_width=1d&limit=31`;
 
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+    const response = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${apiKey}` } });
     if (!response.ok) {
       const text = await response.text();
       return res.status(response.status).json({ error: `OpenAI ${response.status}: ${text}` });
