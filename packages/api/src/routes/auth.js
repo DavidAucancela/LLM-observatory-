@@ -66,7 +66,9 @@ router.post('/register', async (req, res, next) => {
         `UPDATE users SET activation_token = $1 WHERE id = $2`,
         [token, user.id]
       );
-      await sendActivationEmail(email, token);
+      sendActivationEmail(email, token).catch(err =>
+        console.error('[email] sendActivationEmail failed:', err.message)
+      );
       return res.status(201).json({ message: 'Cuenta creada. Revisa tu email para activarla.' });
     }
 
@@ -79,7 +81,9 @@ router.post('/register', async (req, res, next) => {
       [email, hash, token]
     );
 
-    await sendActivationEmail(email, token);
+    sendActivationEmail(email, token).catch(err =>
+      console.error('[email] sendActivationEmail failed:', err.message)
+    );
 
     res.status(201).json({ message: 'Cuenta creada. Revisa tu email para activarla.' });
   } catch (err) {
