@@ -240,7 +240,7 @@ docker-compose up -d --build
 
 Services: `postgres:16`, `api` (Node 20 Alpine), `web` (Nginx with multi-stage build).
 
-The web Dockerfile uses `entrypoint.sh` for runtime environment variable substitution in nginx config.
+The web Dockerfile uses `entrypoint.sh` for runtime environment variable substitution in nginx config. `entrypoint.sh` also reads the DNS resolver from `/etc/resolv.conf` at container start and injects it as `${RESOLVER}` into the nginx template — this allows nginx to re-resolve `api.railway.internal` dynamically on each request (IPv6 nameservers are wrapped in `[brackets]` automatically).
 
 ---
 
@@ -250,8 +250,10 @@ The web Dockerfile uses `entrypoint.sh` for runtime environment variable substit
 2. New Railway project → Add PostgreSQL plugin (auto-injects `DATABASE_URL`)
 3. Two services:
    - **API** → Root: `packages/api`
-   - **Web** → Root: `packages/web`, set `API_INTERNAL_URL=http://api.railway.internal:3001`
+   - **Web** → Root: `packages/web`, set `API_INTERNAL_URL=http://<service-name>.railway.internal:3001`
 4. Enable Private Networking on API service
+
+> **Nota sobre `API_INTERNAL_URL`:** Railway genera el hostname interno a partir del nombre del servicio en el dashboard (ej. `llm-observatory.railway.internal`). El valor por defecto `api.railway.internal` solo funciona si el servicio se llama exactamente `api`. Verifica el nombre real en Railway → servicio API → Settings → Networking.
 
 ---
 

@@ -226,9 +226,13 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 4. Agrega dos servicios desde tu repo:
    - **API** → Root Directory: `packages/api`
    - **Web** → Root Directory: `packages/web`
-5. En el servicio Web, agrega: `API_INTERNAL_URL=http://api.railway.internal:3001`
+5. En el servicio Web, agrega: `API_INTERNAL_URL=http://<nombre-servicio-api>.railway.internal:3001`
 6. En ambos servicios, agrega las variables de `.env.example` (ENCRYPTION_KEY, AUTH_*, JWT_*)
 7. Habilita **Private Networking** en el servicio API
+
+> **¿Cuál es el hostname del API?** Railway genera el hostname interno a partir del nombre del servicio en el dashboard. Ve a Railway → servicio API → Settings → Networking para ver el hostname exacto (ej. `llm-observatory.railway.internal`). Usar `api.railway.internal` solo funciona si el servicio se llama exactamente `api`.
+
+> **DNS dinámico:** el nginx del web service re-resuelve el hostname del API en cada request usando el resolver del contenedor (`/etc/resolv.conf`). Esto significa que si el servicio API se redespliega y cambia de IP interna, el web service lo detecta automáticamente sin necesitar un redeploy.
 
 ---
 
