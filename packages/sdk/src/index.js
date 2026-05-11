@@ -21,6 +21,26 @@ const OPENAI_PRICING = {
   'o1-mini':       { input:  3.00, output: 12.00 },
   'o3-mini':       { input:  1.10, output:  4.40 },
   'o3':            { input: 10.00, output: 40.00 },
+  'gpt-4.1':       { input:  2.00, output:  8.00 },
+  'gpt-4.1-mini':  { input:  0.40, output:  1.60 },
+  'gpt-4.1-nano':  { input:  0.10, output:  0.40 },
+};
+
+// Embeddings: price per million input tokens
+const OPENAI_EMBEDDINGS_PRICING = {
+  'text-embedding-3-small': 0.02,
+  'text-embedding-3-large': 0.13,
+  'text-embedding-ada-002': 0.10,
+};
+
+// Whisper: price per minute of audio
+const OPENAI_WHISPER_PRICE_PER_MINUTE = 0.006;
+
+// TTS: price per million characters
+const OPENAI_TTS_PRICING = {
+  'tts-1':          15.00,
+  'tts-1-hd':       30.00,
+  'gpt-4o-mini-tts': 15.00,
 };
 
 async function _postMetric(url, data) {
@@ -56,6 +76,28 @@ function calculateOpenAICost(model, inputTokens, outputTokens) {
     return 0;
   }
   return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+}
+
+function calculateOpenAIEmbeddingCost(model, inputTokens) {
+  const price = OPENAI_EMBEDDINGS_PRICING[model];
+  if (!price) {
+    console.warn(`[LLM Observatory] Unknown embedding model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (inputTokens / 1_000_000) * price;
+}
+
+function calculateWhisperCost(durationSeconds) {
+  return (durationSeconds / 60) * OPENAI_WHISPER_PRICE_PER_MINUTE;
+}
+
+function calculateTTSCost(model, characterCount) {
+  const price = OPENAI_TTS_PRICING[model];
+  if (!price) {
+    console.warn(`[LLM Observatory] Unknown TTS model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (characterCount / 1_000_000) * price;
 }
 
 class MonitoredAnthropic {
@@ -155,6 +197,12 @@ class MonitoredOpenAI {
     const OpenAI = require('openai');
     this.client = new OpenAI({ apiKey, ...openaiOptions });
     this.chat = { completions: { create: this._createCompletion.bind(this) } };
+    this.embeddings = { create: this._createEmbedding.bind(this) };
+    this.audio = {
+      transcriptions: { create: this._createTranscription.bind(this) },
+      speech:         { create: this._createSpeech.bind(this) },
+    };
+    this.responses = { create: this._createResponse.bind(this) };
   }
 
   async _createCompletion(params) {
@@ -238,6 +286,170 @@ class MonitoredOpenAI {
     }
   }
 
+  async _createEmbedding(params) {
+    const startTime = Date.now();
+    const inputPreview = Array.isArray(params.input)
+      ? `[${params.input.length} input(s)] ${String(params.input[0]).substring(0, 150)}`
+      : String(params.input).substring(0, 200);
+
+    let response, statusCode = 200, error = null;
+    try {
+      response = await this.client.embeddings.create(params);
+    } catch (err) {
+      statusCode = err.status || 500;
+      error = err;
+    }
+
+    const inputTokens = response?.usage?.prompt_tokens || 0;
+    this._sendMetric({
+      provider: 'openai', model: params.model,
+      input_tokens: inputTokens, output_tokens: 0, total_tokens: inputTokens,
+      cost_usd: calculateOpenAIEmbeddingCost(params.model, inputTokens),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      tools_used: [], prompt_preview: inputPreview,
+      tags: this.tags, api_key_hint: this.apiKeyHint,
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+    if (error) throw error;
+    return response;
+  }
+
+  async _createTranscription(params) {
+    const startTime = Date.now();
+    const originalFormat = params.response_format;
+    const canGetDuration = !originalFormat || ['json', 'verbose_json', 'text'].includes(originalFormat);
+
+    let response, statusCode = 200, error = null;
+    try {
+      // Force verbose_json internally to capture duration for accurate cost tracking.
+      // srt/vtt formats can't be reconstructed from verbose_json, so they skip duration.
+      const callParams = canGetDuration ? { ...params, response_format: 'verbose_json' } : params;
+      response = await this.client.audio.transcriptions.create(callParams);
+    } catch (err) {
+      statusCode = err.status || 500;
+      error = err;
+    }
+
+    const durationSeconds = response?.duration || 0;
+    const transcribedText = typeof response === 'string' ? response : (response?.text || '');
+    const preview = durationSeconds
+      ? `audio transcription · ${Math.floor(durationSeconds / 60)}m ${Math.round(durationSeconds % 60)}s`
+      : 'audio transcription';
+
+    this._sendMetric({
+      provider: 'openai', model: params.model || 'whisper-1',
+      input_tokens: Math.round(durationSeconds), output_tokens: transcribedText.length,
+      total_tokens: Math.round(durationSeconds),
+      cost_usd: calculateWhisperCost(durationSeconds),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      tools_used: [], prompt_preview: preview,
+      tags: this.tags, api_key_hint: this.apiKeyHint,
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+    if (error) throw error;
+
+    // Return in the format the user originally requested
+    if (!canGetDuration) return response; // srt / vtt — already in correct format
+    if (!originalFormat || originalFormat === 'json') return { text: response.text };
+    if (originalFormat === 'text') return response.text;
+    return response; // verbose_json
+  }
+
+  async _createSpeech(params) {
+    const startTime = Date.now();
+    const charCount = (params.input || '').length;
+
+    let response, statusCode = 200, error = null;
+    try {
+      response = await this.client.audio.speech.create(params);
+    } catch (err) {
+      statusCode = err.status || 500;
+      error = err;
+    }
+
+    this._sendMetric({
+      provider: 'openai', model: params.model || 'tts-1',
+      input_tokens: charCount, output_tokens: 0, total_tokens: charCount,
+      cost_usd: calculateTTSCost(params.model || 'tts-1', charCount),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      tools_used: [],
+      prompt_preview: `[TTS ${params.voice || ''}] ${(params.input || '').substring(0, 170)}`,
+      tags: this.tags, api_key_hint: this.apiKeyHint,
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+    if (error) throw error;
+    return response;
+  }
+
+  async _createResponse(params) {
+    const startTime = Date.now();
+    const inputPreview = typeof params.input === 'string'
+      ? params.input.substring(0, 200)
+      : JSON.stringify(params.input?.[0] || '').substring(0, 200);
+
+    if (params.stream) {
+      let stream;
+      try {
+        stream = await this.client.responses.create(params);
+      } catch (err) {
+        this._sendMetric({
+          provider: 'openai', model: params.model, input_tokens: 0, output_tokens: 0,
+          total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
+          status_code: err.status || 500, tools_used: [], prompt_preview: inputPreview,
+          tags: this.tags, api_key_hint: this.apiKeyHint,
+        }).catch(() => {});
+        throw err;
+      }
+      return this._wrapResponsesStream(stream, startTime, params, inputPreview);
+    }
+
+    let response, statusCode = 200, error = null;
+    try {
+      response = await this.client.responses.create(params);
+    } catch (err) {
+      statusCode = err.status || 500;
+      error = err;
+    }
+
+    const inputTokens  = response?.usage?.input_tokens  || 0;
+    const outputTokens = response?.usage?.output_tokens || 0;
+    this._sendMetric({
+      provider: 'openai', model: params.model,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+      cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      tools_used: [], prompt_preview: inputPreview,
+      tags: this.tags, api_key_hint: this.apiKeyHint,
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+    if (error) throw error;
+    return response;
+  }
+
+  async* _wrapResponsesStream(stream, startTime, params, inputPreview) {
+    let inputTokens = 0, outputTokens = 0;
+    try {
+      for await (const event of stream) {
+        if (event.type === 'response.completed') {
+          inputTokens  = event.response?.usage?.input_tokens  || 0;
+          outputTokens = event.response?.usage?.output_tokens || 0;
+        }
+        yield event;
+      }
+    } finally {
+      this._sendMetric({
+        provider: 'openai', model: params.model,
+        input_tokens: inputTokens, output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
+        latency_ms: Date.now() - startTime, status_code: 200,
+        tools_used: [], prompt_preview: inputPreview,
+        tags: this.tags, api_key_hint: this.apiKeyHint,
+      }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+    }
+  }
+
   async _sendMetric(data) {
     await _postMetric(`${this.observatoryUrl}/api/metrics`, data);
   }
@@ -248,6 +460,12 @@ module.exports = {
   MonitoredOpenAI,
   calculateCost,
   calculateOpenAICost,
+  calculateOpenAIEmbeddingCost,
+  calculateWhisperCost,
+  calculateTTSCost,
   ANTHROPIC_PRICING,
-  OPENAI_PRICING
+  OPENAI_PRICING,
+  OPENAI_EMBEDDINGS_PRICING,
+  OPENAI_WHISPER_PRICE_PER_MINUTE,
+  OPENAI_TTS_PRICING,
 };

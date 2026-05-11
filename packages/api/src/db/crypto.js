@@ -1,7 +1,12 @@
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-cbc';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'a7f3c2e1d4b8903f6e2a1c5d7b9f4e82a7f3c2e1d4b8903f6e2a1c5d7b9f4e82', 'hex');
+
+if (!process.env.ENCRYPTION_KEY) {
+  console.error('❌ ENCRYPTION_KEY environment variable is required (32-byte hex string)');
+  process.exit(1);
+}
+const KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
 
 function encrypt(text) {
   const iv = crypto.randomBytes(16);
