@@ -1,6 +1,6 @@
 # LLM Observatory
 
-> Open-source observability dashboard for Claude API (and OpenAI) usage. Track tokens, cost & latency in real-time with a drop-in SDK wrapper that adds zero overhead to your requests.
+> Multi-tenant SaaS observability platform for Claude API (and OpenAI) usage. Track tokens, cost & latency in real-time with a drop-in SDK wrapper that adds zero overhead to your requests.
 
 ![Node.js](https://img.shields.io/badge/Node.js-20-green?logo=node.js)
 ![React](https://img.shields.io/badge/React-18-blue?logo=react)
@@ -13,6 +13,7 @@
 ## Features
 
 - **Drop-in SDK Wrapper** — Replace `new Anthropic()` with `new MonitoredAnthropic()`. Zero code changes elsewhere.
+- **Multi-tenant** — Each organization gets isolated data, team members, and Observatory tokens. Self-registration creates an org automatically.
 - **Real-time Dashboard** — Live metric updates via WebSocket. No page refresh required.
 - **Cost Tracking** — Per-request cost calculation using model-aware pricing tables for Anthropic and OpenAI.
 - **Monthly Projections** — Forecast end-of-month spend per provider based on current usage trends.
@@ -22,88 +23,98 @@
 - **Provider Sync** — Pull historical usage data from Anthropic Admin API or OpenAI Organization API.
 - **Balance Tracking** — Record and visualize provider balance recharges.
 - **CSV Export** — Download filtered request logs with all metrics included.
-- **Authentication** — Single-admin login with JWT. No public registration.
+- **Team Management** — Invite teammates by email, manage roles (admin/member), cancel invitations.
+- **Observatory Tokens** — `obs_sk_` tokens authenticate SDK metric ingestion and link calls to your org.
+- **Authentication** — Self-registration with email activation, password reset, and JWT sessions.
 - **Dark Mode** — Full dark/light theme toggle.
 - **OpenAI Support** — Full parity with `MonitoredOpenAI` wrapper for multi-provider monitoring.
 
 ---
 
-## Setup inicial
+## Quick Start
 
-### 1. Generar el password hash para el admin
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/your-username/llm-observatory
 cd llm-observatory
 npm install
-node scripts/generate-password-hash.js tupassword
 ```
 
-Copia el hash resultante al `.env`.
-
-### 2. Configurar variables de entorno
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edita `.env` y completa los campos obligatorios:
+Edit `.env` with the required values:
 
 ```bash
-# Genera con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+DATABASE_URL=postgresql://postgres:changeme@localhost:5432/llm_observatory
+
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ENCRYPTION_KEY=<32-byte hex>
 
-# El hash generado con scripts/generate-password-hash.js
-AUTH_EMAIL=admin@example.com
-AUTH_PASSWORD_HASH=$2b$10$...
-
-# Genera con: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+# Generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 JWT_SECRET=<64-byte hex>
+
+# Email (Resend) — required for account activation and invitations
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
+EMAIL_FROM=noreply@yourdomain.com
+APP_URL=http://localhost:5173
 ```
 
-### 3. Levantar con Docker (recomendado)
+### 3. Start with Docker (recommended)
 
 ```bash
 docker-compose up -d --build
 ```
 
-Abre http://localhost — serás redirigido al login.
+Open http://localhost — you'll be redirected to the register page to create your first account and organization.
 
-### 4. Setup manual
+### 4. Manual setup
 
-**Requisitos:** Node.js 20+, PostgreSQL 16
+**Requirements:** Node.js 20+, PostgreSQL 16
 
 ```bash
-npm install
 npm run dev
 ```
 
 - Web: http://localhost:5173
 - API: http://localhost:3001
 
-### 5. Poblar datos de ejemplo (opcional)
+### 5. Seed demo data (optional)
 
 ```bash
 npm run seed
 ```
 
-Genera 600 registros realistas con distribución de modelos, horas pico, variación de latencia y una tasa de error simulada.
+Generates 600 realistic records with model distribution, peak hours, latency variation, and a simulated error rate.
 
 ---
 
 ## SDK Integration
 
-### Anthropic
+### 1. Create an Observatory token
+
+In the dashboard → Settings → Team tab → Observatory Tokens → **New token**.
+
+Copy the full `obs_sk_...` value — it's shown only once.
+
+### 2. Use the SDK
+
+**Anthropic:**
 
 ```javascript
 const { MonitoredAnthropic } = require('@llm-observatory/sdk');
 
 const client = new MonitoredAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  observatoryUrl: 'http://localhost:3001'  // tu instancia
+  observatoryUrl: 'http://localhost:3001',
+  observatoryToken: process.env.OBSERVATORY_TOKEN  // obs_sk_...
 });
 
-// Úsalo exactamente igual que el SDK oficial de Anthropic
+// Use exactly like the official Anthropic SDK
 const response = await client.messages.create({
   model: 'claude-sonnet-4-6',
   max_tokens: 1024,
@@ -111,14 +122,15 @@ const response = await client.messages.create({
 });
 ```
 
-### OpenAI
+**OpenAI:**
 
 ```javascript
 const { MonitoredOpenAI } = require('@llm-observatory/sdk');
 
 const client = new MonitoredOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  observatoryUrl: 'http://localhost:3001'
+  observatoryUrl: 'http://localhost:3001',
+  observatoryToken: process.env.OBSERVATORY_TOKEN
 });
 
 const response = await client.chat.completions.create({
@@ -127,40 +139,58 @@ const response = await client.chat.completions.create({
 });
 ```
 
-Las métricas se envían **asincrónicamente** — tu llamada a la API retorna inmediatamente, sin overhead de latencia.
-
-> **Nota:** El endpoint `POST /api/metrics` es **público** para que el SDK pueda reportar desde proyectos externos sin necesitar un token. Todos los demás endpoints requieren autenticación.
+Metrics are sent **asynchronously** — your API call returns immediately with zero latency overhead.
 
 ---
 
-## Sistema de credenciales
+## Multi-tenancy
 
-Settings gestiona dos tipos de keys que son conceptualmente distintos:
+Each organization is fully isolated:
+
+- All data (metrics, budgets, credentials, alerts) is scoped to `org_id`.
+- Tenants never see each other's data — enforced at the database query level.
+- Observatory tokens (`obs_sk_xxx`) are how the SDK identifies which org a metric belongs to. Store them in your app's environment variables.
+- Team members are managed per-org. Admins can invite by email, manage roles, and revoke tokens.
+
+**Registration flow:**
+1. User registers at `/register` (email + optional org name + password).
+2. Email activation link is sent (or check server terminal in development).
+3. On first login the user lands in their org's dashboard.
+4. Admin invites teammates via Settings → Team → Invite.
+5. Invited user receives email → opens `/accept-invite?token=xxx` → sets password → joins org.
+
+---
+
+## Credential system
+
+Settings manages two types of keys:
 
 ### SDK Keys
-Las keys que usan tus proyectos con `MonitoredAnthropic` / `MonitoredOpenAI` para registrar métricas en el dashboard.
+Keys your projects use with `MonitoredAnthropic` / `MonitoredOpenAI` to register metrics.
 
-- Anthropic SDK Key: empieza con `sk-ant-api03-`
-- OpenAI SDK Key: empieza con `sk-proj-`
+- Anthropic SDK Key: starts with `sk-ant-api03-`
+- OpenAI SDK Key: starts with `sk-proj-`
 
 ### Admin Keys
-Keys con permisos elevados, necesarias para la función de **sincronización de historial**. No son las mismas que las SDK keys.
+Keys with elevated permissions needed for the **history sync** feature. Not the same as SDK keys.
 
-- **Anthropic Admin Key**: genera en [console.anthropic.com](https://console.anthropic.com) → Settings → Admin Keys. Requiere rol de admin en la organización. Empieza con `sk-ant-admin-`
-- **OpenAI Organization Key**: key con permisos de organización para leer datos de uso vía `/v1/organization/usage`
+- **Anthropic Admin Key**: generate at [console.anthropic.com](https://console.anthropic.com) → Settings → Admin Keys. Requires admin role in the Anthropic org. Starts with `sk-ant-admin-`
+- **OpenAI Organization Key**: key with organization permissions to read usage via `/v1/organization/usage`
 
-Todas las keys se almacenan cifradas con AES-256-CBC. Nunca se muestran completas en la UI.
+All keys are stored encrypted with AES-256-CBC. They are never shown in full in the UI.
 
 ---
 
 ## Architecture
 
 ```
-Your Application
+User Application
   └─► MonitoredAnthropic / MonitoredOpenAI   (SDK)
+      │   Authorization: Bearer obs_sk_xxx    ← org identity
       ├─► Claude / OpenAI API                (real request, awaited)
       └─► Observatory API                    (async metric POST, fire & forget)
-          ├─► PostgreSQL                     (persists all metrics)
+          ├─► org_id resolution              (token hash → org)
+          ├─► PostgreSQL                     (persists all metrics, scoped by org_id)
           ├─► Socket.io                      (broadcasts to connected dashboards)
           └─► React Dashboard                (WebSocket real-time updates)
 ```
@@ -171,48 +201,50 @@ Your Application
 
 ```
 llm-observatory/
-├── scripts/
-│   └── generate-password-hash.js   Genera bcrypt hash para AUTH_PASSWORD_HASH
 ├── packages/
-│   ├── sdk/                        Node.js SDK wrapper (MonitoredAnthropic, MonitoredOpenAI)
-│   ├── api/                        Express + Socket.io + PostgreSQL backend
+│   ├── sdk/                          Node.js SDK wrapper (MonitoredAnthropic, MonitoredOpenAI)
+│   ├── api/                          Express + Socket.io + PostgreSQL backend
 │   │   └── src/
-│   │       ├── index.js            App entry, env validation, auth middleware
-│   │       ├── middleware/auth.js  JWT validation middleware
-│   │       ├── db/                 Pool, schema, migrations, seed, crypto
-│   │       ├── routes/             auth, metrics, budgets, balances, credentials, alerts, sync
-│   │       └── jobs/               alertChecker.js (hourly cron)
-│   └── web/                        React + Vite + Tailwind frontend
+│   │       ├── index.js              App entry, route registration, orphan cleanup
+│   │       ├── middleware/auth.js    JWT + Observatory token resolution
+│   │       ├── db/                   Pool, schema, migrations, seed, crypto
+│   │       ├── routes/               auth, metrics, budgets, balances, credentials,
+│   │       │                         alerts, sync, tokens, team
+│   │       ├── services/email.js     Resend: activation, reset, invitations
+│   │       └── jobs/alertChecker.js  Hourly cron (per-org spend checks)
+│   └── web/                          React + Vite + Tailwind frontend
 │       └── src/
-│           ├── auth/AuthProvider.jsx  Auth context (JWT storage + login/logout)
-│           ├── hooks/useApi.js        Fetch wrapper with auto Authorization header
-│           ├── pages/                 Login, Dashboard, Requests, Models, Providers, Budgets, Settings
-│           └── components/            Sidebar (con logout), KPICard, ProviderBadge, RequestDrawer
+│           ├── auth/AuthProvider.jsx Auth context (JWT + orgId/role storage)
+│           ├── hooks/useApi.js       Fetch wrapper with auto Authorization header
+│           ├── pages/                Login, Register, ForgotPassword, ResetPassword,
+│           │                         AcceptInvite, Dashboard, Activity, Finance, Settings
+│           └── components/           Sidebar, ProviderBadge, RequestDrawer, charts
 ├── docker-compose.yml
 ├── .env.example
-└── package.json                    Workspace root (npm workspaces)
+└── package.json                      Workspace root (npm workspaces)
 ```
 
 ---
 
 ## Authentication
 
-El sistema usa un único usuario administrador definido en el `.env`. No hay registro público.
+LLM Observatory uses a database-backed auth system with email activation and JWT sessions.
 
-- Login: `POST /api/auth/login` — retorna JWT con expiración configurable (default 7d)
-- El JWT se guarda en `localStorage` y se incluye en todas las peticiones al API
-- Si el API devuelve 401, el frontend limpia la sesión y redirige a `/login`
-- `POST /api/metrics` y `GET /health` son las únicas rutas públicas
+- **Register:** `POST /api/auth/register` — creates user + org atomically. Sends activation email.
+- **Login:** `POST /api/auth/login` — returns JWT with `{ id, email, role, orgId, orgName }` payload.
+- **Activate:** `GET /api/auth/activate?token=xxx` — activates account, redirects to `/login?activated=1`
+- **Forgot password:** `POST /api/auth/forgot-password` — sends reset email (1h expiry)
+- **Reset password:** `POST /api/auth/reset-password` — verifies token, updates password
+- **Invite flow:** admin invites by email → `POST /api/team/invite` → invited user opens `/accept-invite?token=xxx` → sets password → joins org
 
-Para regenerar las credenciales:
+JWT is stored in `localStorage` and sent as `Authorization: Bearer <token>` on all API requests. `POST /api/metrics` uses Observatory tokens (`obs_sk_`), not JWTs.
+
+To generate secrets:
 ```bash
-# Nuevo password
-node scripts/generate-password-hash.js mi_nuevo_password
-
-# Nueva ENCRYPTION_KEY
+# ENCRYPTION_KEY
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# Nuevo JWT_SECRET
+# JWT_SECRET
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
@@ -220,43 +252,68 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ## Deploy to Railway
 
-1. Fork este repo y sube a GitHub
-2. Crea un nuevo proyecto en [railway.app](https://railway.app)
-3. Agrega el plugin **PostgreSQL** — Railway inyecta `DATABASE_URL` automáticamente
-4. Agrega dos servicios desde tu repo:
+1. Fork repo → push to GitHub
+2. New Railway project → Add PostgreSQL plugin (auto-injects `DATABASE_URL`)
+3. Add two services from your repo:
    - **API** → Root Directory: `packages/api`
    - **Web** → Root Directory: `packages/web`
-5. En el servicio Web, agrega: `API_INTERNAL_URL=http://<nombre-servicio-api>.railway.internal:3001`
-6. En ambos servicios, agrega las variables de `.env.example` (ENCRYPTION_KEY, AUTH_*, JWT_*)
-7. Habilita **Private Networking** en el servicio API
+4. In the Web service add: `API_INTERNAL_URL=http://<api-service-name>.railway.internal:3001`
+5. In both services add variables from `.env.example` (`ENCRYPTION_KEY`, `JWT_SECRET`, `RESEND_API_KEY`, `APP_URL`, etc.)
+6. Enable **Private Networking** on the API service
 
-> **¿Cuál es el hostname del API?** Railway genera el hostname interno a partir del nombre del servicio en el dashboard. Ve a Railway → servicio API → Settings → Networking para ver el hostname exacto (ej. `llm-observatory.railway.internal`). Usar `api.railway.internal` solo funciona si el servicio se llama exactamente `api`.
+> **API hostname:** Railway generates the internal hostname from the service name in the dashboard. Go to Railway → API service → Settings → Networking to see the exact hostname (e.g. `llm-observatory.railway.internal`). Using `api.railway.internal` only works if the service is named exactly `api`.
 
-> **DNS dinámico:** el nginx del web service re-resuelve el hostname del API en cada request usando el resolver del contenedor (`/etc/resolv.conf`). Esto significa que si el servicio API se redespliega y cambia de IP interna, el web service lo detecta automáticamente sin necesitar un redeploy.
+> **DNS:** The web service nginx re-resolves the API hostname on every request using the container's resolver (`/etc/resolv.conf`). If the API service redeploys and changes internal IP, the web service detects it automatically without redeployment.
 
 ---
 
 ## API Reference
 
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `POST /api/auth/login` | Pública | Login, retorna JWT |
-| `GET /api/auth/me` | JWT | Info del usuario actual |
-| `POST /api/metrics` | **Pública** | Record métrica desde SDK |
-| `GET /api/metrics` | JWT | List metrics (paginado, filtrado) |
-| `GET /api/metrics/summary` | JWT | Stats agregados + time series |
-| `GET /api/metrics/projection` | JWT | Proyección de gasto mensual |
-| `GET /api/metrics/export` | JWT | CSV download |
-| `GET /api/credentials` | JWT | Listar credenciales (keys masqueadas) |
-| `POST /api/credentials` | JWT | Agregar credencial |
-| `POST /api/credentials/:id/test` | JWT | Validar key contra el provider real |
-| `DELETE /api/credentials/:id` | JWT | Eliminar credencial por ID |
-| `GET /api/credentials/openai/balance` | JWT | Uso mensual OpenAI |
-| `POST /api/sync/:provider` | JWT | Iniciar sync histórico (requiere Admin Key) |
-| `GET /api/sync/logs` | JWT | Historial de sync |
-| `GET /api/alerts/rules` | JWT | Listar reglas de alerta |
-| `POST /api/alerts/rules` | JWT | Crear regla de alerta |
-| `GET /health` | **Pública** | Health check |
+### Public endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `POST /api/auth/login` | POST | Login → JWT |
+| `POST /api/auth/register` | POST | Register + create org |
+| `GET /api/auth/activate` | GET | Activate account (`?token=`) |
+| `POST /api/auth/forgot-password` | POST | Request password reset email |
+| `POST /api/auth/reset-password` | POST | Reset password with token |
+| `GET /api/auth/invite-info` | GET | Get invite details (`?token=`) |
+| `POST /api/auth/accept-invite` | POST | Accept invite + join org |
+| `GET /health` | GET | Health check |
+
+### Observatory token (SDK auth)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `POST /api/metrics` | POST | Record metric from SDK (`obs_sk_` required) |
+
+### JWT-authenticated endpoints (org-scoped)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/auth/me` | GET | Current user info |
+| `GET/POST /api/tokens` | GET/POST | Observatory token management |
+| `DELETE /api/tokens/:id` | DELETE | Revoke token |
+| `GET /api/team/members` | GET | List org members |
+| `DELETE /api/team/members/:id` | DELETE | Remove member (admin) |
+| `GET/POST /api/team/invitations` | GET/POST | List / send invitation (admin) |
+| `DELETE /api/team/invitations/:id` | DELETE | Cancel invitation (admin) |
+| `GET /api/metrics` | GET | List metrics (paginated, filtered) |
+| `GET /api/metrics/summary` | GET | Aggregated stats + time series |
+| `GET /api/metrics/projection` | GET | Monthly spend projection |
+| `GET /api/metrics/export` | GET | CSV download |
+| `GET/POST /api/credentials` | GET/POST | Credential management |
+| `POST /api/credentials/:id/test` | POST | Validate key against provider |
+| `DELETE /api/credentials/:id` | DELETE | Delete credential + cascade |
+| `GET/POST /api/budgets` | GET/POST | Budget management |
+| `DELETE /api/budgets/:id` | DELETE | Delete budget |
+| `GET/POST /api/balances` | GET/POST | Balance tracking |
+| `GET /api/alerts/rules` | GET | List alert rules |
+| `POST /api/alerts/rules` | POST | Create alert rule |
+| `PUT/DELETE /api/alerts/rules/:id` | PUT/DELETE | Update/delete rule |
+| `GET /api/alerts/history` | GET | Alert audit log |
+| `POST /api/alerts/rules/:id/test` | POST | Test Discord webhook |
+| `POST /api/sync/:provider` | POST | Start historical sync |
+| `DELETE /api/sync/:provider/data` | DELETE | Delete all provider api_calls |
+| `GET /api/sync/logs` | GET | Sync history |
 
 ---
 
@@ -264,17 +321,18 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite 5, Tailwind CSS 3, Recharts, Socket.io Client, Lucide Icons |
-| Backend | Node.js 20, Express 4, Socket.io 4, Zod validation, node-cron, bcrypt, jsonwebtoken |
-| Database | PostgreSQL 16 con índices en timestamp, model, provider |
+| Frontend | React 18, Vite 5, Tailwind CSS 3, Socket.io Client |
+| Backend | Node.js 20, Express 4, Socket.io 4, Zod, node-cron, bcrypt, jsonwebtoken |
+| Database | PostgreSQL 16 — shared schema multi-tenancy with org_id scoping |
 | Real-time | Socket.io WebSocket (auto-reconnect) |
-| Auth | JWT (7d expiry) + bcrypt (cost 10) |
-| Encryption | AES-256-CBC para API keys almacenadas |
+| Auth | JWT (7d expiry) + bcrypt (cost 12) + Observatory tokens (SHA-256 hashed) |
+| Email | Resend (account activation, password reset, team invitations) |
+| Encryption | AES-256-CBC for stored provider API keys |
 | Deployment | Docker Compose, Railway |
 
 ---
 
-## Model Pricing (April 2026)
+## Model Pricing (May 2026)
 
 | Model | Input ($/1M) | Output ($/1M) |
 |-------|-------------|--------------|
