@@ -11,15 +11,23 @@ const router = express.Router();
 router.get('/members', async (req, res, next) => {
   try {
     const { orgId } = req.user;
-    const result = await pool.query(
-      `SELECT u.id, u.email, m.role, m.joined_at, ib.email as invited_by_email
-       FROM org_members m
-       JOIN users u ON u.id = m.user_id
-       LEFT JOIN users ib ON ib.id = m.invited_by
-       WHERE m.org_id = $1 ORDER BY m.joined_at ASC`,
-      [orgId]
-    );
-    res.json({ members: result.rows });
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const [rows, count] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.email, m.role, m.joined_at, ib.email as invited_by_email
+         FROM org_members m
+         JOIN users u ON u.id = m.user_id
+         LEFT JOIN users ib ON ib.id = m.invited_by
+         WHERE m.org_id = $1 ORDER BY m.joined_at ASC
+         LIMIT $2 OFFSET $3`,
+        [orgId, limit, offset]
+      ),
+      pool.query('SELECT COUNT(*) FROM org_members WHERE org_id = $1', [orgId]),
+    ]);
+    res.json({ members: rows.rows, total: parseInt(count.rows[0].count), page, limit });
   } catch (err) { next(err); }
 });
 
@@ -43,15 +51,26 @@ router.delete('/members/:userId', requireAdmin, async (req, res, next) => {
 router.get('/invitations', requireAdmin, async (req, res, next) => {
   try {
     const { orgId } = req.user;
-    const result = await pool.query(
-      `SELECT i.id, i.email, i.role, i.expires_at, i.created_at, u.email as invited_by_email
-       FROM invitations i
-       LEFT JOIN users u ON u.id = i.invited_by
-       WHERE i.org_id = $1 AND i.accepted_at IS NULL AND i.expires_at > NOW()
-       ORDER BY i.created_at DESC`,
-      [orgId]
-    );
-    res.json({ invitations: result.rows });
+    const page   = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit  = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const [rows, count] = await Promise.all([
+      pool.query(
+        `SELECT i.id, i.email, i.role, i.expires_at, i.created_at, u.email as invited_by_email
+         FROM invitations i
+         LEFT JOIN users u ON u.id = i.invited_by
+         WHERE i.org_id = $1 AND i.accepted_at IS NULL AND i.expires_at > NOW()
+         ORDER BY i.created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [orgId, limit, offset]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM invitations WHERE org_id = $1 AND accepted_at IS NULL AND expires_at > NOW()`,
+        [orgId]
+      ),
+    ]);
+    res.json({ invitations: rows.rows, total: parseInt(count.rows[0].count), page, limit });
   } catch (err) { next(err); }
 });
 

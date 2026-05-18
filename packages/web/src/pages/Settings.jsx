@@ -4,7 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../auth/AuthProvider';
 
 // ── Keys tab ──────────────────────────────────────────────────
-function KeyRow({ cred, onDeleted, onTested }) {
+function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
   const { apiFetch } = useApi();
   const [testing,  setTesting]  = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -70,10 +70,12 @@ function KeyRow({ cred, onDeleted, onTested }) {
         <button className="obs-btn obs-btn-sm" disabled={testing} onClick={handleTest}>
           {testing ? '…' : 'Test'}
         </button>
-        <button className="obs-btn obs-btn-ghost obs-btn-sm" disabled={deleting} onClick={handleDelete}
-          style={{ color: 'var(--muted)' }}>
-          {deleting ? '…' : 'Delete'}
-        </button>
+        {isAdmin && (
+          <button className="obs-btn obs-btn-ghost obs-btn-sm" disabled={deleting} onClick={handleDelete}
+            style={{ color: 'var(--muted)' }}>
+            {deleting ? '…' : 'Delete'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -147,6 +149,8 @@ function AddKeyForm({ onSaved, onCancel }) {
 
 function KeysTab() {
   const { apiFetch } = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [credentials, setCredentials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -172,7 +176,7 @@ function KeysTab() {
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div className="obs-section-label">SDK Keys</div>
-        <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>+ Add key</button>
+        {isAdmin && <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>+ Add key</button>}
       </div>
 
       {showForm && <AddKeyForm onSaved={handleSaved} onCancel={() => setShowForm(false)} />}
@@ -182,7 +186,7 @@ function KeysTab() {
       ) : sdkKeys.length === 0 && !showForm ? (
         <div style={{ fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>No SDK keys configured</div>
       ) : (
-        sdkKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} />)
+        sdkKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} isAdmin={isAdmin} />)
       )}
 
       <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -192,7 +196,7 @@ function KeysTab() {
       {!loading && adminKeys.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>No admin keys configured</div>
       ) : (
-        adminKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} />)
+        adminKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} isAdmin={isAdmin} />)
       )}
 
       <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
@@ -210,6 +214,8 @@ function KeysTab() {
 // ── Observatory Tokens section ─────────────────────────────────────────
 function ObservatoryTokensSection() {
   const { apiFetch } = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [tokens, setTokens]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [name, setName]       = useState('');
@@ -269,19 +275,21 @@ function ObservatoryTokensSection() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input
-          className="obs-input"
-          placeholder="Token name (e.g. Production)"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          style={{ flex: 1 }}
-          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-        />
-        <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={!name.trim() || saving} onClick={handleCreate}>
-          {saving ? '…' : '+ Create'}
-        </button>
-      </div>
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <input
+            className="obs-input"
+            placeholder="Token name (e.g. Production)"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            style={{ flex: 1 }}
+            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+          />
+          <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={!name.trim() || saving} onClick={handleCreate}>
+            {saving ? '…' : '+ Create'}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="obs-skeleton" style={{ height: 36, borderRadius: 4 }} />
@@ -304,7 +312,7 @@ function ObservatoryTokensSection() {
           <span style={{ fontSize: 11, color: t.revoked_at ? 'var(--error)' : 'var(--muted)' }}>
             {t.revoked_at ? 'Revoked' : `Created ${new Date(t.created_at).toLocaleDateString()}`}
           </span>
-          {!t.revoked_at && (
+          {isAdmin && !t.revoked_at && (
             <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleRevoke(t.id)}>
               Revoke
             </button>
@@ -591,25 +599,48 @@ function AlertsTab() {
 function TeamTab() {
   const { apiFetch } = useApi();
   const { user }     = useAuth();
-  const [members, setMembers]       = useState([]);
-  const [invites, setInvites]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole]   = useState('member');
-  const [inviting, setInviting]     = useState(false);
-  const [msg, setMsg]               = useState(null);
+  const PAGE_SIZE = 20;
+  const [members, setMembers]             = useState([]);
+  const [membersTotal, setMembersTotal]   = useState(0);
+  const [membersPage, setMembersPage]     = useState(1);
+  const [invites, setInvites]             = useState([]);
+  const [invitesTotal, setInvitesTotal]   = useState(0);
+  const [invitesPage, setInvitesPage]     = useState(1);
+  const [loading, setLoading]             = useState(true);
+  const [inviteEmail, setInviteEmail]     = useState('');
+  const [inviteRole, setInviteRole]       = useState('member');
+  const [inviting, setInviting]           = useState(false);
+  const [msg, setMsg]                     = useState(null);
 
-  const fetchAll = async () => {
+  const fetchAll = async (mPage = 1, iPage = 1) => {
     try {
       const [m, i] = await Promise.all([
-        apiFetch('/api/team/members').then(r => r.json()),
-        apiFetch('/api/team/invitations').then(r => r.json()),
+        apiFetch(`/api/team/members?page=${mPage}&limit=${PAGE_SIZE}`).then(r => r.json()),
+        apiFetch(`/api/team/invitations?page=${iPage}&limit=${PAGE_SIZE}`).then(r => r.json()),
       ]);
       setMembers(m.members || []);
+      setMembersTotal(m.total || 0);
+      setMembersPage(mPage);
       setInvites(i.invitations || []);
+      setInvitesTotal(i.total || 0);
+      setInvitesPage(iPage);
     } finally { setLoading(false); }
   };
   useEffect(() => { fetchAll(); }, []);
+
+  const handleMembersPage = (page) => {
+    apiFetch(`/api/team/members?page=${page}&limit=${PAGE_SIZE}`)
+      .then(r => r.json())
+      .then(d => { setMembers(d.members || []); setMembersTotal(d.total || 0); setMembersPage(page); })
+      .catch(() => {});
+  };
+
+  const handleInvitesPage = (page) => {
+    apiFetch(`/api/team/invitations?page=${page}&limit=${PAGE_SIZE}`)
+      .then(r => r.json())
+      .then(d => { setInvites(d.invitations || []); setInvitesTotal(d.total || 0); setInvitesPage(page); })
+      .catch(() => {});
+  };
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
@@ -620,7 +651,7 @@ function TeamTab() {
         body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
       const d = await res.json();
-      if (res.ok) { setMsg({ ok: true, text: 'Invitation sent' }); setInviteEmail(''); fetchAll(); }
+      if (res.ok) { setMsg({ ok: true, text: 'Invitation sent' }); setInviteEmail(''); fetchAll(1, 1); }
       else         { setMsg({ ok: false, text: d.error || 'Error sending invitation' }); }
     } finally { setInviting(false); }
   };
@@ -628,12 +659,12 @@ function TeamTab() {
   const handleRemove = async (userId, email) => {
     if (!confirm(`Remove ${email} from the organization?`)) return;
     await apiFetch(`/api/team/members/${userId}`, { method: 'DELETE' });
-    fetchAll();
+    fetchAll(1, 1);
   };
 
   const handleCancelInvite = async (id) => {
     await apiFetch(`/api/team/invitations/${id}`, { method: 'DELETE' });
-    fetchAll();
+    fetchAll(1, 1);
   };
 
   const isAdmin = user?.role === 'admin';
@@ -670,7 +701,9 @@ function TeamTab() {
         </div>
       )}
 
-      <div className="obs-section-label" style={{ marginBottom: 10 }}>Members</div>
+      <div className="obs-section-label" style={{ marginBottom: 10 }}>
+        Members{membersTotal > 0 ? ` (${membersTotal})` : ''}
+      </div>
       {loading ? (
         <div className="obs-skeleton" style={{ height: 40, borderRadius: 4 }} />
       ) : members.map(m => (
@@ -692,10 +725,17 @@ function TeamTab() {
           )}
         </div>
       ))}
+      {membersTotal > PAGE_SIZE && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+          <button className="obs-btn obs-btn-sm" disabled={membersPage <= 1} onClick={() => handleMembersPage(membersPage - 1)}>←</button>
+          <span>Page {membersPage} of {Math.ceil(membersTotal / PAGE_SIZE)}</span>
+          <button className="obs-btn obs-btn-sm" disabled={membersPage >= Math.ceil(membersTotal / PAGE_SIZE)} onClick={() => handleMembersPage(membersPage + 1)}>→</button>
+        </div>
+      )}
 
-      {isAdmin && invites.length > 0 && (
+      {isAdmin && invitesTotal > 0 && (
         <div style={{ marginTop: 28 }}>
-          <div className="obs-section-label" style={{ marginBottom: 10 }}>Pending invitations</div>
+          <div className="obs-section-label" style={{ marginBottom: 10 }}>Pending invitations ({invitesTotal})</div>
           {invites.map(inv => (
             <div key={inv.id} style={{
               display: 'grid', gridTemplateColumns: '1fr 80px 130px auto',
@@ -710,6 +750,13 @@ function TeamTab() {
               </button>
             </div>
           ))}
+          {invitesTotal > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+              <button className="obs-btn obs-btn-sm" disabled={invitesPage <= 1} onClick={() => handleInvitesPage(invitesPage - 1)}>←</button>
+              <span>Page {invitesPage} of {Math.ceil(invitesTotal / PAGE_SIZE)}</span>
+              <button className="obs-btn obs-btn-sm" disabled={invitesPage >= Math.ceil(invitesTotal / PAGE_SIZE)} onClick={() => handleInvitesPage(invitesPage + 1)}>→</button>
+            </div>
+          )}
         </div>
       )}
     </>
