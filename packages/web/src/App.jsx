@@ -10,6 +10,7 @@ import Login          from './pages/Login';
 import Register       from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
+import AcceptInvite   from './pages/AcceptInvite';
 import { useApi } from './hooks/useApi';
 
 function ProtectedRoute({ children }) {
@@ -77,6 +78,7 @@ export default function App() {
       <Route path="/register"        element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password"  element={<ResetPassword  />} />
+      <Route path="/accept-invite"   element={<AcceptInvite />} />
       <Route
         path="/*"
         element={

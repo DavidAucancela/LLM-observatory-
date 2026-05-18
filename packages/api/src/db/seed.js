@@ -50,6 +50,15 @@ function normalRandom(mean, std) {
 async function seed() {
   console.log('🌱 Seeding 600 records...');
 
+  // Get or create a seed org
+  let orgRes = await pool.query('SELECT id FROM organizations LIMIT 1');
+  if (!orgRes.rows.length) {
+    orgRes = await pool.query(
+      "INSERT INTO organizations (name, slug) VALUES ('Seed Organization', 'seed') RETURNING id"
+    );
+  }
+  const orgId = orgRes.rows[0].id;
+
   const now = new Date();
   const records = [];
 
@@ -85,6 +94,7 @@ async function seed() {
       : [];
 
     records.push([
+      orgId,
       timestamp.toISOString(),
       provider,
       model,
@@ -95,7 +105,7 @@ async function seed() {
       Math.max(100, latencyMs),
       statusCode,
       JSON.stringify(tools),
-      SAMPLE_PROMPTS[Math.floor(Math.random() * SAMPLE_PROMPTS.length)]
+      SAMPLE_PROMPTS[Math.floor(Math.random() * SAMPLE_PROMPTS.length)],
     ]);
   }
 
@@ -103,25 +113,30 @@ async function seed() {
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize);
     const values = batch.map((_, idx) => {
-      const base = idx * 11;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11})`;
+      const base = idx * 12;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12})`;
     }).join(', ');
 
     await pool.query(
-      `INSERT INTO api_calls (timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, tools_used, prompt_preview) VALUES ${values}`,
+      `INSERT INTO api_calls (org_id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, tools_used, prompt_preview) VALUES ${values}`,
       batch.flat()
     );
     console.log(`  Inserted ${Math.min(i + batchSize, records.length)}/600`);
   }
 
   // Seed provider balances
-  await pool.query(`
-    INSERT INTO provider_balances (provider, amount_usd, note, recharged_at) VALUES
-    ('anthropic', 50.00, 'Recarga inicial', NOW() - INTERVAL '30 days'),
-    ('anthropic', 100.00, 'Recarga mensual', NOW() - INTERVAL '15 days'),
-    ('openai', 25.00, 'Recarga inicial', NOW() - INTERVAL '28 days'),
-    ('openai', 50.00, 'Recarga mensual', NOW() - INTERVAL '10 days')
-  `);
+  for (const [provider, amount, note, interval] of [
+    ['anthropic', 50.00,  'Recarga inicial', '30 days'],
+    ['anthropic', 100.00, 'Recarga mensual', '15 days'],
+    ['openai',    25.00,  'Recarga inicial', '28 days'],
+    ['openai',    50.00,  'Recarga mensual', '10 days'],
+  ]) {
+    await pool.query(
+      `INSERT INTO provider_balances (org_id, provider, amount_usd, note, recharged_at)
+       VALUES ($1, $2, $3, $4, NOW() - INTERVAL '${interval}')`,
+      [orgId, provider, amount, note]
+    );
+  }
   console.log('  Provider balances seeded');
 
   console.log('✅ Seed complete');

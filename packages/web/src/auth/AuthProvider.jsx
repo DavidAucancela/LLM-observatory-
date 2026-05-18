@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
         if (!res.ok) throw new Error('Token inválido');
         return res.json();
       })
-      .then(data => setUser(data))
+      .then(data => setUser({ email: data.email, role: data.role, orgId: data.orgId, orgName: data.orgName }))
       .catch(() => {
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
@@ -54,7 +54,7 @@ export function AuthProvider({ children }) {
 
     localStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
-    setUser({ email: data.email, role: 'admin' });
+    setUser({ email: data.email, role: data.role, orgId: data.orgId, orgName: data.orgName });
   }, []);
 
   const logout = useCallback(() => {
