@@ -83,6 +83,10 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Add role/is_active to users table for deployments created before auth was added
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role      VARCHAR(20) NOT NULL DEFAULT 'admin';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN     NOT NULL DEFAULT false;
+
 -- Add new columns to existing tables (idempotent migrations)
 ALTER TABLE provider_credentials ADD COLUMN IF NOT EXISTS key_type VARCHAR(10) NOT NULL DEFAULT 'sdk';
 ALTER TABLE provider_credentials ADD COLUMN IF NOT EXISTS label VARCHAR(100);

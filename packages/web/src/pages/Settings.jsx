@@ -9,14 +9,20 @@ function KeyRow({ cred, onDeleted, onTested }) {
   const [deleting, setDeleting] = useState(false);
   const [syncing,  setSyncing]  = useState(false);
   const [syncOk,   setSyncOk]   = useState(null);
+  const [testErr,  setTestErr]  = useState(null);
 
   const handleTest = async () => {
-    setTesting(true);
+    setTesting(true); setTestErr(null);
     try {
       const res = await apiFetch(`/api/credentials/${cred.id}/test`, { method: 'POST' });
       const d = await res.json();
+      if (!res.ok) {
+        setTestErr(res.status === 403 ? 'Sin permisos de administrador' : (d.error || `Error ${res.status}`));
+        return;
+      }
       onTested(cred.id, d.valid);
-    } catch {} finally { setTesting(false); }
+      if (!d.valid && d.error) setTestErr(d.error);
+    } catch (e) { setTestErr(e.message || 'Error de conexión'); } finally { setTesting(false); }
   };
 
   const handleDelete = async () => {
@@ -33,6 +39,7 @@ function KeyRow({ cred, onDeleted, onTested }) {
     try {
       const res = await apiFetch(`/api/credentials/${cred.id}/ping`, { method: 'POST' });
       const d = await res.json();
+      if (!res.ok) { setSyncOk(false); return; }
       setSyncOk(d.success ?? false);
       if (d.success) setTimeout(() => setSyncOk(null), 3000);
     } catch { setSyncOk(false); } finally { setSyncing(false); }
@@ -53,6 +60,7 @@ function KeyRow({ cred, onDeleted, onTested }) {
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{cred.label}</div>
         {syncOk === true  && <span style={{ fontSize: 11, color: 'var(--success)' }}>✓ visible in dashboard</span>}
         {syncOk === false && <span style={{ fontSize: 11, color: 'var(--error)' }}>Sync error</span>}
+        {testErr && <span style={{ fontSize: 11, color: 'var(--error)' }}>{testErr}</span>}
       </div>
       <ProviderBadge provider={cred.provider} />
       <span className="kchip">{cred.key_hint}</span>

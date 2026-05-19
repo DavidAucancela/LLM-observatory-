@@ -137,7 +137,10 @@ async function startServer() {
       await pool.query(
         `INSERT INTO users (email, password_hash, role, is_active)
          VALUES ($1, $2, 'admin', true)
-         ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+         ON CONFLICT (email) DO UPDATE SET
+           password_hash = EXCLUDED.password_hash,
+           role          = EXCLUDED.role,
+           is_active     = EXCLUDED.is_active`,
         [process.env.AUTH_EMAIL, process.env.AUTH_PASSWORD_HASH]
       );
       logger.info(`✅ Admin user synced: ${process.env.AUTH_EMAIL}`);
