@@ -139,3 +139,103 @@ ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '{}'::jsonb;
 -- ── api_key_hint on api_calls (links metric to originating credential) ─────────
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS api_key_hint VARCHAR(30);
 CREATE INDEX IF NOT EXISTS idx_api_calls_key_hint ON api_calls(api_key_hint) WHERE api_key_hint IS NOT NULL;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Multi-tenancy
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── organizations ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS organizations (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  slug       VARCHAR(100) NOT NULL UNIQUE,
+  plan       VARCHAR(20)  NOT NULL DEFAULT 'free',
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- ── org_members ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS org_members (
+  id         SERIAL PRIMARY KEY,
+  org_id     INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role       VARCHAR(20) NOT NULL DEFAULT 'member',
+  invited_by INTEGER REFERENCES users(id),
+  joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(org_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_org_members_user ON org_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_org  ON org_members(org_id);
+
+-- ── invitations ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS invitations (
+  id          SERIAL PRIMARY KEY,
+  org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email       VARCHAR(255) NOT NULL,
+  role        VARCHAR(20)  NOT NULL DEFAULT 'member',
+  token       VARCHAR(64)  NOT NULL UNIQUE,
+  invited_by  INTEGER REFERENCES users(id),
+  expires_at  TIMESTAMPTZ  NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
+  accepted_at TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token) WHERE accepted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email) WHERE accepted_at IS NULL;
+
+-- ── observatory_tokens ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS observatory_tokens (
+  id           SERIAL PRIMARY KEY,
+  org_id       INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name         VARCHAR(100) NOT NULL,
+  token_hash   VARCHAR(64)  NOT NULL UNIQUE,
+  token_prefix VARCHAR(20)  NOT NULL,
+  created_by   INTEGER REFERENCES users(id),
+  last_used_at TIMESTAMPTZ,
+  revoked_at   TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_obs_tokens_hash ON observatory_tokens(token_hash) WHERE revoked_at IS NULL;
+
+-- ── Add org_id to all tenant tables ──────────────────────────────────────────
+ALTER TABLE api_calls            ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE budgets              ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE provider_balances    ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE provider_credentials ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE alert_rules          ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE alert_history        ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+ALTER TABLE sync_logs            ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES organizations(id);
+
+-- ── Indexes for org-scoped lookups ────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_api_calls_org   ON api_calls(org_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_credentials_org ON provider_credentials(org_id);
+CREATE INDEX IF NOT EXISTS idx_budgets_org     ON budgets(org_id);
+CREATE INDEX IF NOT EXISTS idx_balances_org    ON provider_balances(org_id);
+CREATE INDEX IF NOT EXISTS idx_alert_rules_org ON alert_rules(org_id);
+CREATE INDEX IF NOT EXISTS idx_sync_logs_org   ON sync_logs(org_id);
+
+-- ── Backfill existing data into a default org (runs once when no orgs exist) ──
+DO $$
+DECLARE v_org_id INTEGER;
+BEGIN
+  IF EXISTS (SELECT 1 FROM users LIMIT 1)
+     AND NOT EXISTS (SELECT 1 FROM organizations LIMIT 1) THEN
+
+    INSERT INTO organizations (name, slug)
+    VALUES ('Default Organization', 'default')
+    RETURNING id INTO v_org_id;
+
+    INSERT INTO org_members (org_id, user_id, role)
+    SELECT v_org_id, id, 'admin' FROM users
+    ON CONFLICT DO NOTHING;
+
+    UPDATE api_calls            SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE budgets              SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE provider_balances    SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE provider_credentials SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE alert_rules          SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE alert_history        SET org_id = v_org_id WHERE org_id IS NULL;
+    UPDATE sync_logs            SET org_id = v_org_id WHERE org_id IS NULL;
+  END IF;
+END $$;

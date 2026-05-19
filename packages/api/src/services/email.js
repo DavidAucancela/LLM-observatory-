@@ -138,4 +138,35 @@ async function sendPasswordResetEmail(to, token) {
   if (error) throw new Error(`Resend error: ${error.message}`);
 }
 
-module.exports = { sendActivationEmail, sendPasswordResetEmail };
+// ── sendInviteEmail ───────────────────────────────────────────────────────────
+async function sendInviteEmail(to, token, orgName) {
+  const link = `${APP_URL}/accept-invite?token=${token}`;
+
+  const html = base(`
+    <h2 style="margin:0 0 8px;color:#0f172a;font-size:20px">Invitación a ${orgName}</h2>
+    <p style="color:#475569;margin:0 0 4px;font-size:14px;line-height:1.6">
+      Has sido invitado a unirte a <strong>${orgName}</strong> en LLM Observatory.
+    </p>
+    <p style="color:#475569;margin:0;font-size:14px;line-height:1.6">
+      Haz clic en el botón para aceptar. Este link expira en <strong>7 días</strong>.
+    </p>
+    ${btn(link, 'Aceptar invitación')}
+    ${linkNote(link)}
+  `);
+
+  if (!process.env.RESEND_API_KEY) {
+    logEmailToConsole(`Invitación a ${orgName} — LLM Observatory`, to, link);
+    return;
+  }
+
+  const { error } = await getResend().emails.send({
+    from:    FROM,
+    to,
+    subject: `Invitación a ${orgName} — LLM Observatory`,
+    html,
+  });
+
+  if (error) throw new Error(`Resend error: ${error.message}`);
+}
+
+module.exports = { sendActivationEmail, sendPasswordResetEmail, sendInviteEmail };

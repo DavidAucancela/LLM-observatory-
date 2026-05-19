@@ -19,16 +19,18 @@ const MetricSchema = z.object({
   api_key_hint:  z.string().max(30).optional(),
 });
 
-// ── POST / — SDK ingest (public, no auth) ─────────────────────────────────────
+// ── POST / — SDK ingest (requires observatory token or JWT) ───────────────────
 router.post('/', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const data = MetricSchema.parse(req.body);
     const result = await pool.query(
       `INSERT INTO api_calls
-         (provider, model, input_tokens, output_tokens, total_tokens,
+         (org_id, provider, model, input_tokens, output_tokens, total_tokens,
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [
+        orgId,
         data.provider, data.model,
         data.input_tokens, data.output_tokens, data.total_tokens,
         data.cost_usd, data.latency_ms, data.status_code,
@@ -50,6 +52,7 @@ router.post('/', async (req, res) => {
 // ── GET / — paginated list ─────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const page    = Math.max(1, parseInt(req.query.page)  || 1);
     const limit   = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const offset  = (page - 1) * limit;
@@ -64,27 +67,26 @@ router.get('/', async (req, res) => {
     const startDate = req.query.start;
     const endDate   = req.query.end;
 
-    // Build parameterized WHERE clause
-    const params = [];
-    let whereClause;
+    const params = [orgId]; // $1 = org_id
+    let where = 'WHERE org_id = $1';
+
     if (startDate && endDate) {
       params.push(startDate, endDate);
-      whereClause = `WHERE timestamp >= $1 AND timestamp <= $2`;
+      where += ` AND timestamp >= $${params.length - 1} AND timestamp <= $${params.length}`;
     } else {
-      whereClause = `WHERE timestamp > NOW() - INTERVAL '${interval}'`;
+      where += ` AND timestamp > NOW() - INTERVAL '${interval}'`;
     }
-    if (model)    { params.push(model);    whereClause += ` AND model = $${params.length}`; }
-    if (provider) { params.push(provider); whereClause += ` AND provider = $${params.length}`; }
+    if (model)    { params.push(model);    where += ` AND model = $${params.length}`; }
+    if (provider) { params.push(provider); where += ` AND provider = $${params.length}`; }
     if (search) {
       params.push(`%${search}%`);
-      const idx = params.length;
-      whereClause += ` AND (prompt_preview ILIKE $${idx} OR model ILIKE $${idx})`;
+      where += ` AND (prompt_preview ILIKE $${params.length} OR model ILIKE $${params.length})`;
     }
 
     const [countResult, dataResult] = await Promise.all([
-      pool.query(`SELECT COUNT(*) FROM api_calls ${whereClause}`, params),
+      pool.query(`SELECT COUNT(*) FROM api_calls ${where}`, params),
       pool.query(
-        `SELECT * FROM api_calls ${whereClause} ORDER BY ${sortBy} ${sortDir}
+        `SELECT * FROM api_calls ${where} ORDER BY ${sortBy} ${sortDir}
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset]
       ),
@@ -104,41 +106,39 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ── GET /summary — aggregated stats + time series + prev period comparison ─────
+// ── GET /summary — aggregated stats + time series + prev period ────────────────
 router.get('/summary', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const range    = req.query.range || '7d';
     const rangeMap = { '24h':'24 hours', '7d':'7 days', '30d':'30 days', '60d':'60 days', '90d':'90 days' };
-    // For doubling the interval to get prev period bounds (server-side, safe)
     const doubleMap= { '24h':'48 hours', '7d':'14 days', '30d':'60 days', '60d':'120 days', '90d':'180 days' };
-    const interval  = rangeMap[range] || '7 days';
+    const interval    = rangeMap[range] || '7 days';
     const dblInterval = doubleMap[range] || '14 days';
     const startDate = req.query.start;
     const endDate   = req.query.end;
     const useDays   = ['30d','60d','90d'].includes(range) || (startDate && endDate);
     const timeBucket= useDays ? `DATE_TRUNC('day', timestamp)` : `DATE_TRUNC('hour', timestamp)`;
 
-    // Current period — parameterized when using custom dates
-    const currParams = [];
+    const currParams = [orgId];
     let dateFilter;
     if (startDate && endDate) {
       currParams.push(startDate, endDate);
-      dateFilter = `timestamp >= $1 AND timestamp <= $2`;
+      dateFilter = `org_id = $1 AND timestamp >= $2 AND timestamp <= $3`;
     } else {
-      dateFilter = `timestamp > NOW() - INTERVAL '${interval}'`;
+      dateFilter = `org_id = $1 AND timestamp > NOW() - INTERVAL '${interval}'`;
     }
 
-    // Previous period — same duration shifted back
-    const prevParams = [];
+    const prevParams = [orgId];
     let prevFilter;
     if (startDate && endDate) {
       const durationMs = new Date(endDate).getTime() - new Date(startDate).getTime();
-      const prevEnd   = new Date(startDate).toISOString();
-      const prevStart = new Date(new Date(startDate).getTime() - durationMs).toISOString();
+      const prevEnd    = new Date(startDate).toISOString();
+      const prevStart  = new Date(new Date(startDate).getTime() - durationMs).toISOString();
       prevParams.push(prevStart, prevEnd);
-      prevFilter = `timestamp >= $1 AND timestamp <= $2`;
+      prevFilter = `org_id = $1 AND timestamp >= $2 AND timestamp <= $3`;
     } else {
-      prevFilter = `timestamp > NOW() - INTERVAL '${dblInterval}' AND timestamp <= NOW() - INTERVAL '${interval}'`;
+      prevFilter = `org_id = $1 AND timestamp > NOW() - INTERVAL '${dblInterval}' AND timestamp <= NOW() - INTERVAL '${interval}'`;
     }
 
     const [summary, byModel, byProvider, timeSeries, prevSummary] = await Promise.all([
@@ -211,21 +211,23 @@ router.get('/summary', async (req, res) => {
 // ── GET /projection ───────────────────────────────────────────────────────────
 router.get('/projection', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const dayOfMonth   = now.getDate();
-    const daysRemaining= daysInMonth - dayOfMonth;
+    const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
+    const daysInMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const dayOfMonth    = now.getDate();
+    const daysRemaining = daysInMonth - dayOfMonth;
 
     const [monthSpend, weekAvg] = await Promise.all([
       pool.query(
         `SELECT provider, COALESCE(SUM(cost_usd), 0) as spent
-         FROM api_calls WHERE timestamp >= $1 GROUP BY provider`,
-        [startOfMonth.toISOString()]
+         FROM api_calls WHERE org_id = $1 AND timestamp >= $2 GROUP BY provider`,
+        [orgId, startOfMonth.toISOString()]
       ),
       pool.query(
         `SELECT provider, COALESCE(SUM(cost_usd), 0) / 7.0 as avg_daily
-         FROM api_calls WHERE timestamp > NOW() - INTERVAL '7 days' GROUP BY provider`
+         FROM api_calls WHERE org_id = $1 AND timestamp > NOW() - INTERVAL '7 days' GROUP BY provider`,
+        [orgId]
       ),
     ]);
 
@@ -233,7 +235,10 @@ router.get('/projection', async (req, res) => {
     const projection = providers.map(p => {
       const spent    = parseFloat(monthSpend.rows.find(r => r.provider === p)?.spent || 0);
       const avgDaily = parseFloat(weekAvg.rows.find(r => r.provider === p)?.avg_daily || 0);
-      return { provider: p, spent_this_month: spent, avg_daily: avgDaily, days_remaining: daysRemaining, projected_month_total: spent + avgDaily * daysRemaining };
+      return {
+        provider: p, spent_this_month: spent, avg_daily: avgDaily,
+        days_remaining: daysRemaining, projected_month_total: spent + avgDaily * daysRemaining,
+      };
     });
 
     res.json({ projection, days_in_month: daysInMonth, day_of_month: dayOfMonth });
@@ -243,28 +248,29 @@ router.get('/projection', async (req, res) => {
   }
 });
 
-// ── GET /export — CSV download (must be before /:id) ─────────────────────────
+// ── GET /export — CSV download ────────────────────────────────────────────────
 router.get('/export', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const range    = req.query.range || '30d';
     const rangeMap = { '24h':'24 hours', '7d':'7 days', '30d':'30 days', '60d':'60 days', '90d':'90 days' };
     const interval = rangeMap[range] || '30 days';
     const startDate= req.query.start;
     const endDate  = req.query.end;
 
-    const params = [];
-    let whereClause;
+    const params = [orgId];
+    let where = 'WHERE org_id = $1';
     if (startDate && endDate) {
       params.push(startDate, endDate);
-      whereClause = `WHERE timestamp >= $1 AND timestamp <= $2`;
+      where += ` AND timestamp >= $${params.length - 1} AND timestamp <= $${params.length}`;
     } else {
-      whereClause = `WHERE timestamp > NOW() - INTERVAL '${interval}'`;
+      where += ` AND timestamp > NOW() - INTERVAL '${interval}'`;
     }
 
     const result = await pool.query(
       `SELECT id, timestamp, provider, model, input_tokens, output_tokens,
               total_tokens, cost_usd, latency_ms, status_code, prompt_preview, tags
-       FROM api_calls ${whereClause} ORDER BY timestamp DESC`,
+       FROM api_calls ${where} ORDER BY timestamp DESC`,
       params
     );
 
@@ -286,12 +292,16 @@ router.get('/export', async (req, res) => {
   }
 });
 
-// ── GET /:id — single record (must be after named routes) ────────────────────
+// ── GET /:id — single record ──────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
+    const { orgId } = req.user;
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
-    const result = await pool.query('SELECT * FROM api_calls WHERE id = $1', [id]);
+    const result = await pool.query(
+      'SELECT * FROM api_calls WHERE id = $1 AND org_id = $2',
+      [id, orgId]
+    );
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {

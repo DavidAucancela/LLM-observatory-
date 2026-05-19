@@ -28,6 +28,8 @@ const balancesRouter    = require('./routes/balances');
 const credentialsRouter = require('./routes/credentials');
 const alertsRouter      = require('./routes/alerts');
 const syncRouter        = require('./routes/sync');
+const tokensRouter      = require('./routes/tokens');
+const teamRouter        = require('./routes/team');
 const { checkAlerts }   = require('./jobs/alertChecker');
 
 const app = express();
@@ -80,6 +82,8 @@ app.use('/api/balances', balancesRouter);
 app.use('/api/credentials', credentialsRouter);
 app.use('/api/alerts', alertsRouter);
 app.use('/api/sync', syncRouter);
+app.use('/api/tokens', tokensRouter);
+app.use('/api/team', teamRouter);
 
 // ── 404 handler — must be after all routes ────────────────────────────────────
 app.use((req, res) => {
@@ -112,18 +116,22 @@ async function startServer() {
     logger.error('DB migration failed:', err.message);
   }
 
-  // Clean up orphan test/sync records for providers with no configured credentials
+  // Clean up orphan test/sync records per org (no credentials in that org)
   try {
     const r1 = await pool.query(
-      `DELETE FROM api_calls
-       WHERE prompt_preview = 'test:sdk_integration'
-       AND provider NOT IN (SELECT DISTINCT provider FROM provider_credentials)`
+      `DELETE FROM api_calls ac
+       WHERE ac.prompt_preview = 'test:sdk_integration'
+       AND NOT EXISTS (
+         SELECT 1 FROM provider_credentials pc
+         WHERE pc.provider = ac.provider AND pc.org_id = ac.org_id
+       )`
     );
     const r2 = await pool.query(
-      `DELETE FROM api_calls
-       WHERE prompt_preview LIKE 'sync:%'
-       AND provider NOT IN (
-         SELECT DISTINCT provider FROM provider_credentials WHERE key_type = 'admin'
+      `DELETE FROM api_calls ac
+       WHERE ac.prompt_preview LIKE 'sync:%'
+       AND NOT EXISTS (
+         SELECT 1 FROM provider_credentials pc
+         WHERE pc.provider = ac.provider AND pc.key_type = 'admin' AND pc.org_id = ac.org_id
        )`
     );
     if (r1.rowCount + r2.rowCount > 0)
@@ -134,15 +142,35 @@ async function startServer() {
 
   if (process.env.AUTH_EMAIL && process.env.AUTH_PASSWORD_HASH) {
     try {
-      await pool.query(
+      const userRes = await pool.query(
         `INSERT INTO users (email, password_hash, role, is_active)
          VALUES ($1, $2, 'admin', true)
          ON CONFLICT (email) DO UPDATE SET
            password_hash = EXCLUDED.password_hash,
            role          = EXCLUDED.role,
-           is_active     = EXCLUDED.is_active`,
+           is_active     = EXCLUDED.is_active
+         RETURNING id`,
         [process.env.AUTH_EMAIL, process.env.AUTH_PASSWORD_HASH]
       );
+      const userId = userRes.rows[0].id;
+
+      const memberCheck = await pool.query(
+        'SELECT org_id FROM org_members WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      if (!memberCheck.rows.length) {
+        const slug = process.env.AUTH_EMAIL.split('@')[0].toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+          + '-' + Date.now();
+        const orgRes = await pool.query(
+          `INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id`,
+          [process.env.AUTH_EMAIL + "'s Organization", slug]
+        );
+        await pool.query(
+          `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'admin')`,
+          [orgRes.rows[0].id, userId]
+        );
+      }
       logger.info(`✅ Admin user synced: ${process.env.AUTH_EMAIL}`);
     } catch (err) {
       logger.error('Admin user setup failed:', err.message);

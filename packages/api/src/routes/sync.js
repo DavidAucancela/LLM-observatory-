@@ -14,30 +14,29 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 
 const PRICING = {
   anthropic: {
-    'claude-opus-4-6': { input: 15.0, output: 75.0 },
-    'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
-    'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
-    'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0 },
-    'claude-3-5-haiku-20241022': { input: 0.8, output: 4.0 },
-    'claude-3-opus-20240229': { input: 15.0, output: 75.0 },
-    'claude-3-haiku-20240307': { input: 0.25, output: 1.25 }
+    'claude-opus-4-6':            { input: 15.0, output: 75.0 },
+    'claude-sonnet-4-6':          { input:  3.0, output: 15.0 },
+    'claude-haiku-4-5-20251001':  { input:  0.8, output:  4.0 },
+    'claude-3-5-sonnet-20241022': { input:  3.0, output: 15.0 },
+    'claude-3-5-haiku-20241022':  { input:  0.8, output:  4.0 },
+    'claude-3-opus-20240229':     { input: 15.0, output: 75.0 },
+    'claude-3-haiku-20240307':    { input:  0.25, output: 1.25 },
   },
   openai: {
-    'gpt-4o': { input: 2.5, output: 10.0 },
-    'gpt-4o-mini': { input: 0.15, output: 0.6 },
-    'gpt-4-turbo': { input: 10.0, output: 30.0 },
-    'gpt-4': { input: 30.0, output: 60.0 },
-    'gpt-3.5-turbo': { input: 0.5, output: 1.5 },
-    'o1': { input: 15.0, output: 60.0 },
-    'o1-mini': { input: 3.0, output: 12.0 },
-    'o3-mini': { input: 1.1, output: 4.4 },
-    'o3': { input: 10.0, output: 40.0 }
-  }
+    'gpt-4o':        { input:  2.5, output: 10.0 },
+    'gpt-4o-mini':   { input:  0.15, output: 0.6 },
+    'gpt-4-turbo':   { input: 10.0, output: 30.0 },
+    'gpt-4':         { input: 30.0, output: 60.0 },
+    'gpt-3.5-turbo': { input:  0.5, output:  1.5 },
+    'o1':            { input: 15.0, output: 60.0 },
+    'o1-mini':       { input:  3.0, output: 12.0 },
+    'o3-mini':       { input:  1.1, output:  4.4 },
+    'o3':            { input: 10.0, output: 40.0 },
+  },
 };
 
 function calcCost(provider, model, inputTokens, outputTokens) {
-  const table = PRICING[provider] || {};
-  const pricing = table[model];
+  const pricing = (PRICING[provider] || {})[model];
   if (!pricing) {
     console.warn(`[sync] Unknown model pricing: ${provider}/${model} — cost set to $0`);
     return 0;
@@ -46,15 +45,13 @@ function calcCost(provider, model, inputTokens, outputTokens) {
 }
 
 async function syncAnthropic(adminKey, days) {
-  const endDate = new Date();
+  const endDate   = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   const startStr = startDate.toISOString().split('.')[0] + 'Z';
-  const endStr = endDate.toISOString().split('.')[0] + 'Z';
+  const endStr   = endDate.toISOString().split('.')[0] + 'Z';
 
-  let allData = [];
-  let nextPage = null;
-  let hasMore = true;
+  let allData = [], nextPage = null, hasMore = true;
 
   while (hasMore) {
     const url = new URL('https://api.anthropic.com/v1/organizations/usage_report/messages');
@@ -71,24 +68,21 @@ async function syncAnthropic(adminKey, days) {
     if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${await res.text()}`);
 
     const data = await res.json();
-    allData = allData.concat(data.data || []);
-    hasMore = data.has_more || false;
+    allData  = allData.concat(data.data || []);
+    hasMore  = data.has_more || false;
     nextPage = data.next_page || null;
   }
-
   return { buckets: allData, startStr, endStr };
 }
 
 async function syncOpenAI(apiKey, days) {
-  const endDate = new Date();
+  const endDate   = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   const startTs = Math.floor(startDate.getTime() / 1000);
-  const endTs = Math.floor(endDate.getTime() / 1000);
+  const endTs   = Math.floor(endDate.getTime() / 1000);
 
-  let allBuckets = [];
-  let page = null;
-  let hasMore = true;
+  let allBuckets = [], page = null, hasMore = true;
 
   while (hasMore) {
     const url = new URL('https://api.openai.com/v1/organization/usage/completions');
@@ -104,18 +98,17 @@ async function syncOpenAI(apiKey, days) {
     });
     if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await res.text()}`);
 
-    const data = await res.json();
-    allBuckets = allBuckets.concat(data.data || []);
-    hasMore = data.has_more || false;
-    page = data.next_page || null;
+    const data  = await res.json();
+    allBuckets  = allBuckets.concat(data.data || []);
+    hasMore     = data.has_more || false;
+    page        = data.next_page || null;
   }
-
   return { buckets: allBuckets, startTs, endTs };
 }
 
-async function importBuckets(buckets, provider) {
+async function importBuckets(buckets, provider, orgId) {
   let imported = 0;
-  const tag = `sync:${provider}`;
+  const tag    = `sync:${provider}`;
 
   for (const bucket of buckets) {
     const timestamp = bucket.starting_at || new Date(bucket.start_time * 1000).toISOString();
@@ -125,10 +118,10 @@ async function importBuckets(buckets, provider) {
       let inputTokens, outputTokens;
 
       if (provider === 'anthropic') {
-        inputTokens = parseInt(result.uncached_input_tokens || 0) + parseInt(result.cache_read_input_tokens || 0);
+        inputTokens  = parseInt(result.uncached_input_tokens || 0) + parseInt(result.cache_read_input_tokens || 0);
         outputTokens = parseInt(result.output_tokens || 0);
       } else {
-        inputTokens = parseInt(result.input_tokens || 0);
+        inputTokens  = parseInt(result.input_tokens  || 0);
         outputTokens = parseInt(result.output_tokens || 0);
       }
 
@@ -137,17 +130,18 @@ async function importBuckets(buckets, provider) {
 
       const costUsd = calcCost(provider, model, inputTokens, outputTokens);
 
-      // Deduplication: same timestamp + model + provider + tag
       const existing = await pool.query(
-        `SELECT id FROM api_calls WHERE timestamp = $1 AND model = $2 AND provider = $3 AND prompt_preview = $4`,
-        [timestamp, model, provider, tag]
+        `SELECT id FROM api_calls
+         WHERE org_id = $1 AND timestamp = $2 AND model = $3 AND provider = $4 AND prompt_preview = $5`,
+        [orgId, timestamp, model, provider, tag]
       );
       if (existing.rows.length) continue;
 
       await pool.query(
-        `INSERT INTO api_calls (timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, prompt_preview)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 200, $8)`,
-        [timestamp, provider, model, inputTokens, outputTokens, totalTokens, costUsd, tag]
+        `INSERT INTO api_calls
+           (org_id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, prompt_preview)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 200, $9)`,
+        [orgId, timestamp, provider, model, inputTokens, outputTokens, totalTokens, costUsd, tag]
       );
       imported++;
     }
@@ -155,21 +149,21 @@ async function importBuckets(buckets, provider) {
   return imported;
 }
 
-// POST /api/sync/:provider — start historical sync using admin key
+// POST /api/sync/:provider — start historical sync using org's admin key
 router.post('/:provider', requireAdmin, async (req, res, next) => {
   const { provider } = req.params;
-  const days = parseInt(req.query.days) || 30;
+  const { orgId }    = req.user;
+  const days         = parseInt(req.query.days) || 30;
 
   if (!['anthropic', 'openai'].includes(provider)) {
     return res.status(400).json({ error: 'Proveedor no soportado. Usa: anthropic, openai' });
   }
 
-  // Require an admin key for sync — never use SDK keys
   const credRow = await pool.query(
     `SELECT api_key_encrypted FROM provider_credentials
-     WHERE provider = $1 AND key_type = 'admin'
+     WHERE org_id = $1 AND provider = $2 AND key_type = 'admin'
      ORDER BY created_at DESC LIMIT 1`,
-    [provider]
+    [orgId, provider]
   );
 
   if (!credRow.rows.length) {
@@ -177,19 +171,18 @@ router.post('/:provider', requireAdmin, async (req, res, next) => {
       error: `Admin key not configured for this provider. Add it in Settings.`,
       detail: provider === 'anthropic'
         ? 'Para Anthropic: genera una Admin Key en console.anthropic.com > Settings > Admin Keys'
-        : 'Para OpenAI: usa una key con permisos de organización'
+        : 'Para OpenAI: usa una key con permisos de organización',
     });
   }
 
   const apiKey = decrypt(credRow.rows[0].api_key_encrypted);
 
   const logRow = await pool.query(
-    `INSERT INTO sync_logs (provider, status) VALUES ($1, 'running') RETURNING id`,
-    [provider]
+    `INSERT INTO sync_logs (org_id, provider, status) VALUES ($1, $2, 'running') RETURNING id`,
+    [orgId, provider]
   );
   const syncId = logRow.rows[0].id;
 
-  // Respond immediately, run sync in background
   res.json({ success: true, sync_id: syncId, message: 'Sync iniciado en background' });
 
   ;(async () => {
@@ -199,12 +192,12 @@ router.post('/:provider', requireAdmin, async (req, res, next) => {
         ({ buckets, startStr, endStr } = await syncAnthropic(apiKey, days));
       } else {
         const result = await syncOpenAI(apiKey, days);
-        buckets = result.buckets;
+        buckets  = result.buckets;
         startStr = new Date(result.startTs * 1000).toISOString();
-        endStr = new Date(result.endTs * 1000).toISOString();
+        endStr   = new Date(result.endTs   * 1000).toISOString();
       }
 
-      const imported = await importBuckets(buckets, provider);
+      const imported = await importBuckets(buckets, provider, orgId);
 
       await pool.query(
         `UPDATE sync_logs
@@ -224,43 +217,44 @@ router.post('/:provider', requireAdmin, async (req, res, next) => {
   })();
 });
 
-// DELETE /api/sync/:provider/data — delete all api_calls for a provider
+// DELETE /api/sync/:provider/data — delete all api_calls for provider in this org
 router.delete('/:provider/data', requireAdmin, async (req, res, next) => {
   const { provider } = req.params;
+  const { orgId }    = req.user;
   if (!['anthropic', 'openai'].includes(provider)) {
     return res.status(400).json({ error: 'Proveedor no soportado' });
   }
   try {
     const result = await pool.query(
-      `DELETE FROM api_calls WHERE provider = $1`,
-      [provider]
+      `DELETE FROM api_calls WHERE org_id = $1 AND provider = $2`,
+      [orgId, provider]
     );
     res.json({ success: true, deleted: result.rowCount });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// GET /api/sync/logs — list recent sync operations
+// GET /api/sync/logs — recent sync operations for this org
 router.get('/logs', async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT * FROM sync_logs ORDER BY started_at DESC LIMIT 20');
+    const { orgId } = req.user;
+    const result = await pool.query(
+      'SELECT * FROM sync_logs WHERE org_id = $1 ORDER BY started_at DESC LIMIT 20',
+      [orgId]
+    );
     res.json({ logs: result.rows });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-// GET /api/sync/status — latest sync status per provider
+// GET /api/sync/status — latest sync status per provider for this org
 router.get('/status', async (req, res, next) => {
   try {
+    const { orgId } = req.user;
     const result = await pool.query(
-      `SELECT DISTINCT ON (provider) * FROM sync_logs ORDER BY provider, started_at DESC`
+      `SELECT DISTINCT ON (provider) * FROM sync_logs WHERE org_id = $1 ORDER BY provider, started_at DESC`,
+      [orgId]
     );
     res.json({ status: result.rows });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
