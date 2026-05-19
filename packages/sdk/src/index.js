@@ -43,9 +43,10 @@ const OPENAI_TTS_PRICING = {
   'gpt-4o-mini-tts': 15.00,
 };
 
-async function _postMetric(url, data) {
-  const body = JSON.stringify(data);
+async function _postMetric(url, data, token) {
+  const body    = JSON.stringify(data);
   const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   try {
     await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
   } catch (firstErr) {
@@ -102,12 +103,13 @@ function calculateTTSCost(model, characterCount) {
 
 class MonitoredAnthropic {
   constructor(options = {}) {
-    const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...anthropicOptions } = options;
-    this.observatoryUrl = observatoryUrl;
-    this.tags = tags;
+    const { observatoryUrl = 'http://localhost:3001', observatoryToken, apiKey, tags = {}, ...anthropicOptions } = options;
+    this.observatoryUrl   = observatoryUrl;
+    this.observatoryToken = observatoryToken;
+    this.tags      = tags;
     this.apiKeyHint = maskKey(apiKey || anthropicOptions.apiKey || process.env.ANTHROPIC_API_KEY);
-    this.client = new Anthropic({ apiKey, ...anthropicOptions });
-    this.messages = this._buildMessagesProxy();
+    this.client    = new Anthropic({ apiKey, ...anthropicOptions });
+    this.messages  = this._buildMessagesProxy();
   }
 
   _buildMessagesProxy() {
@@ -184,15 +186,16 @@ class MonitoredAnthropic {
   }
 
   async _sendMetric(data) {
-    await _postMetric(`${this.observatoryUrl}/api/metrics`, data);
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data, this.observatoryToken);
   }
 }
 
 class MonitoredOpenAI {
   constructor(options = {}) {
-    const { observatoryUrl = 'http://localhost:3001', apiKey, tags = {}, ...openaiOptions } = options;
-    this.observatoryUrl = observatoryUrl;
-    this.tags = tags;
+    const { observatoryUrl = 'http://localhost:3001', observatoryToken, apiKey, tags = {}, ...openaiOptions } = options;
+    this.observatoryUrl   = observatoryUrl;
+    this.observatoryToken = observatoryToken;
+    this.tags      = tags;
     this.apiKeyHint = maskKey(apiKey || openaiOptions.apiKey || process.env.OPENAI_API_KEY);
     const OpenAI = require('openai');
     this.client = new OpenAI({ apiKey, ...openaiOptions });
@@ -451,7 +454,7 @@ class MonitoredOpenAI {
   }
 
   async _sendMetric(data) {
-    await _postMetric(`${this.observatoryUrl}/api/metrics`, data);
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data, this.observatoryToken);
   }
 }
 

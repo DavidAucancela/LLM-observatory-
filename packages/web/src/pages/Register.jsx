@@ -6,6 +6,7 @@ export default function Register() {
   const { apiFetch } = useApi();
 
   const [email, setEmail]       = useState('');
+  const [orgName, setOrgName]   = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [showPw, setShowPw]     = useState(false);
@@ -25,7 +26,7 @@ export default function Register() {
       const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, org_name: orgName.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
@@ -86,6 +87,17 @@ export default function Register() {
                   required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="obs-field">
+                <label>Organization name <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></label>
+                <input
+                  className="obs-input obs-input-lg"
+                  type="text"
+                  placeholder="Acme Corp"
+                  value={orgName}
+                  onChange={e => setOrgName(e.target.value)}
                 />
               </div>
 

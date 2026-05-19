@@ -5,34 +5,41 @@ import MultiLineChart from '../components/MultiLineChart';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function calcDelta(current, previous) {
   const c = parseFloat(current);
   const p = parseFloat(previous);
-  if (!p || p === 0) return null;
+  if (!p) return null;
   return ((c - p) / p) * 100;
 }
 
 function fmt(n) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
   return Math.round(n).toString();
+}
+
+function fmtCost(v) {
+  return `$${parseFloat(v || 0).toFixed(4)}`;
 }
 
 function Delta({ value, inverse }) {
   if (value === null || value === undefined || isNaN(value)) return null;
-  const abs = Math.abs(value).toFixed(1);
-  const up = value > 0;
+  const up   = value > 0;
   const good = inverse ? !up : up;
   return (
     <span className={`delta ${good ? 'delta-up' : 'delta-down'}`}>
-      {up ? '↑' : '↓'} {abs}%
+      {up ? '↑' : '↓'} {Math.abs(value).toFixed(1)}%
     </span>
   );
 }
 
-function KpiBlock({ label, value, delta, inverse, sparkData }) {
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+
+function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(--border)' }) {
   return (
-    <div className="kpi-block">
+    <div className="kpi-card" style={{ '--kpi-accent': accentColor }}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-row">
         <div className="kpi-value">{value ?? '—'}</div>
@@ -40,25 +47,180 @@ function KpiBlock({ label, value, delta, inverse, sparkData }) {
       </div>
       {sparkData?.length > 1 && (
         <div className="kpi-spark">
-          <Sparkline data={sparkData} color="var(--text)" width={140} height={30} fill />
+          <Sparkline data={sparkData} color={accentColor} height={32} fill />
         </div>
       )}
     </div>
   );
 }
 
+// ── Provider breakdown with bars ──────────────────────────────────────────────
+
+const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)' };
+
+function ProviderBreakdown({ byProvider, loading }) {
+  if (loading) return <div className="obs-skeleton" style={{ height: 90, borderRadius: 6 }} />;
+  if (!byProvider.length) return (
+    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>No data</div>
+  );
+
+  const totalCost = byProvider.reduce((s, p) => s + parseFloat(p.total_cost_usd || 0), 0);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {byProvider.map(p => {
+        const cost = parseFloat(p.total_cost_usd || 0);
+        const reqs = parseInt(p.total_requests || 0);
+        const pct  = totalCost > 0 ? (cost / totalCost) * 100 : 0;
+        const color = PROVIDER_COLORS[p.provider] || 'var(--accent)';
+        return (
+          <div key={p.provider}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <ProviderBadge provider={p.provider} />
+              <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>${cost.toFixed(2)}</span>
+                <span>{pct.toFixed(0)}%</span>
+                <span>{reqs.toLocaleString()} req</span>
+              </div>
+            </div>
+            <div className="iprog-bar" style={{ height: 5, borderRadius: 3 }}>
+              <div style={{
+                height: '100%', borderRadius: 3,
+                width: `${pct}%`,
+                background: color,
+                transition: 'width 0.6s var(--ease-out)',
+              }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Top models mini-section ───────────────────────────────────────────────────
+
+function TopModels({ byModel, loading }) {
+  if (loading) return <div className="obs-skeleton" style={{ height: 70, borderRadius: 6 }} />;
+  if (!byModel?.length) return null;
+
+  const top = byModel.slice(0, 5);
+  const maxCost = Math.max(...top.map(m => parseFloat(m.total_cost || 0)));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {top.map(m => {
+        const cost = parseFloat(m.total_cost || 0);
+        const pct  = maxCost > 0 ? (cost / maxCost) * 100 : 0;
+        const color = m.provider === 'anthropic' ? 'var(--anthropic)' : m.provider === 'openai' ? 'var(--openai)' : 'var(--accent)';
+        return (
+          <div key={`${m.provider}-${m.model}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
+              width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {m.model}
+            </div>
+            <div className="iprog-bar" style={{ flex: 1, height: 5, borderRadius: 3 }}>
+              <div style={{
+                height: '100%', borderRadius: 3, width: `${pct}%`,
+                background: color, transition: 'width 0.6s var(--ease-out)',
+              }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', width: 52, textAlign: 'right', flexShrink: 0 }}>
+              ${cost.toFixed(2)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', width: 42, textAlign: 'right', flexShrink: 0 }}>
+              {parseInt(m.requests || 0).toLocaleString()}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Monthly projection with progress bar ──────────────────────────────────────
+
+function MonthlyProjection({ projection, configuredProviders }) {
+  const items = (projection?.projection || []).filter(p => configuredProviders.includes(p.provider));
+  if (!items.length) return null;
+
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+      <div className="obs-section-label" style={{ marginBottom: 16 }}>Monthly projection</div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+        gap: 0,
+      }}>
+        {items.map((p, i) => {
+          const daysPassed = daysInMonth - (p.days_remaining || 0);
+          const monthPct   = Math.min(100, (daysPassed / daysInMonth) * 100);
+          const spentSoFar = parseFloat(p.daily_avg || 0) * daysPassed;
+          const projected  = parseFloat(p.projected_month_total || 0);
+          const color      = PROVIDER_COLORS[p.provider] || 'var(--accent)';
+
+          return (
+            <div key={p.provider} style={{
+              paddingRight: i < items.length - 1 ? 28 : 0,
+              paddingLeft:  i > 0 ? 28 : 0,
+              borderRight:  i < items.length - 1 ? '1px solid var(--border-soft)' : 'none',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <ProviderBadge provider={p.provider} size="lg" />
+                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                  ${projected.toFixed(2)}
+                </span>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span>
+                  Spent <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${spentSoFar.toFixed(2)}</span>
+                </span>
+                <span>{p.days_remaining > 0 ? `${p.days_remaining}d left` : 'Month end'}</span>
+              </div>
+
+              {/* Month progress */}
+              <div className="iprog-bar" style={{ height: 4, borderRadius: 2 }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, width: `${monthPct}%`,
+                  background: color, transition: 'width 0.6s var(--ease-out)',
+                }} />
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 4, display: 'flex', justifyContent: 'space-between', fontVariantNumeric: 'tabular-nums' }}>
+                <span>Day 1</span>
+                <span>Day {daysInMonth}</span>
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                Daily avg <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.daily_avg || 0).toFixed(2)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 const RANGES = ['24h', '7d', '30d', '90d'];
 
 export default function Dashboard() {
-  const [range, setRange] = useState(() => localStorage.getItem('dash-range') || '7d');
-  const [summary, setSummary] = useState(null);
+  const [range, setRange]         = useState(() => localStorage.getItem('dash-range') || '7d');
+  const [summary, setSummary]     = useState(null);
   const [projection, setProjection] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [syncing, setSyncing]     = useState(false);
   const [hasCredentials, setHasCredentials] = useState(true);
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const { connected } = useSocket();
-  const { apiFetch } = useApi();
+  const { apiFetch }  = useApi();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -70,10 +232,10 @@ export default function Dashboard() {
       ]);
       setSummary(await sumRes.json());
       setProjection(await projRes.json());
-      const credData = await credRes.json();
-      const creds = credData.credentials || credData.data || [];
-      setHasCredentials(creds.length > 0);
-      setConfiguredProviders([...new Set(creds.map(c => c.provider))]);
+      const creds = (await credRes.json());
+      const credList = creds.credentials || creds.data || [];
+      setHasCredentials(credList.length > 0);
+      setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [range]);
@@ -83,29 +245,34 @@ export default function Dashboard() {
   const { on } = useSocket();
   useEffect(() => { on('new-metric', fetchAll); }, [on, fetchAll]);
 
-  const s = summary?.summary;
+  const s    = summary?.summary;
   const prev = summary?.prev_summary;
 
+  // Time series → per-provider arrays
   const timeSeriesRaw = summary?.time_series || [];
   const hourMap = {};
   for (const row of timeSeriesRaw) {
-    const key = row.hour;
-    if (!hourMap[key]) hourMap[key] = { hour: key, anthropic: 0, openai: 0 };
-    if (row.provider === 'anthropic') hourMap[key].anthropic += parseInt(row.total_tokens || 0);
-    else hourMap[key].openai += parseInt(row.total_tokens || 0);
+    if (!hourMap[row.hour]) hourMap[row.hour] = { hour: row.hour, anthropic: 0, openai: 0 };
+    if (row.provider === 'anthropic') hourMap[row.hour].anthropic += parseInt(row.total_tokens || 0);
+    else                              hourMap[row.hour].openai    += parseInt(row.total_tokens || 0);
   }
   const timeSeries = Object.values(hourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
 
-  const anthData = timeSeries.map(r => r.anthropic);
-  const oaiData  = timeSeries.map(r => r.openai);
-  const xLabels  = timeSeries.map(r => {
+  // X-axis label format: HH:00 for short ranges, MMM D for longer
+  const useDate = ['30d', '90d'].includes(range);
+  const xLabels = timeSeries.map(r => {
     const d = new Date(r.hour);
-    return `${String(d.getHours()).padStart(2,'0')}:00`;
+    return useDate
+      ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : `${String(d.getHours()).padStart(2, '0')}:00`;
   });
 
-  const byProvider = summary?.by_provider || [];
+  const anthData = timeSeries.map(r => r.anthropic);
+  const oaiData  = timeSeries.map(r => r.openai);
+  const reqSpark = timeSeries.map(r => r.anthropic + r.openai);
 
-  const reqSpark  = timeSeries.map(r => r.anthropic + r.openai);
+  const byProvider = summary?.by_provider || [];
+  const byModel    = summary?.by_model    || [];
 
   if (!loading && !hasCredentials) {
     return (
@@ -134,7 +301,6 @@ export default function Dashboard() {
 
   return (
     <main className="obs-main obs-fade-in">
-      {/* Header */}
       <div className="obs-header">
         <div className="obs-page-title">Overview</div>
         <div className="obs-divider-v" />
@@ -168,43 +334,47 @@ export default function Dashboard() {
       </div>
 
       <div className="obs-content">
-        {/* KPI Strip */}
+        {/* KPI Cards */}
         <div className="kpi-strip">
-          <KpiBlock
+          <KpiCard
             label="Requests"
             value={loading ? '—' : fmt(s?.total_requests ?? 0)}
             delta={calcDelta(s?.total_requests, prev?.total_requests)}
             sparkData={reqSpark}
+            accentColor="var(--text)"
           />
-          <KpiBlock
+          <KpiCard
             label="Tokens"
             value={loading ? '—' : fmt(s?.total_tokens ?? 0)}
             delta={calcDelta(s?.total_tokens, prev?.total_tokens)}
             sparkData={reqSpark}
+            accentColor="var(--tokens-color)"
           />
-          <KpiBlock
+          <KpiCard
             label="Cost"
             value={loading ? '—' : `$${parseFloat(s?.total_cost_usd ?? 0).toFixed(2)}`}
             delta={calcDelta(s?.total_cost_usd, prev?.total_cost_usd)}
             inverse
             sparkData={reqSpark}
+            accentColor="var(--cost-color)"
           />
-          <KpiBlock
+          <KpiCard
             label="Avg Latency"
             value={loading ? '—' : `${Math.round(s?.avg_latency_ms ?? 0)}ms`}
             delta={calcDelta(s?.avg_latency_ms, prev?.avg_latency_ms)}
             inverse
             sparkData={reqSpark}
+            accentColor="var(--latency-color)"
           />
         </div>
 
-        {/* Main section */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 28, marginTop: 22 }}>
-          {/* Chart */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+        {/* Chart + Provider breakdown */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+          {/* Tokens over time */}
+          <div className="obs-card" style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div className="obs-section-label">Tokens over time</div>
-              <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--muted)' }}>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
                 {configuredProviders.includes('anthropic') && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 10, height: 2, background: 'var(--anthropic)', display: 'inline-block', borderRadius: 1 }} />
@@ -237,67 +407,28 @@ export default function Dashboard() {
           </div>
 
           {/* Provider breakdown */}
-          <div>
-            <div className="obs-section-label" style={{ marginBottom: 10 }}>Provider breakdown</div>
-            {loading ? (
-              <div className="obs-skeleton" style={{ height: 80, borderRadius: 4 }} />
-            ) : (
-              <table className="obs-table" style={{ marginTop: 4 }}>
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th className="col-num">Reqs</th>
-                    <th className="col-num">Tokens</th>
-                    <th className="col-num">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {byProvider.length === 0 ? (
-                    <tr><td colSpan={4} style={{ color: 'var(--muted)', textAlign: 'center', padding: '16px 0' }}>No data</td></tr>
-                  ) : byProvider.map(p => (
-                    <tr key={p.provider} style={{ cursor: 'default' }}>
-                      <td><ProviderBadge provider={p.provider} /></td>
-                      <td className="col-num">{parseInt(p.total_requests || 0).toLocaleString()}</td>
-                      <td className="col-num">{fmt(parseInt(p.total_tokens || 0))}</td>
-                      <td className="col-num">${parseFloat(p.total_cost_usd || 0).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          <div className="obs-card" style={{ padding: '16px 20px' }}>
+            <div className="obs-section-label" style={{ marginBottom: 14 }}>By provider</div>
+            <ProviderBreakdown byProvider={byProvider} loading={loading} />
           </div>
         </div>
 
-        {/* Monthly projection */}
-        {projection?.projection?.length > 0 && (
-          <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-            <div className="obs-section-label" style={{ marginBottom: 14 }}>Monthly projection</div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${projection.projection.filter(p => configuredProviders.includes(p.provider)).length}, 1fr)`,
-              gap: 0,
-            }}>
-              {projection.projection.filter(p => configuredProviders.includes(p.provider)).map((p, i, arr) => (
-                <div key={p.provider} style={{
-                  paddingRight: i < arr.length - 1 ? 28 : 0,
-                  paddingLeft:  i > 0 ? 28 : 0,
-                  borderRight: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-                    <ProviderBadge provider={p.provider} size="lg" />
-                    <span style={{ fontSize: 22, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', marginLeft: 'auto', color: 'var(--text)' }}>
-                      ${parseFloat(p.projected_month_total || 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 16 }}>
-                    <span>Daily avg <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.daily_avg || 0).toFixed(2)}</span></span>
-                    {p.days_remaining > 0 && <span>{p.days_remaining} days remaining</span>}
-                  </div>
-                </div>
-              ))}
+        {/* Top models */}
+        {(byModel.length > 0 || loading) && (
+          <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div className="obs-section-label">Top models</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16 }}>
+                <span style={{ width: 52, textAlign: 'right' }}>Cost</span>
+                <span style={{ width: 42, textAlign: 'right' }}>Reqs</span>
+              </div>
             </div>
+            <TopModels byModel={byModel} loading={loading} />
           </div>
         )}
+
+        {/* Monthly projection */}
+        <MonthlyProjection projection={projection} configuredProviders={configuredProviders} />
 
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>

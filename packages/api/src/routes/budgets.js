@@ -6,21 +6,26 @@ const { requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 
 const BudgetSchema = z.object({
-  name: z.string().min(1).max(100),
+  name:      z.string().min(1).max(100),
   limit_usd: z.number().positive(),
-  period: z.enum(['daily', 'weekly', 'monthly']).default('monthly')
+  period:    z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
 });
 
 router.get('/', async (req, res) => {
   try {
-    const budgets = await pool.query('SELECT * FROM budgets ORDER BY created_at DESC');
+    const { orgId } = req.user;
+    const budgets = await pool.query(
+      'SELECT * FROM budgets WHERE org_id = $1 ORDER BY created_at DESC',
+      [orgId]
+    );
 
-    // Calculate current spend for each budget
     const budgetsWithSpend = await Promise.all(budgets.rows.map(async (budget) => {
       const periodMap = { daily: '1 day', weekly: '7 days', monthly: '30 days' };
-      const interval = periodMap[budget.period] || '30 days';
+      const interval  = periodMap[budget.period] || '30 days';
       const spend = await pool.query(
-        `SELECT COALESCE(SUM(cost_usd), 0) as current_spend FROM api_calls WHERE timestamp > NOW() - INTERVAL '${interval}'`
+        `SELECT COALESCE(SUM(cost_usd), 0) as current_spend
+         FROM api_calls WHERE org_id = $1 AND timestamp > NOW() - INTERVAL '${interval}'`,
+        [orgId]
       );
       return { ...budget, current_spend: parseFloat(spend.rows[0].current_spend) };
     }));
@@ -33,10 +38,11 @@ router.get('/', async (req, res) => {
 
 router.post('/', requireAdmin, async (req, res) => {
   try {
+    const { orgId } = req.user;
     const data = BudgetSchema.parse(req.body);
     const result = await pool.query(
-      'INSERT INTO budgets (name, limit_usd, period) VALUES ($1, $2, $3) RETURNING *',
-      [data.name, data.limit_usd, data.period]
+      'INSERT INTO budgets (org_id, name, limit_usd, period) VALUES ($1, $2, $3, $4) RETURNING *',
+      [orgId, data.name, data.limit_usd, data.period]
     );
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
@@ -47,7 +53,8 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
-    await pool.query('DELETE FROM budgets WHERE id = $1', [req.params.id]);
+    const { orgId } = req.user;
+    await pool.query('DELETE FROM budgets WHERE id = $1 AND org_id = $2', [req.params.id, orgId]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
