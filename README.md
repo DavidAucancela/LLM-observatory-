@@ -36,7 +36,7 @@
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/your-username/llm-observatory
+git clone https://github.com/DavidAucancela/LLM-observatory-
 cd llm-observatory
 npm install
 ```

@@ -25,10 +25,21 @@ services:
       PORT: 3001
       NODE_ENV: production
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      AUTH_EMAIL: ${AUTH_EMAIL}
-      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Email (Resend) — required for account activation, password reset, invitations
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@example.com}
+      APP_URL: ${APP_URL:-http://localhost}
+      # Security
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      # Alerts (optional)
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      # Data retention in days (default 90)
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-90}
+      # Legacy single-admin bootstrap (optional — prefer self-registration)
+      AUTH_EMAIL: ${AUTH_EMAIL:-}
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-}
     depends_on:
       postgres:
         condition: service_healthy
