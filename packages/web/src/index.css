@@ -39,11 +39,24 @@
   --success: #16A34A;
   --error: #DC2626;
   --warning: #D97706;
+
+  /* Metric accent colors */
+  --tokens-color:  #3B82F6;
+  --cost-color:    #8B5CF6;
+  --latency-color: #F59E0B;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05), 0 1px 3px 0 rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
+
+  /* Animation easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .theme-light {
   --page: var(--l-page);
   --surface: var(--l-surface);
+  --surface-raised: #FFFFFF;
   --border: var(--l-border);
   --border-soft: var(--l-border-soft);
   --text: var(--l-text);
@@ -56,6 +69,7 @@
 .theme-dark {
   --page: var(--d-page);
   --surface: var(--d-surface);
+  --surface-raised: #1E2535;
   --border: var(--d-border);
   --border-soft: var(--d-border-soft);
   --text: var(--d-text);
@@ -134,11 +148,21 @@ body {
   cursor: pointer;
   border-radius: 4px;
   margin-bottom: 1px;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 9px;
   text-decoration: none;
   transition: color 0.1s;
   user-select: none;
 }
+
+.obs-nav-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.1s;
+}
+.obs-nav-item:hover .obs-nav-icon,
+.obs-nav-item.active .obs-nav-icon { opacity: 1; }
 
 .obs-nav-item:hover { color: var(--text); background: var(--hover); }
 
@@ -220,6 +244,85 @@ body {
 }
 
 .obs-logout-btn:hover { background: color-mix(in oklab, var(--error) 10%, transparent); color: var(--error); }
+
+/* ── Sidebar user block ── */
+.obs-user-block {
+  margin-top: 8px;
+  padding: 10px 12px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.obs-user-info {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 8px;
+}
+
+.obs-user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: var(--text);
+  color: var(--page);
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+
+.obs-user-meta {
+  flex: 1; min-width: 0;
+}
+
+.obs-user-org {
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.3;
+}
+
+.obs-user-email {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.3;
+}
+
+.obs-role-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.obs-user-actions {
+  display: flex; gap: 4px;
+}
+
+.obs-user-action-btn {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.obs-user-action-btn:hover { background: var(--hover); color: var(--text); }
+.obs-user-action-btn--danger:hover {
+  background: color-mix(in oklab, var(--error) 10%, transparent);
+  color: var(--error);
+  border-color: color-mix(in oklab, var(--error) 30%, transparent);
+}
 
 /* ── Status dot ── */
 .dot {
@@ -387,15 +490,41 @@ body {
   color: var(--muted);
 }
 
+/* ── Card ── */
+.obs-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
 /* ── KPI strip ── */
 .kpi-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 22px;
-  gap: 0;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
+/* Card-style KPI */
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--kpi-accent, var(--border));
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  transition: box-shadow 0.15s var(--ease-out);
+}
+
+.kpi-card:hover { box-shadow: var(--shadow-md); }
+
+/* Legacy flat block (unused in dashboard, kept for compat) */
 .kpi-block {
   display: flex; flex-direction: column;
   gap: 6px;
@@ -403,7 +532,6 @@ body {
   border-right: 1px solid var(--border-soft);
   min-width: 0;
 }
-
 .kpi-block:last-child { border-right: none; padding-right: 0; }
 .kpi-block:not(:first-child) { padding-left: 24px; }
 
@@ -416,7 +544,7 @@ body {
 }
 
 .kpi-row {
-  display: flex; align-items: baseline; gap: 10px;
+  display: flex; align-items: baseline; gap: 8px;
 }
 
 .kpi-value {
@@ -428,7 +556,7 @@ body {
   color: var(--text);
 }
 
-.kpi-spark { margin-top: 8px; }
+.kpi-spark { margin-top: 2px; }
 
 /* ── Delta badge ── */
 .delta {
@@ -440,8 +568,8 @@ body {
   border-radius: 3px;
 }
 
-.delta-up { color: var(--success); }
-.delta-down { color: var(--error); }
+.delta-up   { color: var(--success); background: color-mix(in oklab, var(--success) 10%, transparent); }
+.delta-down { color: var(--error);   background: color-mix(in oklab, var(--error)   10%, transparent); }
 .delta-flat { color: var(--muted); }
 
 /* ── Tables ── */
