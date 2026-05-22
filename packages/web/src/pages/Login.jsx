@@ -15,7 +15,7 @@ export default function Login() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
 
-  if (isAuthenticated) { navigate('/', { replace: true }); return null; }
+  if (isAuthenticated) { navigate('/dashboard', { replace: true }); return null; }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,7 +23,7 @@ export default function Login() {
     setLoading(true); setError('');
     try {
       await login(email, password);
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) { setError(err.message || 'Invalid credentials'); }
     finally { setLoading(false); }
   };

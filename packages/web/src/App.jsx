@@ -7,6 +7,7 @@ import Activity from './pages/Activity';
 import Finance from './pages/Finance';
 import Settings from './pages/Settings';
 import Account  from './pages/Account';
+import LandingPage    from './pages/LandingPage';
 import Login          from './pages/Login';
 import Register       from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -24,6 +25,14 @@ function ProtectedRoute({ children }) {
     );
   }
   return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+
+// Root: landing if not logged in, redirect to /dashboard if logged in
+function RootRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
 }
 
 function AppShell() {
@@ -57,12 +66,13 @@ function AppShell() {
           liveProviders={liveProviders}
         />
         <Routes>
-          <Route path="/"          element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/activity"  element={<Activity />} />
           <Route path="/finance"   element={<Finance />} />
           <Route path="/settings"  element={<Settings />} />
           <Route path="/account"   element={<Account />} />
           {/* Legacy redirects */}
+          <Route path="/"          element={<Navigate to="/dashboard" replace />} />
           <Route path="/requests"  element={<Navigate to="/activity" replace />} />
           <Route path="/models"    element={<Navigate to="/activity?tab=models" replace />} />
           <Route path="/providers" element={<Navigate to="/finance" replace />} />
@@ -76,6 +86,7 @@ function AppShell() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/"                element={<RootRoute />} />
       <Route path="/login"           element={<Login />} />
       <Route path="/register"        element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />

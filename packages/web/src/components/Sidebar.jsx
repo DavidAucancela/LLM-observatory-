@@ -71,10 +71,10 @@ function IconLogout() {
 }
 
 const navItems = [
-  { to: '/',         label: 'Overview',  Icon: IconGrid     },
-  { to: '/activity', label: 'Activity',  Icon: IconActivity },
-  { to: '/finance',  label: 'Finance',   Icon: IconFinance  },
-  { to: '/settings', label: 'Settings',  Icon: IconSettings },
+  { to: '/dashboard', label: 'Overview',  Icon: IconGrid     },
+  { to: '/activity',  label: 'Activity',  Icon: IconActivity },
+  { to: '/finance',   label: 'Finance',   Icon: IconFinance  },
+  { to: '/settings',  label: 'Settings',  Icon: IconSettings },
 ];
 
 const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
@@ -109,7 +109,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === '/dashboard'}
             className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
           >
             <span className="obs-nav-icon"><Icon /></span>
