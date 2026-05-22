@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
 /* ── Nav icons ── */
@@ -90,11 +90,9 @@ function StatusDot({ color, pulse }) {
 
 export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const initials = user?.email
-    ? user.email[0].toUpperCase()
-    : '?';
-
+  const initials  = user?.email ? user.email[0].toUpperCase() : '?';
   const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
 
   return (
@@ -149,7 +147,11 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
       {/* User block */}
       <div className="obs-user-block">
         {user && (
-          <div className="obs-user-info">
+          <button
+            className="obs-user-info obs-user-info--btn"
+            onClick={() => navigate('/account')}
+            title="Mi cuenta"
+          >
             <div className="obs-user-avatar">{initials}</div>
             <div className="obs-user-meta">
               {user.orgName && (
@@ -158,7 +160,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
               <div className="obs-user-email">{user.email}</div>
             </div>
             <span className="obs-role-badge">{roleLabel}</span>
-          </div>
+          </button>
         )}
         <div className="obs-user-actions">
           <button

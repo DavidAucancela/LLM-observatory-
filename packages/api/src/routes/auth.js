@@ -52,16 +52,18 @@ router.post('/login', async (req, res, next) => {
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get('/me', async (req, res, next) => {
   try {
-    const orgRes = await pool.query(
-      'SELECT name FROM organizations WHERE id = $1',
-      [req.user.orgId]
-    );
+    const [userRes, orgRes] = await Promise.all([
+      pool.query('SELECT created_at, last_login_at FROM users WHERE id = $1', [req.user.id]),
+      pool.query('SELECT name FROM organizations WHERE id = $1', [req.user.orgId]),
+    ]);
     res.json({
-      id:      req.user.id,
-      email:   req.user.email,
-      role:    req.user.role,
-      orgId:   req.user.orgId,
-      orgName: orgRes.rows[0]?.name || null,
+      id:          req.user.id,
+      email:       req.user.email,
+      role:        req.user.role,
+      orgId:       req.user.orgId,
+      orgName:     orgRes.rows[0]?.name || null,
+      createdAt:   userRes.rows[0]?.created_at || null,
+      lastLoginAt: userRes.rows[0]?.last_login_at || null,
     });
   } catch (err) { next(err); }
 });
@@ -321,6 +323,87 @@ router.post('/reset-password', async (req, res, next) => {
       `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
       [hash, result.rows[0].id]
     );
+
+    res.json({ message: 'Contraseña actualizada correctamente.' });
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      return res.status(400).json({ error: err.errors[0].message });
+    next(err);
+  }
+});
+
+// ── PUT /api/auth/profile ─────────────────────────────────────────────────────
+const ProfileSchema = z.object({
+  email:    z.string().email('Email inválido').optional(),
+  org_name: z.string().min(1, 'El nombre no puede estar vacío').max(100).optional(),
+});
+
+router.put('/profile', async (req, res, next) => {
+  try {
+    const { email, org_name } = ProfileSchema.parse(req.body);
+    const userId = req.user.id;
+    const orgId  = req.user.orgId;
+
+    if (email && email !== req.user.email) {
+      const dup = await pool.query(
+        'SELECT id FROM users WHERE email = $1 AND id != $2',
+        [email, userId]
+      );
+      if (dup.rows.length)
+        return res.status(409).json({ error: 'Ese email ya está en uso por otra cuenta' });
+
+      await pool.query('UPDATE users SET email = $1 WHERE id = $2', [email, userId]);
+    }
+
+    if (org_name && req.user.role === 'admin') {
+      await pool.query(
+        'UPDATE organizations SET name = $1 WHERE id = $2',
+        [org_name.trim(), orgId]
+      );
+    }
+
+    const [userRow, orgRow] = await Promise.all([
+      pool.query('SELECT email, created_at, last_login_at FROM users WHERE id = $1', [userId]),
+      pool.query('SELECT name FROM organizations WHERE id = $1', [orgId]),
+    ]);
+
+    res.json({
+      email:       userRow.rows[0].email,
+      orgName:     orgRow.rows[0]?.name || null,
+      createdAt:   userRow.rows[0].created_at,
+      lastLoginAt: userRow.rows[0].last_login_at,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      return res.status(400).json({ error: err.errors[0].message });
+    next(err);
+  }
+});
+
+// ── PUT /api/auth/password ────────────────────────────────────────────────────
+const ChangePasswordSchema = z.object({
+  current_password: z.string().min(1, 'Contraseña actual requerida'),
+  new_password:     z.string().min(8, 'La nueva contraseña debe tener al menos 8 caracteres'),
+});
+
+router.put('/password', async (req, res, next) => {
+  try {
+    const { current_password, new_password } = ChangePasswordSchema.parse(req.body);
+    const userId = req.user.id;
+
+    const userRes = await pool.query(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [userId]
+    );
+    const valid = await bcrypt.compare(current_password, userRes.rows[0].password_hash);
+    if (!valid)
+      return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+
+    if (current_password === new_password)
+      return res.status(400).json({ error: 'La nueva contraseña debe ser diferente a la actual' });
+
+    const hash = await bcrypt.hash(new_password, 12);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
 
     res.json({ message: 'Contraseña actualizada correctamente.' });
   } catch (err) {

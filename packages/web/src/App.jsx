@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Activity from './pages/Activity';
 import Finance from './pages/Finance';
 import Settings from './pages/Settings';
+import Account  from './pages/Account';
 import Login          from './pages/Login';
 import Register       from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -60,6 +61,7 @@ function AppShell() {
           <Route path="/activity"  element={<Activity />} />
           <Route path="/finance"   element={<Finance />} />
           <Route path="/settings"  element={<Settings />} />
+          <Route path="/account"   element={<Account />} />
           {/* Legacy redirects */}
           <Route path="/requests"  element={<Navigate to="/activity" replace />} />
           <Route path="/models"    element={<Navigate to="/activity?tab=models" replace />} />

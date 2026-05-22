@@ -257,6 +257,18 @@ body {
   margin-bottom: 8px;
 }
 
+.obs-user-info--btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 5px 4px;
+  text-align: left;
+  transition: background 0.1s;
+}
+.obs-user-info--btn:hover { background: var(--hover); }
+
 .obs-user-avatar {
   width: 28px; height: 28px;
   border-radius: 6px;
