@@ -215,6 +215,11 @@ CREATE INDEX IF NOT EXISTS idx_balances_org    ON provider_balances(org_id);
 CREATE INDEX IF NOT EXISTS idx_alert_rules_org ON alert_rules(org_id);
 CREATE INDEX IF NOT EXISTS idx_sync_logs_org   ON sync_logs(org_id);
 
+-- ── Error capture columns ─────────────────────────────────────────────────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS error_type VARCHAR(100);
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS error_message TEXT;
+CREATE INDEX IF NOT EXISTS idx_api_calls_error ON api_calls(error_type) WHERE error_type IS NOT NULL;
+
 -- ── Backfill existing data into a default org (runs once when no orgs exist) ──
 DO $$
 DECLARE v_org_id INTEGER;

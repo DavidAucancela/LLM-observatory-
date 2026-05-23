@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import ProviderBadge from './ProviderBadge';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { fmtDateTime } from '../utils/fmt';
+import { useApi } from '../hooks/useApi';
 
 export default function RequestDrawer({ requestId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { apiFetch } = useApi();
 
   useEffect(() => {
     if (!requestId) return;
     setLoading(true);
-    fetch(`${API_URL}/api/metrics/${requestId}`)
+    apiFetch(`/api/metrics/${requestId}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -55,7 +56,7 @@ export default function RequestDrawer({ requestId, onClose }) {
                 <div className="obs-section-label" style={{ marginBottom: 10 }}>Metadata</div>
                 <dl className="meta-grid">
                   <dt>Time</dt>
-                  <dd>{new Date(data.timestamp).toLocaleString('en-GB', { hour12: false })}</dd>
+                  <dd>{fmtDateTime(data.timestamp)}</dd>
                   <dt>Provider</dt>
                   <dd><ProviderBadge provider={data.provider} /></dd>
                   <dt>Model</dt>
@@ -67,6 +68,12 @@ export default function RequestDrawer({ requestId, onClose }) {
                     {data.status_code} {data.status_code === 200 ? 'OK' : 'Error'}
                   </dd>
                   {data.stop_reason && <><dt>Stop reason</dt><dd>{data.stop_reason}</dd></>}
+                  {data.error_type && (
+                    <><dt>Error type</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.error_type}</dd></>
+                  )}
+                  {data.error_message && (
+                    <><dt>Error msg</dt><dd style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', wordBreak: 'break-all' }}>{data.error_message}</dd></>
+                  )}
                 </dl>
               </div>
 

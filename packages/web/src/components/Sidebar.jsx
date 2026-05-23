@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
 /* ── Nav icons ── */
@@ -71,10 +71,10 @@ function IconLogout() {
 }
 
 const navItems = [
-  { to: '/',         label: 'Overview',  Icon: IconGrid     },
-  { to: '/activity', label: 'Activity',  Icon: IconActivity },
-  { to: '/finance',  label: 'Finance',   Icon: IconFinance  },
-  { to: '/settings', label: 'Settings',  Icon: IconSettings },
+  { to: '/dashboard', label: 'Overview',  Icon: IconGrid     },
+  { to: '/activity',  label: 'Activity',  Icon: IconActivity },
+  { to: '/finance',   label: 'Finance',   Icon: IconFinance  },
+  { to: '/settings',  label: 'Settings',  Icon: IconSettings },
 ];
 
 const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
@@ -88,17 +88,15 @@ function StatusDot({ color, pulse }) {
   );
 }
 
-export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
+export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose }) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const initials = user?.email
-    ? user.email[0].toUpperCase()
-    : '?';
-
+  const initials  = user?.email ? user.email[0].toUpperCase() : '?';
   const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
 
   return (
-    <aside className="obs-sidebar">
+    <aside className={`obs-sidebar${isOpen ? ' open' : ''}`}>
       {/* Brand */}
       <div className="obs-brand">
         <div className="obs-brand-mark">◐</div>
@@ -111,8 +109,9 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === '/dashboard'}
             className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
           >
             <span className="obs-nav-icon"><Icon /></span>
             <span>{label}</span>
@@ -149,7 +148,11 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
       {/* User block */}
       <div className="obs-user-block">
         {user && (
-          <div className="obs-user-info">
+          <button
+            className="obs-user-info obs-user-info--btn"
+            onClick={() => navigate('/account')}
+            title="Mi cuenta"
+          >
             <div className="obs-user-avatar">{initials}</div>
             <div className="obs-user-meta">
               {user.orgName && (
@@ -158,7 +161,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
               <div className="obs-user-email">{user.email}</div>
             </div>
             <span className="obs-role-badge">{roleLabel}</span>
-          </div>
+          </button>
         )}
         <div className="obs-user-actions">
           <button

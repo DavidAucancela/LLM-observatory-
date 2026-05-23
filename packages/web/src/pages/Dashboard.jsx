@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import MultiLineChart from '../components/MultiLineChart';
+import HBar from '../components/HBar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 
@@ -64,13 +65,13 @@ function ProviderBreakdown({ byProvider, loading }) {
     <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>No data</div>
   );
 
-  const totalCost = byProvider.reduce((s, p) => s + parseFloat(p.total_cost_usd || 0), 0);
+  const totalCost = byProvider.reduce((s, p) => s + parseFloat(p.total_cost || 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {byProvider.map(p => {
-        const cost = parseFloat(p.total_cost_usd || 0);
-        const reqs = parseInt(p.total_requests || 0);
+        const cost = parseFloat(p.total_cost || 0);
+        const reqs = parseInt(p.requests || 0);
         const pct  = totalCost > 0 ? (cost / totalCost) * 100 : 0;
         const color = PROVIDER_COLORS[p.provider] || 'var(--accent)';
         return (
@@ -136,6 +137,110 @@ function TopModels({ byModel, loading }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Error type breakdown ──────────────────────────────────────────────────────
+
+const ERROR_TYPE_LABELS = {
+  auth_error:      'Auth error',
+  rate_limit:      'Rate limit',
+  invalid_request: 'Invalid request',
+  server_error:    'Server error',
+  network_error:   'Network error',
+  timeout:         'Timeout',
+  unknown_error:   'Unknown',
+};
+
+function ErrorBreakdown({ breakdown, loading }) {
+  if (loading) return <div className="obs-skeleton" style={{ height: 60, borderRadius: 6 }} />;
+  if (!breakdown?.length) return (
+    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>No errors in this period</div>
+  );
+  const max = Math.max(...breakdown.map(e => parseInt(e.count || 0)));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {breakdown.map(e => (
+        <HBar
+          key={e.error_type}
+          label={ERROR_TYPE_LABELS[e.error_type] || e.error_type}
+          value={parseInt(e.count || 0)}
+          max={max}
+          color="var(--error)"
+          valueLabel={e.count.toString()}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Tag breakdown ─────────────────────────────────────────────────────────────
+
+function TagBreakdown({ range }) {
+  const [tagKeys, setTagKeys]   = useState([]);
+  const [tagKey, setTagKey]     = useState('');
+  const [data, setData]         = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const { apiFetch } = useApi();
+
+  useEffect(() => {
+    apiFetch(`/api/metrics/tag-keys?range=${range}`)
+      .then(r => r.json())
+      .then(d => {
+        const keys = d.keys || [];
+        setTagKeys(keys);
+        if (keys.length && !tagKey) setTagKey(keys[0]);
+      })
+      .catch(() => {});
+  }, [range]);
+
+  useEffect(() => {
+    if (!tagKey) return;
+    setLoading(true);
+    apiFetch(`/api/metrics/tag-breakdown?key=${encodeURIComponent(tagKey)}&range=${range}`)
+      .then(r => r.json())
+      .then(d => { setData(d.data || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [tagKey, range]);
+
+  if (!tagKeys.length) return null;
+
+  const maxCost = Math.max(...data.map(d => parseFloat(d.total_cost || 0)), 0.0001);
+
+  return (
+    <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div className="obs-section-label">Tag breakdown</div>
+        <select
+          className="obs-btn"
+          style={{ height: 26, paddingTop: 0, paddingBottom: 0, fontSize: 11 }}
+          value={tagKey}
+          onChange={e => setTagKey(e.target.value)}
+        >
+          {tagKeys.map(k => <option key={k} value={k}>{k}</option>)}
+        </select>
+      </div>
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {[...Array(3)].map((_, i) => <div key={i} className="obs-skeleton" style={{ height: 22, borderRadius: 3 }} />)}
+        </div>
+      ) : data.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>No data for tag "{tagKey}"</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {data.map(row => (
+            <HBar
+              key={row.value}
+              label={String(row.value ?? '(empty)')}
+              value={parseFloat(row.total_cost || 0)}
+              max={maxCost}
+              color="var(--accent)"
+              valueLabel={`$${parseFloat(row.total_cost || 0).toFixed(4)}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -271,8 +376,13 @@ export default function Dashboard() {
   const oaiData  = timeSeries.map(r => r.openai);
   const reqSpark = timeSeries.map(r => r.anthropic + r.openai);
 
-  const byProvider = summary?.by_provider || [];
-  const byModel    = summary?.by_model    || [];
+  const byProvider     = summary?.by_provider     || [];
+  const byModel        = summary?.by_model        || [];
+  const errorBreakdown = summary?.error_breakdown || [];
+
+  const errorCount = parseInt(s?.error_count || 0);
+  const totalReqs  = parseInt(s?.total_requests || 0);
+  const errorRate  = totalReqs > 0 ? ((errorCount / totalReqs) * 100).toFixed(1) + '%' : '0%';
 
   if (!loading && !hasCredentials) {
     return (
@@ -335,7 +445,7 @@ export default function Dashboard() {
 
       <div className="obs-content">
         {/* KPI Cards */}
-        <div className="kpi-strip">
+        <div className="kpi-strip" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <KpiCard
             label="Requests"
             value={loading ? '—' : fmt(s?.total_requests ?? 0)}
@@ -365,6 +475,11 @@ export default function Dashboard() {
             inverse
             sparkData={reqSpark}
             accentColor="var(--latency-color)"
+          />
+          <KpiCard
+            label="Error Rate"
+            value={loading ? '—' : errorRate}
+            accentColor="var(--error)"
           />
         </div>
 
@@ -426,6 +541,17 @@ export default function Dashboard() {
             <TopModels byModel={byModel} loading={loading} />
           </div>
         )}
+
+        {/* Error breakdown */}
+        {(errorBreakdown.length > 0 || loading) && (
+          <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
+            <div className="obs-section-label" style={{ marginBottom: 14 }}>Errors by type</div>
+            <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
+          </div>
+        )}
+
+        {/* Tag breakdown */}
+        <TagBreakdown range={range} />
 
         {/* Monthly projection */}
         <MonthlyProjection projection={projection} configuredProviders={configuredProviders} />

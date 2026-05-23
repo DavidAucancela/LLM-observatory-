@@ -63,13 +63,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((patch) => {
+    setUser(prev => prev ? { ...prev, ...patch } : prev);
+  }, []);
+
   const value = {
     user,
     token,
     isLoading,
     isAuthenticated: !!user,
     login,
-    logout
+    logout,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
