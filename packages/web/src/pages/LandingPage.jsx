@@ -47,6 +47,7 @@ const CHART_A = '0,58 32,42 64,50 96,28 128,44 160,32 192,20 224,36 256,24 288,3
 const CHART_O = '0,68 32,64 64,58 96,54 128,61 160,52 192,56 224,49 256,54 288,46 320,50';
 
 function DashboardMockup() {
+  const { t } = useTranslation();
   return (
     <div className="lp-mockup-outer">
       <div className="lp-mockup-glow" />
@@ -61,10 +62,10 @@ function DashboardMockup() {
           {/* KPI strip */}
           <div className="lp-mockup-kpi-strip">
             {[
-              { label: 'Requests',    val: '12.4K',  color: '#6366f1' },
-              { label: 'Tokens',      val: '1.84M',  color: '#3b82f6' },
-              { label: 'Total Cost',  val: '$4.21',  color: '#a855f7' },
-              { label: 'Avg Latency', val: '312ms',  color: '#f59e0b' },
+              { label: t('landing.kpiRequests'), val: '12.4K',  color: '#6366f1' },
+              { label: t('landing.kpiTokens'),   val: '1.84M',  color: '#3b82f6' },
+              { label: t('landing.kpiCost'),      val: '$4.21',  color: '#a855f7' },
+              { label: t('landing.kpiLatency'),   val: '312ms',  color: '#f59e0b' },
             ].map(k => (
               <div key={k.label} className="lp-mockup-kpi">
                 <div className="lp-mockup-kpi-val" style={{ color: k.color }}>{k.val}</div>
@@ -76,7 +77,7 @@ function DashboardMockup() {
           {/* Body: chart + breakdown */}
           <div className="lp-mockup-body">
             <div className="lp-mockup-chart">
-              <div className="lp-mockup-chart-title">Tokens over time</div>
+              <div className="lp-mockup-chart-title">{t('landing.mockTokensOverTime')}</div>
               <svg viewBox="0 0 320 72" preserveAspectRatio="none" className="lp-mockup-svg">
                 <defs>
                   <linearGradient id="lgA" x1="0" y1="0" x2="0" y2="1">
@@ -99,7 +100,7 @@ function DashboardMockup() {
               </div>
             </div>
             <div className="lp-mockup-breakdown">
-              <div className="lp-mockup-breakdown-title">Top models</div>
+              <div className="lp-mockup-breakdown-title">{t('landing.mockTopModels')}</div>
               {[
                 { name: 'claude-sonnet-4-6', pct: 72, color: '#d97706' },
                 { name: 'gpt-4o',            pct: 18, color: '#10b981' },
@@ -156,23 +157,10 @@ function Providers() {
 /* ══════════════════════════════════════════════════════
    5. PROBLEM → SOLUTION
 ══════════════════════════════════════════════════════ */
-const VS_BAD = [
-  'No visibility into which model costs most',
-  'Surprise bills at the end of the month',
-  'Scattered API keys across team members',
-  'Zero context when a latency spike appears',
-  'No budget limits or webhook alerts',
-];
-const VS_GOOD = [
-  'Per-request cost breakdown by model & provider',
-  'Monthly projections based on live 30-day trend',
-  'Centralised org tokens, each scoped to one integration',
-  'Real-time latency chart + historical data sync',
-  'Discord alerts before you hit daily/weekly limits',
-];
-
 function ProblemSolution() {
   const { t } = useTranslation();
+  const vsBad  = [t('landing.vsBad0'),  t('landing.vsBad1'),  t('landing.vsBad2'),  t('landing.vsBad3'),  t('landing.vsBad4')];
+  const vsGood = [t('landing.vsGood0'), t('landing.vsGood1'), t('landing.vsGood2'), t('landing.vsGood3'), t('landing.vsGood4')];
   return (
     <section className="lp-section" id="why">
       <div className="lp-section-tag">{t('landing.whyTag')}</div>
@@ -186,7 +174,7 @@ function ProblemSolution() {
             </svg>
             {t('landing.withoutTitle')}
           </div>
-          {VS_BAD.map(item => (
+          {vsBad.map(item => (
             <div key={item} className="lp-vs-item">
               <span className="lp-vs-icon lp-vs-icon-bad">✗</span>
               {item}
@@ -200,7 +188,7 @@ function ProblemSolution() {
             </svg>
             {t('landing.withTitle')}
           </div>
-          {VS_GOOD.map(item => (
+          {vsGood.map(item => (
             <div key={item} className="lp-vs-item">
               <span className="lp-vs-icon lp-vs-icon-good">✓</span>
               {item}
@@ -215,46 +203,12 @@ function ProblemSolution() {
 /* ══════════════════════════════════════════════════════
    6. FEATURES WITH TABS
 ══════════════════════════════════════════════════════ */
-const TABS = [
-  {
-    label: 'Real-time Monitoring',
-    title: 'Live metrics as they happen',
-    desc: 'WebSocket-powered updates stream tokens, cost, and latency the instant your app makes a call. Every request is logged with full detail.',
-    bullets: [
-      'WebSocket live feed — no polling required',
-      'Per-request drawer with prompt preview',
-      'Provider & model side-by-side comparison',
-    ],
-    visual: 'monitoring',
-  },
-  {
-    label: 'Cost & Budgets',
-    title: 'Know your spend before the bill arrives',
-    desc: 'Model-aware pricing tables auto-calculate cost per request. Set daily, weekly, or monthly budget limits and get Discord alerts.',
-    bullets: [
-      'Model-aware pricing for all Claude & OpenAI models',
-      'Discord webhook alerts before overspending',
-      'Monthly projection based on 30-day live trend',
-    ],
-    visual: 'budgets',
-  },
-  {
-    label: 'Team Management',
-    title: 'One org, isolated data, full control',
-    desc: 'Every organisation gets its own tenant. Invite teammates by email, assign roles, and issue Observatory tokens per integration.',
-    bullets: [
-      'Role-based access: admin / member',
-      'Observatory tokens (obs_sk_…) per integration',
-      'Email invitations with 7-day expiry',
-    ],
-    visual: 'team',
-  },
-];
 
 function TabVisualMonitoring() {
+  const { t } = useTranslation();
   return (
     <div className="lp-tab-visual">
-      <div className="lp-tab-visual-label">Recent requests</div>
+      <div className="lp-tab-visual-label">{t('landing.recentRequests')}</div>
       {[
         { p: 'A', model: 'claude-sonnet-4-6', tok: '2.4K', cost: '$0.012', ok: true  },
         { p: 'O', model: 'gpt-4o',            tok: '1.1K', cost: '$0.005', ok: true  },
@@ -279,18 +233,19 @@ function TabVisualMonitoring() {
 }
 
 function TabVisualBudgets() {
+  const { t } = useTranslation();
   const rows = [
-    { label: 'Daily',   spent: 12.4,  limit: 20,  color: '#f59e0b' },
-    { label: 'Weekly',  spent: 82.1,  limit: 100, color: '#ef4444' },
-    { label: 'Monthly', spent: 142.8, limit: 500, color: '#10b981' },
+    { labelKey: 'finance.daily',   spent: 12.4,  limit: 20,  color: '#f59e0b' },
+    { labelKey: 'finance.weekly',  spent: 82.1,  limit: 100, color: '#ef4444' },
+    { labelKey: 'finance.monthly', spent: 142.8, limit: 500, color: '#10b981' },
   ];
   return (
     <div className="lp-tab-visual">
-      <div className="lp-tab-visual-label">Budget limits</div>
+      <div className="lp-tab-visual-label">{t('landing.budgetLimits')}</div>
       {rows.map(b => (
-        <div key={b.label} className="lp-tab-budget">
+        <div key={b.labelKey} className="lp-tab-budget">
           <div className="lp-tab-budget-hdr">
-            <span>{b.label}</span>
+            <span>{t(b.labelKey)}</span>
             <span className="lp-tab-mono">${b.spent.toFixed(2)} / ${b.limit}</span>
           </div>
           <div className="lp-tab-bar-track">
@@ -299,7 +254,7 @@ function TabVisualBudgets() {
         </div>
       ))}
       <div className="lp-tab-projection">
-        <span>Projected monthly</span>
+        <span>{t('landing.projectedMonthly')}</span>
         <span className="lp-tab-mono" style={{ color: '#a855f7' }}>$248.60</span>
       </div>
     </div>
@@ -307,14 +262,15 @@ function TabVisualBudgets() {
 }
 
 function TabVisualTeam() {
+  const { t } = useTranslation();
   const members = [
-    { initials: 'DA', name: 'David A.',  email: 'david@corp.io', role: 'Admin',  color: '#6366f1' },
-    { initials: 'MR', name: 'Maria R.',  email: 'maria@corp.io', role: 'Member', color: '#10b981' },
-    { initials: 'JL', name: 'Juan L.',   email: 'juan@corp.io',  role: 'Member', color: '#f59e0b' },
+    { initials: 'DA', name: 'David A.',  email: 'david@corp.io', roleKey: 'settings.team.adminRole',  color: '#6366f1' },
+    { initials: 'MR', name: 'Maria R.',  email: 'maria@corp.io', roleKey: 'settings.team.memberRole', color: '#10b981' },
+    { initials: 'JL', name: 'Juan L.',   email: 'juan@corp.io',  roleKey: 'settings.team.memberRole', color: '#f59e0b' },
   ];
   return (
     <div className="lp-tab-visual">
-      <div className="lp-tab-visual-label">Team members</div>
+      <div className="lp-tab-visual-label">{t('landing.teamMembers')}</div>
       {members.map(m => (
         <div key={m.email} className="lp-tab-member">
           <div className="lp-tab-avatar" style={{ background: m.color }}>{m.initials}</div>
@@ -322,12 +278,12 @@ function TabVisualTeam() {
             <div className="lp-tab-member-name">{m.name}</div>
             <div className="lp-tab-member-email">{m.email}</div>
           </div>
-          <span className="lp-tab-role" style={{ color: m.role === 'Admin' ? '#818cf8' : '#555' }}>{m.role}</span>
+          <span className="lp-tab-role" style={{ color: m.roleKey.includes('admin') ? '#818cf8' : '#555' }}>{t(m.roleKey)}</span>
         </div>
       ))}
       <div className="lp-tab-token">
         <span className="lp-tab-mono" style={{ color: '#6366f1', fontSize: 10 }}>obs_sk_abc123…</span>
-        <span style={{ fontSize: 10, color: '#555' }}>SDK token</span>
+        <span style={{ fontSize: 10, color: '#555' }}>{t('landing.sdkToken')}</span>
       </div>
     </div>
   );
@@ -338,6 +294,29 @@ const TAB_VISUALS = { monitoring: TabVisualMonitoring, budgets: TabVisualBudgets
 function FeaturesWithTabs() {
   const [active, setActive] = useState(0);
   const { t } = useTranslation();
+  const TABS = [
+    {
+      label:   t('landing.tab0Label'),
+      title:   t('landing.tab0Title'),
+      desc:    t('landing.tab0Desc'),
+      bullets: [t('landing.tab0Bullet0'), t('landing.tab0Bullet1'), t('landing.tab0Bullet2')],
+      visual:  'monitoring',
+    },
+    {
+      label:   t('landing.tab1Label'),
+      title:   t('landing.tab1Title'),
+      desc:    t('landing.tab1Desc'),
+      bullets: [t('landing.tab1Bullet0'), t('landing.tab1Bullet1'), t('landing.tab1Bullet2')],
+      visual:  'budgets',
+    },
+    {
+      label:   t('landing.tab2Label'),
+      title:   t('landing.tab2Title'),
+      desc:    t('landing.tab2Desc'),
+      bullets: [t('landing.tab2Bullet0'), t('landing.tab2Bullet1'), t('landing.tab2Bullet2')],
+      visual:  'team',
+    },
+  ];
   const tab = TABS[active];
   const Visual = TAB_VISUALS[tab.visual];
   return (
@@ -434,26 +413,13 @@ function ArchDiagram() {
 /* ══════════════════════════════════════════════════════
    8. HOW IT WORKS
 ══════════════════════════════════════════════════════ */
-const STEPS = [
-  {
-    title: 'Deploy Observatory',
-    desc: 'One-click deploy to Railway or docker-compose up locally. PostgreSQL, API, and dashboard start together.',
-    code: 'docker-compose up -d --build',
-  },
-  {
-    title: 'Create an Observatory token',
-    desc: 'Register, create your org, then go to Settings → Team → Observatory Tokens → New token.',
-    code: 'obs_sk_xxxxxxxxxxxxxxxxxxxxxxxx',
-  },
-  {
-    title: 'Wrap your SDK client',
-    desc: 'Replace new Anthropic() with new MonitoredAnthropic(). Every API call is automatically tracked with zero extra latency.',
-    code: 'npm install @llm-observatory/sdk',
-  },
-];
-
 function HowItWorks() {
   const { t } = useTranslation();
+  const STEPS = [
+    { title: t('landing.step0Title'), desc: t('landing.step0Desc'), code: 'docker-compose up -d --build' },
+    { title: t('landing.step1Title'), desc: t('landing.step1Desc'), code: 'obs_sk_xxxxxxxxxxxxxxxxxxxxxxxx' },
+    { title: t('landing.step2Title'), desc: t('landing.step2Desc'), code: 'npm install @llm-observatory/sdk' },
+  ];
   return (
     <section id="how-it-works" className="lp-section" style={{ paddingTop: 0 }}>
       <div className="lp-section-tag">{t('landing.howTag')}</div>
