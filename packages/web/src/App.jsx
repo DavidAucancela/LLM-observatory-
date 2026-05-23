@@ -39,6 +39,9 @@ function AppShell() {
   const [darkMode, setDarkMode] = useState(
     () => localStorage.getItem('dark-mode') === 'true'
   );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebar-collapsed') === 'true'
+  );
   const [liveProviders, setLiveProviders] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { apiFetch } = useApi();
@@ -46,6 +49,13 @@ function AppShell() {
   const toggleDarkMode = (value) => {
     localStorage.setItem('dark-mode', String(value));
     setDarkMode(value);
+  };
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed(v => {
+      localStorage.setItem('sidebar-collapsed', String(!v));
+      return !v;
+    });
   };
 
   useEffect(() => {
@@ -84,6 +94,8 @@ function AppShell() {
           liveProviders={liveProviders}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
         />
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />

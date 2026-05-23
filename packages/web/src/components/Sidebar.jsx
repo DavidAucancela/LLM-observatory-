@@ -70,6 +70,22 @@ function IconLogout() {
   );
 }
 
+function IconChevronLeft() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function IconChevronRight() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
 const navItems = [
   { to: '/dashboard', label: 'Overview',  Icon: IconGrid     },
   { to: '/activity',  label: 'Activity',  Icon: IconActivity },
@@ -88,7 +104,7 @@ function StatusDot({ color, pulse }) {
   );
 }
 
-export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose }) {
+export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -96,11 +112,18 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
   const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
 
   return (
-    <aside className={`obs-sidebar${isOpen ? ' open' : ''}`}>
+    <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
       {/* Brand */}
       <div className="obs-brand">
         <div className="obs-brand-mark">◐</div>
-        <span>Observatory</span>
+        <span className="obs-brand-text">Observatory</span>
+        <button
+          className="obs-sidebar-toggle"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+        >
+          {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
+        </button>
       </div>
 
       {/* Nav */}
@@ -112,9 +135,10 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
             end={to === '/dashboard'}
             className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
             onClick={onClose}
+            title={collapsed ? label : undefined}
           >
             <span className="obs-nav-icon"><Icon /></span>
-            <span>{label}</span>
+            <span className="obs-nav-label">{label}</span>
           </NavLink>
         ))}
       </nav>

@@ -75,7 +75,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
   };
 
   return (
-    <section className="obs-card" style={{ marginBottom: 20 }}>
+    <section className="obs-card">
       <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
         Perfil
       </h2>
@@ -87,7 +87,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
-            style={{ width: '100%', maxWidth: 360 }}
+            style={{ width: '100%' }}
           />
         </Field>
 
@@ -99,7 +99,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
               value={orgName}
               onChange={e => setOrgName(e.target.value)}
               maxLength={100}
-              style={{ width: '100%', maxWidth: 360 }}
+              style={{ width: '100%' }}
             />
           </Field>
         )}
@@ -153,7 +153,7 @@ function PasswordSection({ apiFetch }) {
   };
 
   return (
-    <section className="obs-card" style={{ marginBottom: 20 }}>
+    <section className="obs-card">
       <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
         Cambiar contraseña
       </h2>
@@ -166,7 +166,7 @@ function PasswordSection({ apiFetch }) {
             onChange={e => setCurrent(e.target.value)}
             required
             autoComplete="current-password"
-            style={{ width: '100%', maxWidth: 360 }}
+            style={{ width: '100%' }}
           />
         </Field>
         <Field label="Nueva contraseña" hint="Mínimo 8 caracteres.">
@@ -178,7 +178,7 @@ function PasswordSection({ apiFetch }) {
             required
             minLength={8}
             autoComplete="new-password"
-            style={{ width: '100%', maxWidth: 360 }}
+            style={{ width: '100%' }}
           />
         </Field>
         <Field label="Confirmar nueva contraseña">
@@ -190,7 +190,7 @@ function PasswordSection({ apiFetch }) {
             required
             minLength={8}
             autoComplete="new-password"
-            style={{ width: '100%', maxWidth: 360 }}
+            style={{ width: '100%' }}
           />
         </Field>
 
@@ -224,27 +224,10 @@ function SessionSection({ user, apiFetch, logout }) {
 
   return (
     <section className="obs-card" style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
-        Sesión actual
-      </h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
-        {[
-          { label: 'Email',          value: user?.email },
-          { label: 'Organización',   value: user?.orgName || '—' },
-          { label: 'Rol',            value: roleLabel },
-          { label: 'Miembro desde',  value: fmtDate(info?.createdAt) },
-          { label: 'Último acceso',  value: fmtDate(info?.lastLoginAt) },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 3, fontWeight: 600 }}>{label}</div>
-            <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: label === 'Email' ? 'var(--font-mono)' : undefined }}>
-              {value}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+          Sesión actual
+        </h2>
         <button
           className="obs-btn obs-btn-sm"
           style={{ color: 'var(--error)', borderColor: 'color-mix(in oklab, var(--error) 30%, transparent)' }}
@@ -252,6 +235,22 @@ function SessionSection({ user, apiFetch, logout }) {
         >
           Cerrar sesión
         </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 20 }}>
+        {[
+          { label: 'Email',          value: user?.email,            mono: true },
+          { label: 'Organización',   value: user?.orgName || '—' },
+          { label: 'Rol',            value: roleLabel },
+          { label: 'Miembro desde',  value: fmtDate(info?.createdAt) },
+          { label: 'Último acceso',  value: fmtDate(info?.lastLoginAt) },
+        ].map(({ label, value, mono }) => (
+          <div key={label}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: mono ? 'var(--font-mono)' : undefined, wordBreak: 'break-all' }}>
+              {value}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -271,10 +270,20 @@ export default function Account() {
         </div>
       </div>
 
-      <div className="obs-content" style={{ maxWidth: 640, padding: '24px 28px' }}>
-        <ProfileSection  user={user} updateUser={updateUser} apiFetch={apiFetch} />
-        <PasswordSection apiFetch={apiFetch} />
-        <SessionSection  user={user} apiFetch={apiFetch} logout={logout} />
+      <div className="obs-content" style={{ padding: '24px 28px' }}>
+        {/* Session info — full width strip at the top */}
+        <SessionSection user={user} apiFetch={apiFetch} logout={logout} />
+
+        {/* Forms — two-column grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 20,
+          alignItems: 'start',
+        }}>
+          <ProfileSection  user={user} updateUser={updateUser} apiFetch={apiFetch} />
+          <PasswordSection apiFetch={apiFetch} />
+        </div>
       </div>
     </main>
   );
