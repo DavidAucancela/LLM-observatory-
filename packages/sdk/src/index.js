@@ -148,6 +148,7 @@ class MonitoredAnthropic {
             self._sendMetric({
               model: params.model, input_tokens: 0, output_tokens: 0, total_tokens: 0,
               cost_usd: 0, latency_ms: Date.now() - startTime, status_code: err.status || 500,
+              cache_read_tokens: 0, cache_write_tokens: 0, error_message: err.message || null,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
               api_key_hint: self.apiKeyHint, ...classifyError(err),
             }).catch(() => {});
@@ -157,12 +158,15 @@ class MonitoredAnthropic {
           stream.finalMessage().then(finalMsg => {
             const inputTokens  = finalMsg.usage?.input_tokens  || 0;
             const outputTokens = finalMsg.usage?.output_tokens || 0;
+            const cacheReadTokens  = finalMsg.usage?.cache_read_input_tokens    || 0;
+            const cacheWriteTokens = finalMsg.usage?.cache_creation_input_tokens || 0;
             self._sendMetric({
               model: params.model,
               input_tokens: inputTokens, output_tokens: outputTokens,
               total_tokens: inputTokens + outputTokens,
               cost_usd: calculateCost(params.model, inputTokens, outputTokens),
               latency_ms: Date.now() - startTime, status_code: 200,
+              cache_read_tokens: cacheReadTokens, cache_write_tokens: cacheWriteTokens,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
               api_key_hint: self.apiKeyHint,
             }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
@@ -183,8 +187,10 @@ class MonitoredAnthropic {
           error = err;
         }
 
-        const inputTokens  = response?.usage?.input_tokens  || 0;
-        const outputTokens = response?.usage?.output_tokens || 0;
+        const inputTokens      = response?.usage?.input_tokens               || 0;
+        const outputTokens     = response?.usage?.output_tokens              || 0;
+        const cacheReadTokens  = response?.usage?.cache_read_input_tokens    || 0;
+        const cacheWriteTokens = response?.usage?.cache_creation_input_tokens || 0;
 
         self._sendMetric({
           model: params.model,
@@ -192,6 +198,8 @@ class MonitoredAnthropic {
           total_tokens: inputTokens + outputTokens,
           cost_usd: calculateCost(params.model, inputTokens, outputTokens),
           latency_ms: Date.now() - startTime, status_code: statusCode,
+          cache_read_tokens: cacheReadTokens, cache_write_tokens: cacheWriteTokens,
+          error_message: error ? (error.message || null) : null,
           tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
           api_key_hint: self.apiKeyHint, ...(error ? classifyError(error) : {}),
         }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
@@ -265,8 +273,9 @@ class MonitoredOpenAI {
       error = err;
     }
 
-    const inputTokens  = response?.usage?.prompt_tokens     || 0;
-    const outputTokens = response?.usage?.completion_tokens || 0;
+    const inputTokens      = response?.usage?.prompt_tokens                          || 0;
+    const outputTokens     = response?.usage?.completion_tokens                      || 0;
+    const cacheReadTokens  = response?.usage?.prompt_tokens_details?.cached_tokens   || 0;
 
     this._sendMetric({
       provider: 'openai', model: params.model,
@@ -274,6 +283,8 @@ class MonitoredOpenAI {
       total_tokens: inputTokens + outputTokens,
       cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
       latency_ms: Date.now() - startTime, status_code: statusCode,
+      cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
+      error_message: error ? (error.message || null) : null,
       tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
       api_key_hint: this.apiKeyHint, ...(error ? classifyError(error) : {}),
     }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
@@ -283,13 +294,13 @@ class MonitoredOpenAI {
   }
 
   async* _wrapOpenAIStream(stream, startTime, params, tools, promptPreview) {
-    let inputTokens = 0;
-    let outputTokens = 0;
+    let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0;
     try {
       for await (const chunk of stream) {
         if (chunk.usage) {
-          inputTokens  = chunk.usage.prompt_tokens     || 0;
-          outputTokens = chunk.usage.completion_tokens || 0;
+          inputTokens     = chunk.usage.prompt_tokens                        || 0;
+          outputTokens    = chunk.usage.completion_tokens                    || 0;
+          cacheReadTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0;
         }
         yield chunk;
       }
@@ -300,6 +311,7 @@ class MonitoredOpenAI {
         total_tokens: inputTokens + outputTokens,
         cost_usd: calculateOpenAICost(params.model, inputTokens, outputTokens),
         latency_ms: Date.now() - startTime, status_code: 200,
+        cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
         tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
         api_key_hint: this.apiKeyHint,
       }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));

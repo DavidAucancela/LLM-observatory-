@@ -215,8 +215,12 @@ CREATE INDEX IF NOT EXISTS idx_balances_org    ON provider_balances(org_id);
 CREATE INDEX IF NOT EXISTS idx_alert_rules_org ON alert_rules(org_id);
 CREATE INDEX IF NOT EXISTS idx_sync_logs_org   ON sync_logs(org_id);
 
+-- ── Cache token tracking ─────────────────────────────────────────────────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS cache_read_tokens  INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS cache_write_tokens INTEGER NOT NULL DEFAULT 0;
+
 -- ── Error capture columns ─────────────────────────────────────────────────────
-ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS error_type VARCHAR(100);
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS error_type    VARCHAR(100);
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS error_message TEXT;
 CREATE INDEX IF NOT EXISTS idx_api_calls_error ON api_calls(error_type) WHERE error_type IS NOT NULL;
 

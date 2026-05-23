@@ -335,6 +335,8 @@ function ObservatoryTokensSection() {
 // ── Sync tab ──────────────────────────────────────────────────
 function SyncTab() {
   const { apiFetch } = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [logs, setLogs]         = useState([]);
   const [syncing, setSyncing]   = useState({});
   const [clearing, setClearing] = useState({});
@@ -385,19 +387,25 @@ function SyncTab() {
             ) : 'Never synced'}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <select className="obs-select" style={{ height: 30 }} value={syncDays} onChange={e => setSyncDays(e.target.value)}>
-              <option value="7">7 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-              <option value="90">90 days</option>
-            </select>
-            <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={syncing[p]} onClick={() => handleSync(p)}>
-              {syncing[p] ? '…' : 'Run'}
-            </button>
+            {isAdmin && (
+              <>
+                <select className="obs-select" style={{ height: 30 }} value={syncDays} onChange={e => setSyncDays(e.target.value)}>
+                  <option value="7">7 days</option>
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+                <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={syncing[p]} onClick={() => handleSync(p)}>
+                  {syncing[p] ? '…' : 'Run'}
+                </button>
+              </>
+            )}
           </div>
-          <button className="obs-btn obs-btn-danger obs-btn-sm" disabled={clearing[p]} onClick={() => handleClear(p)}>
-            {clearing[p] ? '…' : 'Clear data'}
-          </button>
+          {isAdmin && (
+            <button className="obs-btn obs-btn-danger obs-btn-sm" disabled={clearing[p]} onClick={() => handleClear(p)}>
+              {clearing[p] ? '…' : 'Clear data'}
+            </button>
+          )}
         </div>
       ))}
 
@@ -436,6 +444,8 @@ function SyncTab() {
 // ── Alerts tab ────────────────────────────────────────────────
 function AlertsTab() {
   const { apiFetch } = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [rules, setRules]       = useState([]);
   const [history, setHistory]   = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -489,7 +499,7 @@ function AlertsTab() {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
-        <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>+ New rule</button>
+        {isAdmin && <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>+ New rule</button>}
       </div>
 
       {showForm && (
@@ -557,7 +567,10 @@ function AlertsTab() {
           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {rule.discord_webhook_url}
           </div>
-          <button className={`tsw ${rule.enabled ? 'on' : ''}`} onClick={() => toggleEnabled(rule)} title={rule.enabled ? 'Disable' : 'Enable'} />
+          {isAdmin
+            ? <button className={`tsw ${rule.enabled ? 'on' : ''}`} onClick={() => toggleEnabled(rule)} title={rule.enabled ? 'Disable' : 'Enable'} />
+            : <span />
+          }
           <div>
             <button className="obs-btn obs-btn-sm" disabled={testingId === rule.id} onClick={() => handleTest(rule.id)}>
               {testingId === rule.id ? '…' : 'Test'}
@@ -568,9 +581,11 @@ function AlertsTab() {
               </div>
             )}
           </div>
-          <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleDelete(rule.id)}>
-            Delete
-          </button>
+          {isAdmin && (
+            <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleDelete(rule.id)}>
+              Delete
+            </button>
+          )}
         </div>
       ))}
 

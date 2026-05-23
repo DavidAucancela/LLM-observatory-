@@ -5,20 +5,22 @@ const pool = require('../db/pool');
 const router = express.Router();
 
 const MetricSchema = z.object({
-  provider:      z.enum(['anthropic', 'openai']).default('anthropic'),
-  model:         z.string().min(1),
-  input_tokens:  z.number().int().min(0),
-  output_tokens: z.number().int().min(0),
-  total_tokens:  z.number().int().min(0),
-  cost_usd:      z.number().min(0),
-  latency_ms:    z.number().int().min(0),
-  status_code:   z.number().int().min(100).max(599),
-  tools_used:    z.array(z.string()).default([]),
-  prompt_preview:z.string().max(200).optional(),
-  tags:          z.record(z.unknown()).optional().default({}),
-  api_key_hint:  z.string().max(30).optional(),
-  error_type:    z.string().max(100).optional(),
-  error_message: z.string().max(500).optional(),
+  provider:           z.enum(['anthropic', 'openai']).default('anthropic'),
+  model:              z.string().min(1),
+  input_tokens:       z.number().int().min(0),
+  output_tokens:      z.number().int().min(0),
+  total_tokens:       z.number().int().min(0),
+  cost_usd:           z.number().min(0),
+  latency_ms:         z.number().int().min(0),
+  status_code:        z.number().int().min(100).max(599),
+  tools_used:         z.array(z.string()).default([]),
+  prompt_preview:     z.string().max(200).optional(),
+  tags:               z.record(z.unknown()).optional().default({}),
+  api_key_hint:       z.string().max(30).optional(),
+  cache_read_tokens:  z.number().int().min(0).default(0),
+  cache_write_tokens: z.number().int().min(0).default(0),
+  error_type:         z.string().max(100).optional(),
+  error_message:      z.string().max(500).nullable().optional(),
 });
 
 // ── POST / — SDK ingest (requires observatory token or JWT) ───────────────────
@@ -30,8 +32,8 @@ router.post('/', async (req, res) => {
       `INSERT INTO api_calls
          (org_id, provider, model, input_tokens, output_tokens, total_tokens,
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
-          error_type, error_message)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+          cache_read_tokens, cache_write_tokens, error_type, error_message)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [
         orgId,
         data.provider, data.model,
@@ -41,6 +43,8 @@ router.post('/', async (req, res) => {
         data.prompt_preview || null,
         JSON.stringify(data.tags || {}),
         data.api_key_hint || null,
+        data.cache_read_tokens || 0,
+        data.cache_write_tokens || 0,
         data.error_type || null,
         data.error_message || null,
       ]
@@ -61,9 +65,10 @@ router.get('/', async (req, res) => {
     const page    = Math.max(1, parseInt(req.query.page)  || 1);
     const limit   = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const offset  = (page - 1) * limit;
-    const model   = req.query.model;
-    const provider= req.query.provider;
-    const search  = req.query.search?.trim();
+    const model    = req.query.model;
+    const provider = req.query.provider;
+    const status   = req.query.status; // 'error' | 'success'
+    const search   = req.query.search?.trim();
     const range   = req.query.range || '7d';
     const sortBy  = ['timestamp','cost_usd','latency_ms','total_tokens'].includes(req.query.sortBy) ? req.query.sortBy : 'timestamp';
     const sortDir = req.query.sortDir === 'asc' ? 'ASC' : 'DESC';
@@ -86,6 +91,8 @@ router.get('/', async (req, res) => {
     }
     if (model)    { params.push(model);    where += ` AND model = $${params.length}`; }
     if (provider) { params.push(provider); where += ` AND provider = $${params.length}`; }
+    if (status === 'error')   where += ` AND status_code >= 400`;
+    if (status === 'success') where += ` AND status_code < 400`;
     if (search) {
       params.push(`%${search}%`);
       where += ` AND (prompt_preview ILIKE $${params.length} OR model ILIKE $${params.length})`;
@@ -159,13 +166,15 @@ router.get('/summary', async (req, res) => {
     const [summary, byModel, byProvider, timeSeries, prevSummary, errorBreakdown] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) as total_requests,
-                COALESCE(SUM(total_tokens),0)  as total_tokens,
-                COALESCE(SUM(input_tokens),0)  as total_input_tokens,
-                COALESCE(SUM(output_tokens),0) as total_output_tokens,
-                COALESCE(SUM(cost_usd),0)      as total_cost_usd,
-                COALESCE(AVG(latency_ms),0)    as avg_latency_ms,
-                COALESCE(AVG(cost_usd),0)      as avg_cost_usd,
-                COUNT(*) FILTER (WHERE status_code >= 400) as error_count
+                COALESCE(SUM(total_tokens),0)       as total_tokens,
+                COALESCE(SUM(input_tokens),0)       as total_input_tokens,
+                COALESCE(SUM(output_tokens),0)      as total_output_tokens,
+                COALESCE(SUM(cost_usd),0)           as total_cost_usd,
+                COALESCE(AVG(latency_ms),0)         as avg_latency_ms,
+                COALESCE(AVG(cost_usd),0)           as avg_cost_usd,
+                COUNT(*) FILTER (WHERE status_code >= 400) as error_count,
+                COALESCE(SUM(cache_read_tokens),0)  as total_cache_read_tokens,
+                COALESCE(SUM(cache_write_tokens),0) as total_cache_write_tokens
          FROM api_calls WHERE ${dateFilter}`,
         currParams
       ),
@@ -291,14 +300,16 @@ router.get('/export', async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, timestamp, provider, model, input_tokens, output_tokens,
-              total_tokens, cost_usd, latency_ms, status_code, prompt_preview, tags
+              total_tokens, cost_usd, latency_ms, status_code,
+              cache_read_tokens, cache_write_tokens, error_message,
+              prompt_preview, tags
        FROM api_calls ${where} ORDER BY timestamp DESC`,
       params
     );
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="llm-metrics-${range}.csv"`);
-    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','latency_ms','status_code','prompt_preview','tags'];
+    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','latency_ms','status_code','cache_read_tokens','cache_write_tokens','error_message','prompt_preview','tags'];
     res.write(headers.join(',') + '\n');
     for (const row of result.rows) {
       const line = headers.map(h => {

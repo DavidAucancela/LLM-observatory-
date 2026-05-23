@@ -398,12 +398,14 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 ## Roadmap / Pending Work
 
 ### Short-term
-- [ ] Frontend role-based UI — hide admin actions (invite, remove member) from `member` role users
-- [ ] Rate limiting on `POST /api/metrics` — protect against token abuse
-- [ ] Observatory token `last_used_at` update on each metric POST
-- [ ] Pagination on team member list and invitations list
+- [x] Frontend role-based UI — hide admin actions (invite, remove member, sync, alerts) from `member` role users
+- [x] Rate limiting on `POST /api/metrics` — protect against token abuse
+- [x] Observatory token `last_used_at` update on each metric POST
+- [x] Pagination on team member list and invitations list
 
 ### Medium-term
+- [x] Cache hit rate tracking — `cache_read_tokens` + `cache_write_tokens` in DB, SDK, API and UI drawer
+- [x] Error capture — `error_message` in DB, SDK, API; filter in Activity tab (status=error/success)
 - [ ] Superadmin panel — cross-org visibility for platform operators
 - [ ] Per-org usage quotas — hard limits on metrics volume
 - [ ] Audit log — record sensitive actions (member added/removed, token revoked, key deleted)

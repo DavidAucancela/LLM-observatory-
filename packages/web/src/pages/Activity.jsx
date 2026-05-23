@@ -31,6 +31,7 @@ function RequestsTab({ range, onRangeChange }) {
   const [data, setData]         = useState(null);
   const [page, setPage]         = useState(1);
   const [provider, setProvider] = useState('');
+  const [status, setStatus]     = useState('');
   const [search, setSearch]     = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [sortBy, setSortBy]     = useState('timestamp');
@@ -63,14 +64,15 @@ function RequestsTab({ range, onRangeChange }) {
     try {
       const params = new URLSearchParams({ page, limit: 20, sortBy, sortDir, range });
       if (provider) params.set('provider', provider);
-      if (search)   params.set('search', search);
-      if (tagKey)   params.set('tag_key', tagKey);
+      if (status)   params.set('status',   status);
+      if (search)   params.set('search',   search);
+      if (tagKey)   params.set('tag_key',  tagKey);
       if (tagValue) params.set('tag_value', tagValue);
       const res = await apiFetch(`/api/metrics?${params}`);
       setData(await res.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [page, range, provider, search, sortBy, sortDir, tagKey, tagValue]);
+  }, [page, range, provider, status, search, sortBy, sortDir, tagKey, tagValue]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -125,6 +127,17 @@ function RequestsTab({ range, onRangeChange }) {
           <option value="">All providers</option>
           <option value="anthropic">Anthropic</option>
           <option value="openai">OpenAI</option>
+        </select>
+
+        <select
+          className="obs-btn"
+          style={{ height: 30, paddingTop: 0, paddingBottom: 0 }}
+          value={status}
+          onChange={e => { setStatus(e.target.value); setPage(1); }}
+        >
+          <option value="">All statuses</option>
+          <option value="success">Success (2xx)</option>
+          <option value="error">Errors (4xx/5xx)</option>
         </select>
 
         {tagKeys.length > 0 && (

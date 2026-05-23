@@ -64,9 +64,12 @@ export default function RequestDrawer({ requestId, onClose }) {
                   <dt>Latency</dt>
                   <dd>{data.latency_ms}ms</dd>
                   <dt>Status</dt>
-                  <dd style={{ color: data.status_code === 200 ? 'var(--success)' : 'var(--error)' }}>
-                    {data.status_code} {data.status_code === 200 ? 'OK' : 'Error'}
+                  <dd style={{ color: data.status_code < 400 ? 'var(--success)' : 'var(--error)' }}>
+                    {data.status_code} {data.status_code < 400 ? 'OK' : 'Error'}
                   </dd>
+                  {data.error_message && (
+                    <><dt>Error</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11, wordBreak: 'break-word' }}>{data.error_message}</dd></>
+                  )}
                   {data.stop_reason && <><dt>Stop reason</dt><dd>{data.stop_reason}</dd></>}
                   {data.error_type && (
                     <><dt>Error type</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.error_type}</dd></>
