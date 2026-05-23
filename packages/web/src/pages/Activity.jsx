@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
 import HBar from '../components/HBar';
@@ -43,6 +44,7 @@ function RequestsTab({ range, onRangeChange }) {
   const [tagValues, setTagValues] = useState([]);
   const [tagValue, setTagValue] = useState('');
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   useEffect(() => {
     apiFetch(`/api/metrics/tag-keys?range=${range}`)
@@ -77,8 +79,8 @@ function RequestsTab({ range, onRangeChange }) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 350);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 350);
+    return () => clearTimeout(timer);
   }, [searchInput]);
 
   const handleSort = (col) => {
@@ -112,7 +114,7 @@ function RequestsTab({ range, onRangeChange }) {
           <input
             className="obs-search-input"
             type="text"
-            placeholder="Search by model or prompt…"
+            placeholder={t('activity.searchPlaceholder')}
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
           />
@@ -124,7 +126,7 @@ function RequestsTab({ range, onRangeChange }) {
           value={provider}
           onChange={e => { setProvider(e.target.value); setPage(1); }}
         >
-          <option value="">All providers</option>
+          <option value="">{t('activity.allProviders')}</option>
           <option value="anthropic">Anthropic</option>
           <option value="openai">OpenAI</option>
         </select>
@@ -135,9 +137,9 @@ function RequestsTab({ range, onRangeChange }) {
           value={status}
           onChange={e => { setStatus(e.target.value); setPage(1); }}
         >
-          <option value="">All statuses</option>
-          <option value="success">Success (2xx)</option>
-          <option value="error">Errors (4xx/5xx)</option>
+          <option value="">{t('activity.allStatuses')}</option>
+          <option value="success">{t('activity.successStatus')}</option>
+          <option value="error">{t('activity.errorStatus')}</option>
         </select>
 
         {tagKeys.length > 0 && (
@@ -147,7 +149,7 @@ function RequestsTab({ range, onRangeChange }) {
             value={tagKey}
             onChange={e => { setTagKey(e.target.value); setTagValue(''); setPage(1); }}
           >
-            <option value="">All tags</option>
+            <option value="">{t('activity.allTags')}</option>
             {tagKeys.map(k => <option key={k} value={k}>{k}</option>)}
           </select>
         )}
@@ -159,7 +161,7 @@ function RequestsTab({ range, onRangeChange }) {
             value={tagValue}
             onChange={e => { setTagValue(e.target.value); setPage(1); }}
           >
-            <option value="">All values</option>
+            <option value="">{t('common.all')}</option>
             {tagValues.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         )}
@@ -176,7 +178,7 @@ function RequestsTab({ range, onRangeChange }) {
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Export CSV
+          {t('activity.exportCsv')}
         </button>
       </div>
 
@@ -185,19 +187,19 @@ function RequestsTab({ range, onRangeChange }) {
       <table className="obs-table">
         <thead>
           <tr>
-            <th style={{ width: 90 }}>Time</th>
-            <th>Provider</th>
-            <th>Model</th>
+            <th style={{ width: 90 }}>{t('activity.timeColumn')}</th>
+            <th>{t('activity.providerColumn')}</th>
+            <th>{t('activity.modelColumn')}</th>
             <th className="col-num" style={{ cursor: 'pointer' }} onClick={() => handleSort('total_tokens')}>
-              Tokens {sortBy === 'total_tokens' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+              {t('activity.tokensColumn')} {sortBy === 'total_tokens' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
             </th>
             <th className="col-num" style={{ cursor: 'pointer' }} onClick={() => handleSort('cost_usd')}>
-              Cost {sortBy === 'cost_usd' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+              {t('activity.costColumn')} {sortBy === 'cost_usd' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
             </th>
             <th className="col-num" style={{ cursor: 'pointer' }} onClick={() => handleSort('latency_ms')}>
-              Latency {sortBy === 'latency_ms' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+              {t('activity.latencyColumn')} {sortBy === 'latency_ms' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
             </th>
-            <th>Status</th>
+            <th>{t('activity.statusColumn')}</th>
           </tr>
         </thead>
         <tbody>
@@ -213,7 +215,7 @@ function RequestsTab({ range, onRangeChange }) {
             <tr>
               <td colSpan={7}>
                 <div className="obs-empty">
-                  <div className="obs-empty-title">No requests in this period</div>
+                  <div className="obs-empty-title">{t('activity.noRequests')}</div>
                 </div>
               </td>
             </tr>
@@ -242,10 +244,10 @@ function RequestsTab({ range, onRangeChange }) {
 
       {/* Pagination */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', fontSize: 12, color: 'var(--muted)' }}>
-        <span>Showing {Math.min((page - 1) * 20 + 1, total)}–{Math.min(page * 20, total)} of {total.toLocaleString()}</span>
+        <span>{t('activity.showing', { start: Math.min((page - 1) * 20 + 1, total), end: Math.min(page * 20, total), total: total.toLocaleString() })}</span>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="obs-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Prev</button>
-          <button className="obs-btn" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Next</button>
+          <button className="obs-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>{t('common.prev')}</button>
+          <button className="obs-btn" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>{t('common.next')}</button>
         </div>
       </div>
 
@@ -259,6 +261,7 @@ function ModelsTab({ range, onRangeChange }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   useEffect(() => {
     setLoading(true);
@@ -271,7 +274,6 @@ function ModelsTab({ range, onRangeChange }) {
   const allModels = (summary?.by_model || []).map(parseModel);
   const maxCost = Math.max(...allModels.map(m => m.total_cost), 0.001);
   const sorted  = [...allModels].sort((a, b) => b.total_cost - a.total_cost);
-  const totalCost = allModels.reduce((a, m) => a + m.total_cost, 0);
 
   return (
     <>
@@ -293,7 +295,7 @@ function ModelsTab({ range, onRangeChange }) {
         <>
           {sorted.length > 0 && (
             <>
-              <div className="obs-section-label" style={{ marginBottom: 12 }}>Cost by model · {range}</div>
+              <div className="obs-section-label" style={{ marginBottom: 12 }}>{t('activity.costByModel')} · {range}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 32 }}>
                 {sorted.map((m, i) => (
                   <HBar
@@ -309,21 +311,21 @@ function ModelsTab({ range, onRangeChange }) {
             </>
           )}
 
-          <div className="obs-section-label" style={{ marginBottom: 8 }}>All models</div>
+          <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('activity.allModels')}</div>
           <table className="obs-table">
             <thead>
               <tr>
-                <th>Model</th>
-                <th>Provider</th>
-                <th className="col-num">Requests</th>
-                <th className="col-num">Tokens</th>
-                <th className="col-num">Total cost</th>
-                <th className="col-num">Avg latency</th>
+                <th>{t('activity.modelColumn')}</th>
+                <th>{t('activity.providerColumn')}</th>
+                <th className="col-num">{t('activity.requestsCol')}</th>
+                <th className="col-num">{t('activity.tokensCol')}</th>
+                <th className="col-num">{t('activity.totalCostCol')}</th>
+                <th className="col-num">{t('activity.avgLatencyCol')}</th>
               </tr>
             </thead>
             <tbody>
               {allModels.length === 0 ? (
-                <tr><td colSpan={6}><div className="obs-empty"><div className="obs-empty-title">No data for this period</div></div></td></tr>
+                <tr><td colSpan={6}><div className="obs-empty"><div className="obs-empty-title">{t('common.noData')}</div></div></td></tr>
               ) : [...allModels].sort((a, b) => b.requests - a.requests).map(m => (
                 <tr key={`${m.provider}-${m.model}`} style={{ cursor: 'default' }}>
                   <td className="col-mono">{m.model}</td>
@@ -347,10 +349,11 @@ export default function Activity() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'models' ? 'models' : 'requests');
   const [range, setRange] = useState(() => localStorage.getItem('activity-range') || '7d');
+  const { t } = useTranslation();
 
-  const handleTabChange = (t) => {
-    setTab(t);
-    setSearchParams(t === 'models' ? { tab: 'models' } : {}, { replace: true });
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    setSearchParams(newTab === 'models' ? { tab: 'models' } : {}, { replace: true });
   };
 
   const handleRangeChange = (r) => {
@@ -361,16 +364,16 @@ export default function Activity() {
   return (
     <main className="obs-main obs-fade-in">
       <div className="obs-header">
-        <div className="obs-page-title">Activity</div>
+        <div className="obs-page-title">{t('activity.title')}</div>
       </div>
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <div className="obs-tabbar">
           <button className={`obs-tab${tab === 'requests' ? ' active' : ''}`} onClick={() => handleTabChange('requests')}>
-            Requests
+            {t('activity.requestsTab')}
           </button>
           <button className={`obs-tab${tab === 'models' ? ' active' : ''}`} onClick={() => handleTabChange('models')}>
-            Models
+            {t('activity.modelsTab')}
           </button>
         </div>
 

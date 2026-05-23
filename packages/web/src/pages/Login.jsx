@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 
 export default function Login() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const searchParams  = new URLSearchParams(window.location.search);
   const justReset     = searchParams.get('reset') === '1';
@@ -35,19 +37,19 @@ export default function Login() {
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
           <div className="obs-brand-mark" style={{ width: 22, height: 22, fontSize: 12 }}>◐</div>
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>Observatory</span>
+          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.brand')}</span>
         </div>
 
         {/* Title */}
         <div style={{ textAlign: 'center', marginTop: -8 }}>
-          <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>Sign in</div>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Welcome back to your control panel</div>
+          <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.signInTitle')}</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{t('auth.signInSubtitle')}</div>
         </div>
 
         {/* Success banners */}
         {justReset && (
           <div style={{ fontSize: 12, color: 'var(--success)', background: 'color-mix(in oklab, var(--success) 10%, transparent)', border: '1px solid color-mix(in oklab, var(--success) 30%, transparent)', borderRadius: 5, padding: '8px 12px' }}>
-            Password updated. Sign in with your new password.
+            {t('auth.resetSuccess')}
           </div>
         )}
 
@@ -61,11 +63,11 @@ export default function Login() {
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="obs-field">
-            <label>Email</label>
+            <label>{t('auth.emailLabel')}</label>
             <input
               className="obs-input obs-input-lg"
               type="email"
-              placeholder="you@company.com"
+              placeholder={t('auth.emailPlaceholder')}
               autoComplete="email"
               required
               value={email}
@@ -75,9 +77,9 @@ export default function Login() {
 
           <div className="obs-field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Password</span>
+              <span>{t('auth.passwordLabel')}</span>
               <Link to="/forgot-password" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 400, fontSize: 12 }}>
-                Forgot?
+                {t('auth.forgotLink')}
               </Link>
             </label>
             <div style={{ position: 'relative' }}>
@@ -85,7 +87,7 @@ export default function Login() {
                 className="obs-input obs-input-lg"
                 type={showPw ? 'text' : 'password'}
                 autoComplete="current-password"
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -96,7 +98,7 @@ export default function Login() {
                 onClick={() => setShowPw(v => !v)}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}
               >
-                {showPw ? 'hide' : 'show'}
+                {showPw ? t('auth.hidePassword') : t('auth.showPassword')}
               </button>
             </div>
           </div>
@@ -107,14 +109,14 @@ export default function Login() {
             disabled={loading || !email || !password}
             style={{ height: 38, fontSize: 13, justifyContent: 'center', marginTop: 4 }}
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? t('auth.signingIn') : t('auth.signInButton')}
           </button>
         </form>
 
         <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-          Don't have an account?{' '}
+          {t('auth.noAccount')}{' '}
           <Link to="/register" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-            Create one
+            {t('auth.createAccount')}
           </Link>
         </div>
 
@@ -123,7 +125,7 @@ export default function Login() {
             onMouseEnter={e => e.target.style.color = 'var(--text)'}
             onMouseLeave={e => e.target.style.color = 'var(--muted)'}
           >
-            ← Back to home
+            {t('auth.backToHome')}
           </Link>
         </div>
       </div>

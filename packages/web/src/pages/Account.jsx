@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import { useApi } from '../hooks/useApi';
 import { fmtDate } from '../utils/fmt';
@@ -35,10 +36,11 @@ function StatusMsg({ ok, msg }) {
 
 // ── Profile section ───────────────────────────────────────────────────────────
 function ProfileSection({ user, updateUser, apiFetch }) {
+  const { t } = useTranslation();
   const [email,   setEmail]   = useState(user?.email || '');
   const [orgName, setOrgName] = useState(user?.orgName || '');
   const [saving,  setSaving]  = useState(false);
-  const [status,  setStatus]  = useState(null); // {ok, msg}
+  const [status,  setStatus]  = useState(null);
 
   const isAdmin = user?.role === 'admin';
 
@@ -52,7 +54,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
       if (isAdmin && orgName !== user.orgName) body.org_name = orgName;
 
       if (!Object.keys(body).length) {
-        setStatus({ ok: true, msg: 'Sin cambios que guardar.' });
+        setStatus({ ok: true, msg: t('account.noChanges') });
         return;
       }
 
@@ -66,7 +68,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
       updateUser({ email: data.email, orgName: data.orgName });
       setEmail(data.email);
       setOrgName(data.orgName || '');
-      setStatus({ ok: true, msg: 'Perfil actualizado correctamente.' });
+      setStatus({ ok: true, msg: t('account.profileUpdated') });
     } catch (err) {
       setStatus({ ok: false, msg: err.message });
     } finally {
@@ -77,10 +79,10 @@ function ProfileSection({ user, updateUser, apiFetch }) {
   return (
     <section className="obs-card">
       <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
-        Perfil
+        {t('account.profileSection')}
       </h2>
       <form onSubmit={handleSubmit}>
-        <Field label="Email" hint="Cambiar el email no requiere re-verificación.">
+        <Field label={t('account.emailLabel')} hint={t('account.emailHint')}>
           <input
             className="obs-input"
             type="email"
@@ -92,7 +94,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
         </Field>
 
         {isAdmin && (
-          <Field label="Nombre de la organización" hint="Solo los administradores pueden cambiar el nombre del equipo.">
+          <Field label={t('account.orgNameLabel')} hint={t('account.orgNameHint')}>
             <input
               className="obs-input"
               type="text"
@@ -112,7 +114,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
           disabled={saving}
           style={{ marginTop: 12 }}
         >
-          {saving ? 'Guardando…' : 'Guardar cambios'}
+          {saving ? t('common.saving') : t('account.saveButton')}
         </button>
       </form>
     </section>
@@ -121,6 +123,7 @@ function ProfileSection({ user, updateUser, apiFetch }) {
 
 // ── Password section ──────────────────────────────────────────────────────────
 function PasswordSection({ apiFetch }) {
+  const { t } = useTranslation();
   const [current,  setCurrent]  = useState('');
   const [next,     setNext]     = useState('');
   const [confirm,  setConfirm]  = useState('');
@@ -130,7 +133,7 @@ function PasswordSection({ apiFetch }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (next !== confirm) {
-      setStatus({ ok: false, msg: 'Las contraseñas nuevas no coinciden.' });
+      setStatus({ ok: false, msg: t('account.passwordMismatch') });
       return;
     }
     setSaving(true);
@@ -155,10 +158,10 @@ function PasswordSection({ apiFetch }) {
   return (
     <section className="obs-card">
       <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
-        Cambiar contraseña
+        {t('account.passwordSection')}
       </h2>
       <form onSubmit={handleSubmit}>
-        <Field label="Contraseña actual">
+        <Field label={t('account.currentPassword')}>
           <input
             className="obs-input"
             type="password"
@@ -169,7 +172,7 @@ function PasswordSection({ apiFetch }) {
             style={{ width: '100%' }}
           />
         </Field>
-        <Field label="Nueva contraseña" hint="Mínimo 8 caracteres.">
+        <Field label={t('account.newPassword')} hint={t('account.passwordMinHint')}>
           <input
             className="obs-input"
             type="password"
@@ -181,7 +184,7 @@ function PasswordSection({ apiFetch }) {
             style={{ width: '100%' }}
           />
         </Field>
-        <Field label="Confirmar nueva contraseña">
+        <Field label={t('account.confirmPassword')}>
           <input
             className="obs-input"
             type="password"
@@ -202,7 +205,7 @@ function PasswordSection({ apiFetch }) {
           disabled={saving}
           style={{ marginTop: 12 }}
         >
-          {saving ? 'Actualizando…' : 'Actualizar contraseña'}
+          {saving ? t('account.updating') : t('account.updateButton')}
         </button>
       </form>
     </section>
@@ -211,6 +214,7 @@ function PasswordSection({ apiFetch }) {
 
 // ── Session info section ──────────────────────────────────────────────────────
 function SessionSection({ user, apiFetch, logout }) {
+  const { t } = useTranslation();
   const [info, setInfo] = useState(null);
 
   useEffect(() => {
@@ -220,29 +224,29 @@ function SessionSection({ user, apiFetch, logout }) {
       .catch(() => {});
   }, []);
 
-  const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
+  const roleLabel = user?.role === 'admin' ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
 
   return (
     <section className="obs-card" style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
         <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
-          Sesión actual
+          {t('account.sessionSection')}
         </h2>
         <button
           className="obs-btn obs-btn-sm"
           style={{ color: 'var(--error)', borderColor: 'color-mix(in oklab, var(--error) 30%, transparent)' }}
           onClick={logout}
         >
-          Cerrar sesión
+          {t('account.logoutButton')}
         </button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 20 }}>
         {[
-          { label: 'Email',          value: user?.email,            mono: true },
-          { label: 'Organización',   value: user?.orgName || '—' },
-          { label: 'Rol',            value: roleLabel },
-          { label: 'Miembro desde',  value: fmtDate(info?.createdAt) },
-          { label: 'Último acceso',  value: fmtDate(info?.lastLoginAt) },
+          { label: t('account.emailInfo'),    value: user?.email,            mono: true },
+          { label: t('account.orgInfo'),      value: user?.orgName || '—' },
+          { label: t('account.roleInfo'),     value: roleLabel },
+          { label: t('account.memberSince'),  value: fmtDate(info?.createdAt) },
+          { label: t('account.lastLogin'),    value: fmtDate(info?.lastLoginAt) },
         ].map(({ label, value, mono }) => (
           <div key={label}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
@@ -260,21 +264,20 @@ function SessionSection({ user, apiFetch, logout }) {
 export default function Account() {
   const { user, updateUser, logout } = useAuth();
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   return (
     <main className="obs-main">
       <div className="obs-header">
         <div>
-          <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Mi cuenta</h1>
+          <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>{t('account.title')}</h1>
           <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>{user?.email}</p>
         </div>
       </div>
 
       <div className="obs-content" style={{ padding: '24px 28px' }}>
-        {/* Session info — full width strip at the top */}
         <SessionSection user={user} apiFetch={apiFetch} logout={logout} />
 
-        {/* Forms — two-column grid */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',

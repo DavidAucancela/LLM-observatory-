@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import MultiLineChart from '../components/MultiLineChart';
@@ -19,10 +20,6 @@ function fmt(n) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
   return Math.round(n).toString();
-}
-
-function fmtCost(v) {
-  return `$${parseFloat(v || 0).toFixed(4)}`;
 }
 
 function Delta({ value, inverse }) {
@@ -62,7 +59,7 @@ const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)'
 function ProviderBreakdown({ byProvider, loading }) {
   if (loading) return <div className="obs-skeleton" style={{ height: 90, borderRadius: 6 }} />;
   if (!byProvider.length) return (
-    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>No data</div>
+    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>—</div>
   );
 
   const totalCost = byProvider.reduce((s, p) => s + parseFloat(p.total_cost || 0), 0);
@@ -143,20 +140,22 @@ function TopModels({ byModel, loading }) {
 
 // ── Error type breakdown ──────────────────────────────────────────────────────
 
-const ERROR_TYPE_LABELS = {
-  auth_error:      'Auth error',
-  rate_limit:      'Rate limit',
-  invalid_request: 'Invalid request',
-  server_error:    'Server error',
-  network_error:   'Network error',
-  timeout:         'Timeout',
-  unknown_error:   'Unknown',
-};
-
 function ErrorBreakdown({ breakdown, loading }) {
+  const { t } = useTranslation();
+
+  const ERROR_TYPE_LABELS = {
+    auth_error:      t('dashboard.authError'),
+    rate_limit:      t('dashboard.rateLimit'),
+    invalid_request: t('dashboard.invalidRequest'),
+    server_error:    t('dashboard.serverError'),
+    network_error:   t('dashboard.networkError'),
+    timeout:         t('dashboard.timeout'),
+    unknown_error:   t('dashboard.unknownError'),
+  };
+
   if (loading) return <div className="obs-skeleton" style={{ height: 60, borderRadius: 6 }} />;
   if (!breakdown?.length) return (
-    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>No errors in this period</div>
+    <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>{t('dashboard.noErrors')}</div>
   );
   const max = Math.max(...breakdown.map(e => parseInt(e.count || 0)));
   return (
@@ -183,6 +182,7 @@ function TagBreakdown({ range }) {
   const [data, setData]         = useState([]);
   const [loading, setLoading]   = useState(false);
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   useEffect(() => {
     apiFetch(`/api/metrics/tag-keys?range=${range}`)
@@ -211,7 +211,7 @@ function TagBreakdown({ range }) {
   return (
     <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div className="obs-section-label">Tag breakdown</div>
+        <div className="obs-section-label">{t('dashboard.tagBreakdown')}</div>
         <select
           className="obs-btn"
           style={{ height: 26, paddingTop: 0, paddingBottom: 0, fontSize: 11 }}
@@ -226,7 +226,7 @@ function TagBreakdown({ range }) {
           {[...Array(3)].map((_, i) => <div key={i} className="obs-skeleton" style={{ height: 22, borderRadius: 3 }} />)}
         </div>
       ) : data.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>No data for tag "{tagKey}"</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('common.noData')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {data.map(row => (
@@ -248,6 +248,7 @@ function TagBreakdown({ range }) {
 // ── Monthly projection with progress bar ──────────────────────────────────────
 
 function MonthlyProjection({ projection, configuredProviders }) {
+  const { t } = useTranslation();
   const items = (projection?.projection || []).filter(p => configuredProviders.includes(p.provider));
   if (!items.length) return null;
 
@@ -256,7 +257,7 @@ function MonthlyProjection({ projection, configuredProviders }) {
 
   return (
     <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-      <div className="obs-section-label" style={{ marginBottom: 16 }}>Monthly projection</div>
+      <div className="obs-section-label" style={{ marginBottom: 16 }}>{t('dashboard.monthlyProjection')}</div>
       <div style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${items.length}, 1fr)`,
@@ -284,12 +285,12 @@ function MonthlyProjection({ projection, configuredProviders }) {
 
               <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span>
-                  Spent <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${spentSoFar.toFixed(2)}</span>
+                  {t('dashboard.spent')}{' '}
+                  <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${spentSoFar.toFixed(2)}</span>
                 </span>
                 <span>{p.days_remaining > 0 ? `${p.days_remaining}d left` : 'Month end'}</span>
               </div>
 
-              {/* Month progress */}
               <div className="iprog-bar" style={{ height: 4, borderRadius: 2 }}>
                 <div style={{
                   height: '100%', borderRadius: 2, width: `${monthPct}%`,
@@ -302,7 +303,8 @@ function MonthlyProjection({ projection, configuredProviders }) {
               </div>
 
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                Daily avg <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.daily_avg || 0).toFixed(2)}</span>
+                {t('dashboard.dailyAvg')}{' '}
+                <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.daily_avg || 0).toFixed(2)}</span>
               </div>
             </div>
           );
@@ -326,6 +328,7 @@ export default function Dashboard() {
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const { connected } = useSocket();
   const { apiFetch }  = useApi();
+  const { t } = useTranslation();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -353,7 +356,6 @@ export default function Dashboard() {
   const s    = summary?.summary;
   const prev = summary?.prev_summary;
 
-  // Time series → per-provider arrays
   const timeSeriesRaw = summary?.time_series || [];
   const hourMap = {};
   for (const row of timeSeriesRaw) {
@@ -363,7 +365,6 @@ export default function Dashboard() {
   }
   const timeSeries = Object.values(hourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
 
-  // X-axis label format: HH:00 for short ranges, MMM D for longer
   const useDate = ['30d', '90d'].includes(range);
   const xLabels = timeSeries.map(r => {
     const d = new Date(r.hour);
@@ -388,7 +389,7 @@ export default function Dashboard() {
     return (
       <main className="obs-main">
         <div className="obs-header">
-          <div className="obs-page-title">Overview</div>
+          <div className="obs-page-title">{t('dashboard.title')}</div>
         </div>
         <div className="obs-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="obs-empty">
@@ -398,10 +399,10 @@ export default function Dashboard() {
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </div>
-            <div className="obs-empty-title">No API keys configured</div>
-            <div className="obs-empty-sub">Go to Settings → Keys to get started</div>
+            <div className="obs-empty-title">{t('dashboard.noKeysTitle')}</div>
+            <div className="obs-empty-sub">{t('dashboard.noKeysSub')}</div>
             <a href="/settings" className="obs-btn obs-btn-primary" style={{ marginTop: 16, textDecoration: 'none' }}>
-              Add API key
+              {t('dashboard.addKeyButton')}
             </a>
           </div>
         </div>
@@ -412,7 +413,7 @@ export default function Dashboard() {
   return (
     <main className="obs-main obs-fade-in">
       <div className="obs-header">
-        <div className="obs-page-title">Overview</div>
+        <div className="obs-page-title">{t('dashboard.title')}</div>
         <div className="obs-divider-v" />
         <div className="obs-range-picker">
           {RANGES.map(r => (
@@ -426,7 +427,7 @@ export default function Dashboard() {
         <div className="obs-header-right">
           <div className="obs-live">
             <span className="dot dot-pulse" style={{ background: connected ? 'var(--success)' : 'var(--faint)' }} />
-            <span>{connected ? 'Live' : 'Offline'}</span>
+            <span>{connected ? t('dashboard.live') : t('dashboard.offline')}</span>
           </div>
           <button
             className="obs-btn"
@@ -438,7 +439,7 @@ export default function Dashboard() {
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            Refresh
+            {t('dashboard.refresh')}
           </button>
         </div>
       </div>
@@ -447,21 +448,21 @@ export default function Dashboard() {
         {/* KPI Cards */}
         <div className="kpi-strip" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <KpiCard
-            label="Requests"
+            label={t('activity.requestsCol')}
             value={loading ? '—' : fmt(s?.total_requests ?? 0)}
             delta={calcDelta(s?.total_requests, prev?.total_requests)}
             sparkData={reqSpark}
             accentColor="var(--text)"
           />
           <KpiCard
-            label="Tokens"
+            label={t('activity.tokensCol')}
             value={loading ? '—' : fmt(s?.total_tokens ?? 0)}
             delta={calcDelta(s?.total_tokens, prev?.total_tokens)}
             sparkData={reqSpark}
             accentColor="var(--tokens-color)"
           />
           <KpiCard
-            label="Cost"
+            label={t('dashboard.cost')}
             value={loading ? '—' : `$${parseFloat(s?.total_cost_usd ?? 0).toFixed(2)}`}
             delta={calcDelta(s?.total_cost_usd, prev?.total_cost_usd)}
             inverse
@@ -469,7 +470,7 @@ export default function Dashboard() {
             accentColor="var(--cost-color)"
           />
           <KpiCard
-            label="Avg Latency"
+            label={t('activity.avgLatencyCol')}
             value={loading ? '—' : `${Math.round(s?.avg_latency_ms ?? 0)}ms`}
             delta={calcDelta(s?.avg_latency_ms, prev?.avg_latency_ms)}
             inverse
@@ -488,7 +489,7 @@ export default function Dashboard() {
           {/* Tokens over time */}
           <div className="obs-card" style={{ padding: '16px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div className="obs-section-label">Tokens over time</div>
+              <div className="obs-section-label">{t('dashboard.tokensOverTime')}</div>
               <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
                 {configuredProviders.includes('anthropic') && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -516,14 +517,14 @@ export default function Dashboard() {
               />
             ) : (
               <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Not enough data for this range</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
               </div>
             )}
           </div>
 
           {/* Provider breakdown */}
           <div className="obs-card" style={{ padding: '16px 20px' }}>
-            <div className="obs-section-label" style={{ marginBottom: 14 }}>By provider</div>
+            <div className="obs-section-label" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
             <ProviderBreakdown byProvider={byProvider} loading={loading} />
           </div>
         </div>
@@ -532,10 +533,10 @@ export default function Dashboard() {
         {(byModel.length > 0 || loading) && (
           <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div className="obs-section-label">Top models</div>
+              <div className="obs-section-label">{t('dashboard.topModels')}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16 }}>
-                <span style={{ width: 52, textAlign: 'right' }}>Cost</span>
-                <span style={{ width: 42, textAlign: 'right' }}>Reqs</span>
+                <span style={{ width: 52, textAlign: 'right' }}>{t('dashboard.cost')}</span>
+                <span style={{ width: 42, textAlign: 'right' }}>{t('dashboard.reqs')}</span>
               </div>
             </div>
             <TopModels byModel={byModel} loading={loading} />
@@ -545,7 +546,7 @@ export default function Dashboard() {
         {/* Error breakdown */}
         {(errorBreakdown.length > 0 || loading) && (
           <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
-            <div className="obs-section-label" style={{ marginBottom: 14 }}>Errors by type</div>
+            <div className="obs-section-label" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
             <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
           </div>
         )}

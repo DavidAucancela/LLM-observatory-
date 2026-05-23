@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
+import i18n from '../i18n';
 
 /* ── Nav icons ── */
 function IconGrid() {
@@ -86,11 +88,11 @@ function IconChevronRight() {
   );
 }
 
-const navItems = [
-  { to: '/dashboard', label: 'Overview',  Icon: IconGrid     },
-  { to: '/activity',  label: 'Activity',  Icon: IconActivity },
-  { to: '/finance',   label: 'Finance',   Icon: IconFinance  },
-  { to: '/settings',  label: 'Settings',  Icon: IconSettings },
+const navDefs = [
+  { to: '/dashboard', labelKey: 'nav.overview', Icon: IconGrid     },
+  { to: '/activity',  labelKey: 'nav.activity',  Icon: IconActivity },
+  { to: '/finance',   labelKey: 'nav.finance',   Icon: IconFinance  },
+  { to: '/settings',  labelKey: 'nav.settings',  Icon: IconSettings },
 ];
 
 const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
@@ -107,9 +109,16 @@ function StatusDot({ color, pulse }) {
 export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const initials  = user?.email ? user.email[0].toUpperCase() : '?';
-  const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
+  const roleLabel = user?.role === 'admin' ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
+
+  const toggleLanguage = () => {
+    const next = i18n.language === 'en' ? 'es' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('lang', next);
+  };
 
   return (
     <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
@@ -120,7 +129,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
         <button
           className="obs-sidebar-toggle"
           onClick={onToggleCollapse}
-          title={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+          title={collapsed ? t('sidebar.expandSidebar') : t('sidebar.collapseSidebar')}
         >
           {collapsed ? <IconChevronRight /> : <IconChevronLeft />}
         </button>
@@ -128,26 +137,29 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
 
       {/* Nav */}
       <nav className="obs-nav">
-        {navItems.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/dashboard'}
-            className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
-            onClick={onClose}
-            title={collapsed ? label : undefined}
-          >
-            <span className="obs-nav-icon"><Icon /></span>
-            <span className="obs-nav-label">{label}</span>
-          </NavLink>
-        ))}
+        {navDefs.map(({ to, labelKey, Icon }) => {
+          const label = t(labelKey);
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/dashboard'}
+              className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
+              onClick={onClose}
+              title={collapsed ? label : undefined}
+            >
+              <span className="obs-nav-icon"><Icon /></span>
+              <span className="obs-nav-label">{label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div className="obs-nav-spacer" />
 
       {/* Provider status */}
       <div className="obs-status-block">
-        <div className="obs-status-label">Providers</div>
+        <div className="obs-status-label">{t('sidebar.providers')}</div>
         {['anthropic', 'openai'].map(p => {
           const active = liveProviders.includes(p);
           return (
@@ -162,7 +174,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
                 fontSize: 11,
                 color: active ? 'var(--success)' : 'var(--faint)',
               }}>
-                {active ? 'OK' : '--'}
+                {active ? t('sidebar.statusOk') : '--'}
               </span>
             </div>
           );
@@ -175,7 +187,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
           <button
             className="obs-user-info obs-user-info--btn"
             onClick={() => navigate('/account')}
-            title="Mi cuenta"
+            title={t('sidebar.myAccount')}
           >
             <div className="obs-user-avatar">{initials}</div>
             <div className="obs-user-meta">
@@ -191,18 +203,27 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
           <button
             className="obs-user-action-btn"
             onClick={() => setDarkMode(!darkMode)}
-            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={darkMode ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
           >
             {darkMode ? <IconSun /> : <IconMoon />}
-            <span>{darkMode ? 'Light' : 'Dark'}</span>
+            <span>{darkMode ? t('sidebar.themeLight') : t('sidebar.themeDark')}</span>
+          </button>
+          <button
+            className="obs-user-action-btn"
+            onClick={toggleLanguage}
+            title={t('sidebar.language')}
+          >
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+              {i18n.language === 'en' ? 'ES' : 'EN'}
+            </span>
           </button>
           <button
             className="obs-user-action-btn obs-user-action-btn--danger"
             onClick={logout}
-            title="Sign out"
+            title={t('sidebar.signOut')}
           >
             <IconLogout />
-            <span>Sign out</span>
+            <span>{t('sidebar.signOut')}</span>
           </button>
         </div>
       </div>

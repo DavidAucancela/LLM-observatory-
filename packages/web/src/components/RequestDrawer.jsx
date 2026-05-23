@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProviderBadge from './ProviderBadge';
 import { fmtDateTime } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
@@ -7,6 +8,7 @@ export default function RequestDrawer({ requestId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!requestId) return;
@@ -29,7 +31,7 @@ export default function RequestDrawer({ requestId, onClose }) {
       <div className="obs-drawer">
         <div className="obs-drawer-header">
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Request detail</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t('drawer.title')}</div>
             {data && (
               <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
                 #{data.id}
@@ -53,43 +55,43 @@ export default function RequestDrawer({ requestId, onClose }) {
           ) : data ? (
             <>
               <div className="obs-drawer-section">
-                <div className="obs-section-label" style={{ marginBottom: 10 }}>Metadata</div>
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('drawer.metadata')}</div>
                 <dl className="meta-grid">
-                  <dt>Time</dt>
+                  <dt>{t('drawer.time')}</dt>
                   <dd>{fmtDateTime(data.timestamp)}</dd>
-                  <dt>Provider</dt>
+                  <dt>{t('drawer.provider')}</dt>
                   <dd><ProviderBadge provider={data.provider} /></dd>
-                  <dt>Model</dt>
+                  <dt>{t('drawer.model')}</dt>
                   <dd style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.model}</dd>
-                  <dt>Latency</dt>
+                  <dt>{t('drawer.latency')}</dt>
                   <dd>{data.latency_ms}ms</dd>
-                  <dt>Status</dt>
+                  <dt>{t('drawer.status')}</dt>
                   <dd style={{ color: data.status_code < 400 ? 'var(--success)' : 'var(--error)' }}>
-                    {data.status_code} {data.status_code < 400 ? 'OK' : 'Error'}
+                    {data.status_code} {data.status_code < 400 ? t('drawer.statusOk') : t('drawer.statusError')}
                   </dd>
                   {data.error_message && (
-                    <><dt>Error</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11, wordBreak: 'break-word' }}>{data.error_message}</dd></>
+                    <><dt>{t('drawer.errorLabel')}</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11, wordBreak: 'break-word' }}>{data.error_message}</dd></>
                   )}
-                  {data.stop_reason && <><dt>Stop reason</dt><dd>{data.stop_reason}</dd></>}
+                  {data.stop_reason && <><dt>{t('drawer.stopReason')}</dt><dd>{data.stop_reason}</dd></>}
                   {data.error_type && (
-                    <><dt>Error type</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.error_type}</dd></>
+                    <><dt>{t('drawer.errorType')}</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{data.error_type}</dd></>
                   )}
                   {data.error_message && (
-                    <><dt>Error msg</dt><dd style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', wordBreak: 'break-all' }}>{data.error_message}</dd></>
+                    <><dt>{t('drawer.errorMessage')}</dt><dd style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', wordBreak: 'break-all' }}>{data.error_message}</dd></>
                   )}
                 </dl>
               </div>
 
               <div className="obs-drawer-section">
-                <div className="obs-section-label" style={{ marginBottom: 10 }}>Token breakdown</div>
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('drawer.tokenBreakdown')}</div>
                 <dl className="meta-grid">
-                  <dt>Input</dt>
+                  <dt>{t('drawer.input')}</dt>
                   <dd>{parseInt(data.input_tokens || 0).toLocaleString()}</dd>
-                  {data.cache_read_tokens > 0 && <><dt>Cache read</dt><dd>{parseInt(data.cache_read_tokens).toLocaleString()}</dd></>}
-                  {data.cache_write_tokens > 0 && <><dt>Cache write</dt><dd>{parseInt(data.cache_write_tokens).toLocaleString()}</dd></>}
-                  <dt>Output</dt>
+                  {data.cache_read_tokens > 0 && <><dt>{t('drawer.cacheRead')}</dt><dd>{parseInt(data.cache_read_tokens).toLocaleString()}</dd></>}
+                  {data.cache_write_tokens > 0 && <><dt>{t('drawer.cacheWrite')}</dt><dd>{parseInt(data.cache_write_tokens).toLocaleString()}</dd></>}
+                  <dt>{t('drawer.output')}</dt>
                   <dd>{parseInt(data.output_tokens || 0).toLocaleString()}</dd>
-                  <dt>Total cost</dt>
+                  <dt>{t('drawer.totalCost')}</dt>
                   <dd>${parseFloat(data.cost_usd).toFixed(6)}</dd>
                 </dl>
               </div>
@@ -99,9 +101,9 @@ export default function RequestDrawer({ requestId, onClose }) {
                   const tools = JSON.parse(data.tools_used);
                   if (tools.length > 0) return (
                     <div className="obs-drawer-section">
-                      <div className="obs-section-label" style={{ marginBottom: 8 }}>Tools used</div>
+                      <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('drawer.toolsUsed')}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {tools.map(t => <span key={t} className="kchip">{t}</span>)}
+                        {tools.map(tool => <span key={tool} className="kchip">{tool}</span>)}
                       </div>
                     </div>
                   );
@@ -111,7 +113,7 @@ export default function RequestDrawer({ requestId, onClose }) {
 
               {data.tags && Object.keys(data.tags).length > 0 && (
                 <div className="obs-drawer-section">
-                  <div className="obs-section-label" style={{ marginBottom: 8 }}>Tags</div>
+                  <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('drawer.tags')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                     {Object.entries(data.tags).map(([k, v]) => (
                       <span key={k} className="kchip">{k}: {String(v)}</span>
@@ -121,20 +123,20 @@ export default function RequestDrawer({ requestId, onClose }) {
               )}
 
               <div className="obs-drawer-section">
-                <div className="obs-section-label" style={{ marginBottom: 10 }}>Prompt preview</div>
+                <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('drawer.promptPreview')}</div>
                 <div style={{
                   fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55,
                   color: 'var(--muted)', padding: 10,
                   background: 'var(--hover)', borderRadius: 4,
                   maxHeight: 160, overflow: 'auto',
                 }}>
-                  {data.prompt_full || data.prompt_preview || '(no preview available)'}
+                  {data.prompt_full || data.prompt_preview || t('drawer.noPreview')}
                 </div>
               </div>
             </>
           ) : (
             <div className="obs-empty">
-              <div className="obs-empty-title">Could not load request</div>
+              <div className="obs-empty-title">{t('drawer.loadError')}</div>
             </div>
           )}
         </div>

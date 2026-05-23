@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
-import { fmtDateTime, fmtDate } from '../utils/fmt';
+import { fmtDateTime } from '../utils/fmt';
 
 // ── Balances tab ──────────────────────────────────────────────
 function BalancesTab() {
@@ -11,6 +12,7 @@ function BalancesTab() {
   const [form, setForm]         = useState({ provider: 'anthropic', amount_usd: '', note: '' });
   const [submitting, setSubmitting] = useState(false);
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   const fetchData = async () => {
     try {
@@ -49,12 +51,12 @@ function BalancesTab() {
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
         <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(s => !s)}>
-          + Register recharge
+          {t('finance.registerRecharge')}
         </button>
       </div>
 
       {/* Provider rows */}
-      {providers.map((p, i) => {
+      {providers.map((p) => {
         const pct = Math.min(100, p.pct_used || 0);
         const isWarn = pct > 75 && pct < 100;
         const isOver = pct >= 100;
@@ -69,20 +71,22 @@ function BalancesTab() {
           }}>
             <ProviderBadge provider={p.provider} size="lg" />
             <div>
-              <div className="obs-section-label" style={{ fontSize: 10, marginBottom: 2 }}>Remaining</div>
+              <div className="obs-section-label" style={{ fontSize: 10, marginBottom: 2 }}>{t('finance.remaining')}</div>
               <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', color: 'var(--text)' }}>
                 ${parseFloat(p.remaining || 0).toFixed(2)}
               </div>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Consumed <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_spent || 0).toFixed(2)}</span>
-              {' '}of <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_loaded || 0).toFixed(2)}</span>
+              {t('finance.consumed')}{' '}
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_spent || 0).toFixed(2)}</span>
+              {' '}{t('common.of')}{' '}
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_loaded || 0).toFixed(2)}</span>
             </div>
             <div className="iprog-bar">
               <div className={`iprog-fill ${fillCls}`} style={{ width: `${pct}%` }} />
             </div>
             <button className="obs-btn" style={{ justifySelf: 'end' }} onClick={() => setShowForm(true)}>
-              + Add funds
+              {t('finance.addFunds')}
             </button>
           </div>
         );
@@ -90,8 +94,8 @@ function BalancesTab() {
 
       {providers.length === 0 && (
         <div className="obs-empty">
-          <div className="obs-empty-title">No balances tracked</div>
-          <div className="obs-empty-sub">Register a recharge to start tracking balance</div>
+          <div className="obs-empty-title">{t('finance.noBalances')}</div>
+          <div className="obs-empty-sub">{t('finance.registerRechargeHint')}</div>
         </div>
       )}
 
@@ -100,25 +104,25 @@ function BalancesTab() {
         <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)' }}>
           <form onSubmit={handleSubmit} className="obs-form-row" style={{ flexWrap: 'wrap' }}>
             <div className="obs-field">
-              <label>Provider</label>
+              <label>{t('finance.providerLabel')}</label>
               <select className="obs-select" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI</option>
               </select>
             </div>
             <div className="obs-field">
-              <label>Amount (USD)</label>
+              <label>{t('finance.amountLabel')}</label>
               <input className="obs-input" type="number" step="0.01" min="0.01" required placeholder="100.00"
                 value={form.amount_usd} onChange={e => setForm(f => ({ ...f, amount_usd: e.target.value }))} />
             </div>
             <div className="obs-field" style={{ flex: 1 }}>
-              <label>Note</label>
-              <input className="obs-input" type="text" placeholder="Optional note"
+              <label>{t('finance.noteLabel')}</label>
+              <input className="obs-input" type="text" placeholder={t('finance.notePlaceholder')}
                 value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
             </div>
-            <button type="button" className="obs-btn" style={{ alignSelf: 'flex-end' }} onClick={() => setShowForm(false)}>Cancel</button>
+            <button type="button" className="obs-btn" style={{ alignSelf: 'flex-end' }} onClick={() => setShowForm(false)}>{t('common.cancel')}</button>
             <button type="submit" className="obs-btn obs-btn-primary" disabled={submitting} style={{ alignSelf: 'flex-end' }}>
-              {submitting ? 'Saving…' : 'Save'}
+              {submitting ? t('common.saving') : t('common.save')}
             </button>
           </form>
         </div>
@@ -127,14 +131,14 @@ function BalancesTab() {
       {/* Recharge history */}
       {history.length > 0 && (
         <div style={{ marginTop: 28 }}>
-          <div className="obs-section-label" style={{ marginBottom: 10 }}>Recharge history</div>
+          <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('finance.rechargeHistory')}</div>
           <table className="obs-table">
             <thead>
               <tr>
-                <th style={{ width: 110 }}>Date</th>
-                <th>Provider</th>
-                <th className="col-num">Amount</th>
-                <th>Note</th>
+                <th style={{ width: 110 }}>{t('finance.dateColumn')}</th>
+                <th>{t('finance.providerLabel')}</th>
+                <th className="col-num">{t('finance.amountColumn')}</th>
+                <th>{t('finance.noteColumn')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -147,7 +151,7 @@ function BalancesTab() {
                   <td className="col-muted">{h.note || '—'}</td>
                   <td className="col-num">
                     <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleDelete(h.id)}>
-                      Delete
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
@@ -167,6 +171,7 @@ function BudgetsTab() {
   const [form, setForm]         = useState({ name: '', limit_usd: '', period: 'monthly' });
   const [submitting, setSubmitting] = useState(false);
   const { apiFetch } = useApi();
+  const { t } = useTranslation();
 
   const fetchBudgets = async () => {
     try {
@@ -203,7 +208,7 @@ function BudgetsTab() {
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
         <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(s => !s)}>
-          + New budget
+          {t('finance.newBudget')}
         </button>
       </div>
 
@@ -212,26 +217,26 @@ function BudgetsTab() {
         <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)' }}>
           <form onSubmit={handleSubmit} className="obs-form-row" style={{ flexWrap: 'wrap' }}>
             <div className="obs-field" style={{ flex: '2 1 200px' }}>
-              <label>Name</label>
+              <label>{t('finance.nameLabel')}</label>
               <input className="obs-input" required placeholder="e.g. Monthly production"
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="obs-field">
-              <label>Period</label>
+              <label>{t('finance.periodLabel')}</label>
               <select className="obs-select" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))}>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
+                <option value="daily">{t('finance.daily')}</option>
+                <option value="weekly">{t('finance.weekly')}</option>
+                <option value="monthly">{t('finance.monthly')}</option>
               </select>
             </div>
             <div className="obs-field">
-              <label>Limit (USD)</label>
+              <label>{t('finance.limitLabel')}</label>
               <input className="obs-input" type="number" step="0.01" min="0.01" required placeholder="100.00"
                 value={form.limit_usd} onChange={e => setForm(f => ({ ...f, limit_usd: e.target.value }))} />
             </div>
-            <button type="button" className="obs-btn" style={{ alignSelf: 'flex-end' }} onClick={() => setShowForm(false)}>Cancel</button>
+            <button type="button" className="obs-btn" style={{ alignSelf: 'flex-end' }} onClick={() => setShowForm(false)}>{t('common.cancel')}</button>
             <button type="submit" className="obs-btn obs-btn-primary" disabled={submitting} style={{ alignSelf: 'flex-end' }}>
-              {submitting ? 'Saving…' : 'Save'}
+              {submitting ? t('common.saving') : t('common.save')}
             </button>
           </form>
         </div>
@@ -239,8 +244,8 @@ function BudgetsTab() {
 
       {budgets.length === 0 && !showForm ? (
         <div className="obs-empty">
-          <div className="obs-empty-title">No budgets configured</div>
-          <div className="obs-empty-sub">Add a budget to track spending limits</div>
+          <div className="obs-empty-title">{t('finance.noBudgets')}</div>
+          <div className="obs-empty-sub">{t('finance.budgetHint')}</div>
         </div>
       ) : budgets.map(b => {
         const pct = Math.min(100, (parseFloat(b.spent_usd || 0) / parseFloat(b.limit_usd)) * 100);
@@ -258,10 +263,12 @@ function BudgetsTab() {
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{b.name}</div>
             <span className="period-badge" style={{ justifySelf: 'start', textTransform: 'capitalize' }}>{b.period}</span>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Limit <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(b.limit_usd).toFixed(2)}</span>
+              {t('finance.limitDisplay')}{' '}
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(b.limit_usd).toFixed(2)}</span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              Spent <span style={{ color: isOver ? 'var(--error)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+              {t('finance.spentDisplay')}{' '}
+              <span style={{ color: isOver ? 'var(--error)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                 ${parseFloat(b.spent_usd || 0).toFixed(2)}
               </span>
             </div>
@@ -269,7 +276,7 @@ function BudgetsTab() {
               <div className={`iprog-fill ${fillCls}`} style={{ width: `${pct}%` }} />
             </div>
             <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)', justifySelf: 'end' }} onClick={() => handleDelete(b.id)}>
-              Delete
+              {t('common.delete')}
             </button>
           </div>
         );
@@ -282,25 +289,26 @@ function BudgetsTab() {
 export default function Finance() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'budgets' ? 'budgets' : 'balances');
+  const { t } = useTranslation();
 
-  const handleTabChange = (t) => {
-    setTab(t);
-    setSearchParams(t === 'budgets' ? { tab: 'budgets' } : {}, { replace: true });
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    setSearchParams(newTab === 'budgets' ? { tab: 'budgets' } : {}, { replace: true });
   };
 
   return (
     <main className="obs-main obs-fade-in">
       <div className="obs-header">
-        <div className="obs-page-title">Finance</div>
+        <div className="obs-page-title">{t('finance.title')}</div>
       </div>
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <div className="obs-tabbar">
           <button className={`obs-tab${tab === 'balances' ? ' active' : ''}`} onClick={() => handleTabChange('balances')}>
-            Balances
+            {t('finance.balancesTab')}
           </button>
           <button className={`obs-tab${tab === 'budgets' ? ' active' : ''}`} onClick={() => handleTabChange('budgets')}>
-            Budgets
+            {t('finance.budgetsTab')}
           </button>
         </div>
 

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthProvider';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 export default function AcceptInvite() {
-  const [params]   = useSearchParams();
-  const navigate   = useNavigate();
-  const { login }  = useAuth();
-  const token      = params.get('token') || '';
+  const [params]  = useSearchParams();
+  const { t }     = useTranslation();
+  const token     = params.get('token') || '';
 
   const [invite, setInvite]     = useState(null);
   const [loadErr, setLoadErr]   = useState('');
@@ -18,15 +17,15 @@ export default function AcceptInvite() {
   const [error, setError]       = useState('');
 
   useEffect(() => {
-    if (!token) { setLoadErr('Token de invitación no encontrado'); return; }
+    if (!token) { setLoadErr(t('auth.noToken')); return; }
     fetch(`${API_URL}/api/auth/invite-info?token=${token}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) setLoadErr(d.error);
         else { setInvite(d); setEmail(d.email || ''); }
       })
-      .catch(() => setLoadErr('No se pudo cargar la invitación'));
-  }, [token]);
+      .catch(() => setLoadErr(t('auth.inviteLoadError')));
+  }, [token, t]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,8 +38,7 @@ export default function AcceptInvite() {
         body:    JSON.stringify({ token, email, password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al aceptar invitación');
-      // Store token and redirect like a normal login
+      if (!res.ok) throw new Error(data.error || 'Error accepting invitation');
       localStorage.setItem('llm_obs_token', data.token);
       window.location.href = '/';
     } catch (err) {
@@ -55,7 +53,7 @@ export default function AcceptInvite() {
       <div style={{ width: 360, display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
           <div className="obs-brand-mark" style={{ width: 22, height: 22, fontSize: 12 }}>◐</div>
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>Observatory</span>
+          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.brand')}</span>
         </div>
 
         {loadErr ? (
@@ -68,12 +66,12 @@ export default function AcceptInvite() {
           <>
             <div style={{ textAlign: 'center', marginTop: -8 }}>
               <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>
-                Join {invite.org_name}
+                {t('auth.joinOrgTitle', { orgName: invite.org_name })}
               </div>
               <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
                 {invite.invited_by_email
-                  ? `Invited by ${invite.invited_by_email}`
-                  : 'You have been invited to join this organization'}
+                  ? t('auth.invitedBy', { email: invite.invited_by_email })
+                  : t('auth.defaultInviteMsg')}
               </div>
             </div>
 
@@ -85,28 +83,28 @@ export default function AcceptInvite() {
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="obs-field">
-                <label>Email</label>
+                <label>{t('auth.emailLabel')}</label>
                 <input
                   className="obs-input obs-input-lg"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   required
                 />
               </div>
               <div className="obs-field">
-                <label>Set a password</label>
+                <label>{t('auth.setPasswordLabel')}</label>
                 <input
                   className="obs-input obs-input-lg"
                   type="password"
-                  placeholder="Min. 8 characters"
+                  placeholder={t('auth.passwordMinPlaceholder')}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
                 />
                 {password && password.length < 8 && (
-                  <span style={{ fontSize: 11, color: 'var(--error)', marginTop: 4 }}>At least 8 characters required</span>
+                  <span style={{ fontSize: 11, color: 'var(--error)', marginTop: 4 }}>{t('auth.passwordTooShort')}</span>
                 )}
               </div>
               <button
@@ -115,13 +113,13 @@ export default function AcceptInvite() {
                 disabled={loading || password.length < 8}
                 style={{ height: 38, fontSize: 13, justifyContent: 'center', marginTop: 4 }}
               >
-                {loading ? 'Joining…' : `Join ${invite.org_name}`}
+                {loading ? t('auth.joining') : t('auth.joinButton', { orgName: invite.org_name })}
               </button>
             </form>
 
             <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-              Already have an account?{' '}
-              <Link to="/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Sign in</Link>
+              {t('auth.hasAccount')}{' '}
+              <Link to="/login" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{t('auth.signIn')}</Link>
             </div>
           </>
         )}

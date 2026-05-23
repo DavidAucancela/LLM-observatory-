@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -8,6 +9,7 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent]       = useState(false);
   const [error, setError]     = useState('');
+  const { t } = useTranslation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,22 +33,24 @@ export default function ForgotPassword() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
           <div className="obs-brand-mark" style={{ width: 22, height: 22, fontSize: 12 }}>◐</div>
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>Observatory</span>
+          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.brand')}</span>
         </div>
 
         {sent ? (
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>Check your email</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{t('auth.checkEmailTitle')}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-              If <strong style={{ color: 'var(--text)' }}>{email}</strong> is registered, you'll receive a reset link shortly. Check your spam folder too.
+              {t('auth.checkEmailMsg', { email })}
             </div>
-            <Link to="/login" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', marginTop: 8 }}>← Back to sign in</Link>
+            <Link to="/login" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', marginTop: 8 }}>
+              {t('auth.backToSignIn')}
+            </Link>
           </div>
         ) : (
           <>
             <div style={{ textAlign: 'center', marginTop: -8 }}>
-              <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>Reset password</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Enter your email to receive a reset link</div>
+              <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.resetTitle')}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{t('auth.resetSubtitle')}</div>
             </div>
 
             {error && (
@@ -57,17 +61,27 @@ export default function ForgotPassword() {
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div className="obs-field">
-                <label>Email</label>
-                <input className="obs-input obs-input-lg" type="email" autoFocus placeholder="you@company.com" required value={email} onChange={e => setEmail(e.target.value)} />
+                <label>{t('auth.emailLabel')}</label>
+                <input
+                  className="obs-input obs-input-lg"
+                  type="email"
+                  autoFocus
+                  placeholder={t('auth.emailPlaceholder')}
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
               </div>
               <button type="submit" className="obs-btn obs-btn-primary" disabled={loading || !email}
                 style={{ height: 38, fontSize: 13, justifyContent: 'center', marginTop: 4 }}>
-                {loading ? 'Sending…' : 'Send reset link'}
+                {loading ? t('auth.sendingEmail') : t('auth.sendResetButton')}
               </button>
             </form>
 
             <div style={{ textAlign: 'center' }}>
-              <Link to="/login" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>← Back to sign in</Link>
+              <Link to="/login" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}>
+                {t('auth.backToSignIn')}
+              </Link>
             </div>
           </>
         )}

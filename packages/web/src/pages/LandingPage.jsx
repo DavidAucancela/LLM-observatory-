@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import './LandingPage.css';
 
 /* ── Icon helper ── */
@@ -19,6 +20,7 @@ const GitHubIcon = () => (
    1. NAVBAR
 ══════════════════════════════════════════════════════ */
 function Nav({ onDashboard }) {
+  const { t } = useTranslation();
   return (
     <nav className="lp-nav">
       <a className="lp-nav-brand" href="#">
@@ -26,13 +28,13 @@ function Nav({ onDashboard }) {
         Observatory
       </a>
       <div className="lp-nav-links">
-        <a className="lp-nav-link" href="#features">Features</a>
-        <a className="lp-nav-link" href="#architecture">Architecture</a>
-        <a className="lp-nav-link" href="#how-it-works">How it works</a>
+        <a className="lp-nav-link" href="#features">{t('landing.navFeatures')}</a>
+        <a className="lp-nav-link" href="#architecture">{t('landing.navArchitecture')}</a>
+        <a className="lp-nav-link" href="#how-it-works">{t('landing.navHowItWorks')}</a>
         <a className="lp-nav-link lp-nav-link-gh" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
           <GitHubIcon /> GitHub
         </a>
-        <button className="lp-nav-cta" onClick={onDashboard}>Dashboard →</button>
+        <button className="lp-nav-cta" onClick={onDashboard}>{t('landing.navDashboard')}</button>
       </div>
     </nav>
   );
@@ -123,9 +125,10 @@ function DashboardMockup() {
    3. PROVIDER STRIP
 ══════════════════════════════════════════════════════ */
 function Providers() {
+  const { t } = useTranslation();
   return (
     <div className="lp-providers">
-      <span className="lp-prov-label">Works with</span>
+      <span className="lp-prov-label">{t('landing.worksWith')}</span>
       <div className="lp-prov-item">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="#d97706" strokeWidth="1.5" />
@@ -144,68 +147,46 @@ function Providers() {
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
         </svg>
-        More coming soon
+        {t('landing.moreSoon')}
       </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════
-   4. STATS BAR
-══════════════════════════════════════════════════════ 
-function Stats() {
-  return (
-    <div className="lp-stats">
-      {[
-        { num: '0ms',  label: 'Latency overhead on your API calls' },
-        { num: '2',    label: 'Providers supported'                },
-        { num: '∞',    label: 'Requests tracked per org'           },
-        { num: 'MIT',  label: 'Open source license'                },
-      ].map(s => (
-        <div key={s.label} className="lp-stat">
-          <div className="lp-stat-num">{s.num}</div>
-          <div className="lp-stat-label">{s.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}*/
-
-/* ══════════════════════════════════════════════════════
    5. PROBLEM → SOLUTION
 ══════════════════════════════════════════════════════ */
-const VS = {
-  bad: [
-    'No visibility into which model costs most',
-    'Surprise bills at the end of the month',
-    'Scattered API keys across team members',
-    'Zero context when a latency spike appears',
-    'No budget limits or webhook alerts',
-  ],
-  good: [
-    'Per-request cost breakdown by model & provider',
-    'Monthly projections based on live 30-day trend',
-    'Centralised org tokens, each scoped to one integration',
-    'Real-time latency chart + historical data sync',
-    'Discord alerts before you hit daily/weekly limits',
-  ],
-};
+const VS_BAD = [
+  'No visibility into which model costs most',
+  'Surprise bills at the end of the month',
+  'Scattered API keys across team members',
+  'Zero context when a latency spike appears',
+  'No budget limits or webhook alerts',
+];
+const VS_GOOD = [
+  'Per-request cost breakdown by model & provider',
+  'Monthly projections based on live 30-day trend',
+  'Centralised org tokens, each scoped to one integration',
+  'Real-time latency chart + historical data sync',
+  'Discord alerts before you hit daily/weekly limits',
+];
 
 function ProblemSolution() {
+  const { t } = useTranslation();
   return (
     <section className="lp-section" id="why">
-      <div className="lp-section-tag">Why Observatory?</div>
-      <h2 className="lp-section-title">Stop flying blind on LLM costs</h2>
-      <p className="lp-section-sub">Most teams don't know what they're spending on AI until the invoice arrives.</p>
+      <div className="lp-section-tag">{t('landing.whyTag')}</div>
+      <h2 className="lp-section-title">{t('landing.whyTitle')}</h2>
+      <p className="lp-section-sub">{t('landing.whySub')}</p>
       <div className="lp-vs-grid">
         <div className="lp-vs-col lp-vs-col-bad">
           <div className="lp-vs-header">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
-            Without Observatory
+            {t('landing.withoutTitle')}
           </div>
-          {VS.bad.map(item => (
+          {VS_BAD.map(item => (
             <div key={item} className="lp-vs-item">
               <span className="lp-vs-icon lp-vs-icon-bad">✗</span>
               {item}
@@ -217,9 +198,9 @@ function ProblemSolution() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            With Observatory
+            {t('landing.withTitle')}
           </div>
-          {VS.good.map(item => (
+          {VS_GOOD.map(item => (
             <div key={item} className="lp-vs-item">
               <span className="lp-vs-icon lp-vs-icon-good">✓</span>
               {item}
@@ -356,17 +337,18 @@ const TAB_VISUALS = { monitoring: TabVisualMonitoring, budgets: TabVisualBudgets
 
 function FeaturesWithTabs() {
   const [active, setActive] = useState(0);
+  const { t } = useTranslation();
   const tab = TABS[active];
   const Visual = TAB_VISUALS[tab.visual];
   return (
     <section id="features" className="lp-section">
-      <div className="lp-section-tag">Features</div>
-      <h2 className="lp-section-title">Everything you need to monitor<br />LLM usage at scale</h2>
-      <p className="lp-section-sub">From a single developer to a whole engineering team — Observatory grows with you.</p>
+      <div className="lp-section-tag">{t('landing.featuresTag')}</div>
+      <h2 className="lp-section-title">{t('landing.featuresTitle')}</h2>
+      <p className="lp-section-sub">{t('landing.featuresSub')}</p>
       <div className="lp-tabs-bar">
-        {TABS.map((t, i) => (
-          <button key={t.label} className={`lp-tab-btn${active === i ? ' active' : ''}`} onClick={() => setActive(i)}>
-            {t.label}
+        {TABS.map((tabItem, i) => (
+          <button key={tabItem.label} className={`lp-tab-btn${active === i ? ' active' : ''}`} onClick={() => setActive(i)}>
+            {tabItem.label}
           </button>
         ))}
       </div>
@@ -413,15 +395,15 @@ function Arrow({ dashed }) {
 }
 
 function ArchDiagram() {
+  const { t } = useTranslation();
   return (
     <section id="architecture" className="lp-section" style={{ paddingTop: 0 }}>
-      <div className="lp-section-tag">Architecture</div>
-      <h2 className="lp-section-title">Zero-latency by design</h2>
-      <p className="lp-section-sub">Metrics travel a completely separate async path — your users never wait an extra millisecond.</p>
+      <div className="lp-section-tag">{t('landing.archTag')}</div>
+      <h2 className="lp-section-title">{t('landing.archTitle')}</h2>
+      <p className="lp-section-sub">{t('landing.archSub')}</p>
       <div className="lp-arch-wrap">
-        {/* Sync row */}
         <div className="lp-arch-row">
-          <div className="lp-arch-row-tag lp-arch-row-tag-sync">sync · awaited</div>
+          <div className="lp-arch-row-tag lp-arch-row-tag-sync">{t('landing.syncAwaited')}</div>
           <div className="lp-arch-nodes">
             <ArchNode label="Your App" sub="Node.js" />
             <Arrow />
@@ -430,9 +412,8 @@ function ArchDiagram() {
             <ArchNode label="Claude / OpenAI" sub="Provider API" />
           </div>
         </div>
-        {/* Async row */}
         <div className="lp-arch-row lp-arch-row-async">
-          <div className="lp-arch-row-tag lp-arch-row-tag-async">async · fire &amp; forget</div>
+          <div className="lp-arch-row-tag lp-arch-row-tag-async">{t('landing.asyncFire')}</div>
           <div className="lp-arch-nodes">
             <ArchNode label="MonitoredAnthropic" sub="SDK wrapper" primary />
             <Arrow dashed />
@@ -472,11 +453,12 @@ const STEPS = [
 ];
 
 function HowItWorks() {
+  const { t } = useTranslation();
   return (
     <section id="how-it-works" className="lp-section" style={{ paddingTop: 0 }}>
-      <div className="lp-section-tag">How it works</div>
-      <h2 className="lp-section-title">Up and running in minutes</h2>
-      <p className="lp-section-sub">No infrastructure expertise required. Self-host on Railway, Docker, or any Node.js server.</p>
+      <div className="lp-section-tag">{t('landing.howTag')}</div>
+      <h2 className="lp-section-title">{t('landing.howTitle')}</h2>
+      <p className="lp-section-sub">{t('landing.howSub')}</p>
       <div className="lp-steps">
         {STEPS.map((s, i) => (
           <div key={i} className="lp-step">
@@ -497,26 +479,27 @@ function HowItWorks() {
    9. OPEN SOURCE CALLOUT
 ══════════════════════════════════════════════════════ */
 function OpenSourceCallout() {
+  const { t } = useTranslation();
   return (
     <section className="lp-oss-callout">
-      <div className="lp-section-tag" style={{ textAlign: 'center' }}>Open Source</div>
-      <h2 className="lp-oss-title">Your data never leaves<br />your infrastructure</h2>
-      <p className="lp-oss-sub">Self-host on any server. Inspect every line of code. Fork it and extend it to fit your stack.</p>
+      <div className="lp-section-tag" style={{ textAlign: 'center' }}>{t('landing.ossTag')}</div>
+      <h2 className="lp-oss-title">{t('landing.ossTitle')}</h2>
+      <p className="lp-oss-sub">{t('landing.ossSub')}</p>
       <div className="lp-oss-badges">
         {[
-          { icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',               label: 'Data stays yours'       },
-          { icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z',            label: 'Self-hosted'            },
-          { icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', label: 'MIT License'           },
+          { icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',               labelKey: 'landing.dataStaysYours' },
+          { icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z',            labelKey: 'landing.selfHosted'     },
+          { icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', labelKey: 'landing.mitLicense'    },
         ].map(b => (
-          <div key={b.label} className="lp-oss-badge">
+          <div key={b.labelKey} className="lp-oss-badge">
             <IC d={b.icon} size={15} stroke="#6366f1" />
-            {b.label}
+            {t(b.labelKey)}
           </div>
         ))}
       </div>
       <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer"
         style={{ display: 'inline-flex', marginTop: 28 }}>
-        <GitHubIcon /> View on GitHub
+        <GitHubIcon /> {t('landing.viewOnGitHub')}
       </a>
     </section>
   );
@@ -526,15 +509,16 @@ function OpenSourceCallout() {
    10. CTA BANNER
 ══════════════════════════════════════════════════════ */
 function CTABanner({ onDashboard }) {
+  const { t } = useTranslation();
   return (
     <div className="lp-cta-banner">
       <div className="lp-cta-glow" />
-      <h2>Ready to see what your API spend<br />actually looks like?</h2>
-      <p>Free, open source, self-hosted. No credit card. Your data stays in your infrastructure.</p>
+      <h2>{t('landing.ctaTitle')}</h2>
+      <p>{t('landing.ctaSub')}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button className="lp-btn-primary" onClick={onDashboard}>Open Dashboard →</button>
+        <button className="lp-btn-primary" onClick={onDashboard}>{t('landing.openDashboard')}</button>
         <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
-          <GitHubIcon /> View on GitHub
+          <GitHubIcon /> {t('landing.viewOnGitHub')}
         </a>
       </div>
     </div>
@@ -545,6 +529,7 @@ function CTABanner({ onDashboard }) {
    11. FOOTER
 ══════════════════════════════════════════════════════ */
 function Footer() {
+  const { t } = useTranslation();
   return (
     <footer className="lp-footer">
       <div className="lp-footer-cols">
@@ -553,22 +538,22 @@ function Footer() {
             <div className="lp-brand-mark" style={{ width: 22, height: 22, fontSize: 10 }}>◐</div>
             LLM Observatory
           </a>
-          <p className="lp-footer-tagline">Open-source observability for<br />Claude and OpenAI API calls.</p>
+          <p className="lp-footer-tagline">{t('landing.footerTagline')}</p>
           <span className="lp-mit">MIT © 2026 LLM Observatory</span>
         </div>
         <div className="lp-footer-col">
-          <div className="lp-footer-col-title">Product</div>
-          <a className="lp-footer-link" href="#features">Features</a>
-          <a className="lp-footer-link" href="#architecture">Architecture</a>
-          <a className="lp-footer-link" href="#how-it-works">How it works</a>
-          <a className="lp-footer-link" href="/login">Open Dashboard</a>
+          <div className="lp-footer-col-title">{t('landing.footerProduct')}</div>
+          <a className="lp-footer-link" href="#features">{t('landing.navFeatures')}</a>
+          <a className="lp-footer-link" href="#architecture">{t('landing.navArchitecture')}</a>
+          <a className="lp-footer-link" href="#how-it-works">{t('landing.navHowItWorks')}</a>
+          <a className="lp-footer-link" href="/login">Dashboard</a>
         </div>
         <div className="lp-footer-col">
-          <div className="lp-footer-col-title">Resources</div>
+          <div className="lp-footer-col-title">{t('landing.footerResources')}</div>
           <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">GitHub</a>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/LICENSE" target="_blank" rel="noreferrer">{t('landing.mitLicense')}</a>
           <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/issues" target="_blank" rel="noreferrer">Issues</a>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/README.md" target="_blank" rel="noreferrer">Docs</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/README.md" target="_blank" rel="noreferrer">{t('landing.footerDocs')}</a>
         </div>
       </div>
     </footer>
@@ -580,6 +565,7 @@ function Footer() {
 ══════════════════════════════════════════════════════ */
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const onDashboard = () => navigate('/login');
 
   return (
@@ -590,25 +576,22 @@ export default function LandingPage() {
       <section className="lp-hero">
         <div className="lp-hero-bg" />
         <div className="lp-hero-grid" />
+        <div className="lp-badge">{t('landing.badgeText')}</div>
         <h1>
-          Observability for your<br />
-          <span className="lp-grad">Claude &amp; OpenAI calls</span>
+          {t('landing.heroTitle1')}<br />
+          <span className="lp-grad">{t('landing.heroTitle2')}</span>
         </h1>
-        <p>
-          Drop-in SDK wrapper that streams real-time cost, token, and latency
-          metrics to your team dashboard — with zero overhead on your API calls.
-        </p>
+        <p>{t('landing.heroSubtitle')}</p>
         <div className="lp-hero-actions">
-          <button className="lp-btn-primary" onClick={onDashboard}>Open Dashboard →</button>
+          <button className="lp-btn-primary" onClick={onDashboard}>{t('landing.openDashboard')}</button>
           <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
-            <GitHubIcon /> Star on GitHub
+            <GitHubIcon /> {t('landing.starOnGitHub')}
           </a>
         </div>
         <DashboardMockup />
       </section>
 
       <Providers />
-      <Stats />
       <ProblemSolution />
       <FeaturesWithTabs />
       <ArchDiagram />
