@@ -37,7 +37,26 @@ function RequestsTab({ range, onRangeChange }) {
   const [sortDir, setSortDir]   = useState('desc');
   const [loading, setLoading]   = useState(true);
   const [selectedId, setSelectedId] = useState(null);
+  const [tagKeys, setTagKeys]   = useState([]);
+  const [tagKey, setTagKey]     = useState('');
+  const [tagValues, setTagValues] = useState([]);
+  const [tagValue, setTagValue] = useState('');
   const { apiFetch } = useApi();
+
+  useEffect(() => {
+    apiFetch(`/api/metrics/tag-keys?range=${range}`)
+      .then(r => r.json())
+      .then(d => setTagKeys(d.keys || []))
+      .catch(() => {});
+  }, [range]);
+
+  useEffect(() => {
+    if (!tagKey) { setTagValues([]); setTagValue(''); return; }
+    apiFetch(`/api/metrics/tag-values?key=${encodeURIComponent(tagKey)}&range=${range}`)
+      .then(r => r.json())
+      .then(d => setTagValues(d.values || []))
+      .catch(() => {});
+  }, [tagKey, range]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -45,11 +64,13 @@ function RequestsTab({ range, onRangeChange }) {
       const params = new URLSearchParams({ page, limit: 20, sortBy, sortDir, range });
       if (provider) params.set('provider', provider);
       if (search)   params.set('search', search);
+      if (tagKey)   params.set('tag_key', tagKey);
+      if (tagValue) params.set('tag_value', tagValue);
       const res = await apiFetch(`/api/metrics?${params}`);
       setData(await res.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [page, range, provider, search, sortBy, sortDir]);
+  }, [page, range, provider, search, sortBy, sortDir, tagKey, tagValue]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -106,6 +127,30 @@ function RequestsTab({ range, onRangeChange }) {
           <option value="openai">OpenAI</option>
         </select>
 
+        {tagKeys.length > 0 && (
+          <select
+            className="obs-btn"
+            style={{ height: 30, paddingTop: 0, paddingBottom: 0 }}
+            value={tagKey}
+            onChange={e => { setTagKey(e.target.value); setTagValue(''); setPage(1); }}
+          >
+            <option value="">All tags</option>
+            {tagKeys.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+        )}
+
+        {tagKey && tagValues.length > 0 && (
+          <select
+            className="obs-btn"
+            style={{ height: 30, paddingTop: 0, paddingBottom: 0 }}
+            value={tagValue}
+            onChange={e => { setTagValue(e.target.value); setPage(1); }}
+          >
+            <option value="">All values</option>
+            {tagValues.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        )}
+
         <div className="obs-range-picker">
           {RANGES.map(r => (
             <button key={r} className={`obs-range-btn${range === r ? ' active' : ''}`} onClick={() => { onRangeChange(r); setPage(1); }}>{r}</button>
@@ -123,6 +168,7 @@ function RequestsTab({ range, onRangeChange }) {
       </div>
 
       {/* Table */}
+      <div className="obs-table-wrap">
       <table className="obs-table">
         <thead>
           <tr>
@@ -179,6 +225,7 @@ function RequestsTab({ range, onRangeChange }) {
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Pagination */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', fontSize: 12, color: 'var(--muted)' }}>

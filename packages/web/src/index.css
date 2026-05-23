@@ -911,3 +911,121 @@ body {
 }
 
 .obs-search-input::placeholder { color: var(--muted); }
+
+/* ── Table scroll wrapper (mobile) ── */
+.obs-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile header (hidden on desktop) ── */
+.obs-mobile-header {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.obs-mobile-hamburger {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+}
+.obs-mobile-hamburger:hover { background: var(--hover); }
+
+/* Sidebar overlay (mobile) */
+.obs-sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 29;
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 767px) {
+  .obs-mobile-header { display: flex; }
+  .obs-sidebar-overlay { display: block; }
+
+  /* Outer theme wrapper becomes flex column */
+  .theme-light, .theme-dark {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Root: take remaining height, sidebar is overlaid */
+  .obs-root {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Sidebar: fixed overlay, slides in from left */
+  .obs-sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.25s var(--ease-out);
+    box-shadow: var(--shadow-md);
+  }
+
+  .obs-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* KPI strip: 2 columns on mobile */
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Charts: full width on mobile */
+  .obs-content > div[style*="grid-template-columns: 2fr 1fr"] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Header: allow wrapping */
+  .obs-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 52px;
+    padding: 10px 16px;
+    gap: 8px;
+  }
+
+  /* Content: less padding on mobile */
+  .obs-content {
+    padding: 16px;
+  }
+
+  /* Drawer: full width on mobile */
+  .obs-drawer {
+    width: 100%;
+  }
+
+  /* Tabbar: adjust margin/padding */
+  .obs-tabbar {
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* Hide range picker text on very small screens */
+  .obs-range-btn { padding: 5px 7px; }
+
+  /* Form rows wrap on mobile */
+  .obs-form-row { flex-wrap: wrap; }
+
+  /* Search input full width on mobile */
+  .obs-search-wrap { flex: 1 1 100%; }
+}

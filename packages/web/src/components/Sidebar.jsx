@@ -88,7 +88,7 @@ function StatusDot({ color, pulse }) {
   );
 }
 
-export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
+export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -96,7 +96,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
   const roleLabel = user?.role === 'admin' ? 'Admin' : 'Member';
 
   return (
-    <aside className="obs-sidebar">
+    <aside className={`obs-sidebar${isOpen ? ' open' : ''}`}>
       {/* Brand */}
       <div className="obs-brand">
         <div className="obs-brand-mark">◐</div>
@@ -111,6 +111,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [] }) {
             to={to}
             end={to === '/dashboard'}
             className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
           >
             <span className="obs-nav-icon"><Icon /></span>
             <span>{label}</span>

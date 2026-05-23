@@ -40,6 +40,7 @@ function AppShell() {
     () => localStorage.getItem('dark-mode') === 'true'
   );
   const [liveProviders, setLiveProviders] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { apiFetch } = useApi();
 
   const toggleDarkMode = (value) => {
@@ -59,11 +60,30 @@ function AppShell() {
 
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
+      {/* Mobile header — only visible on small screens */}
+      <div className="obs-mobile-header">
+        <button className="obs-mobile-hamburger" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div className="obs-brand" style={{ padding: 0, border: 'none' }}>
+          <div className="obs-brand-mark">◐</div>
+          <span>Observatory</span>
+        </div>
+      </div>
+
       <div className="obs-root">
+        {/* Overlay for mobile sidebar */}
+        {sidebarOpen && (
+          <div className="obs-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        )}
         <Sidebar
           darkMode={darkMode}
           setDarkMode={toggleDarkMode}
           liveProviders={liveProviders}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
