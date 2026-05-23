@@ -74,6 +74,18 @@
   transition: opacity 0.15s, transform 0.15s;
 }
 .lp-nav-cta:hover { opacity: 0.9; transform: translateY(-1px); }
+.lp-nav-lang {
+  padding: 5px 11px;
+  background: rgba(255,255,255,0.07);
+  color: #c4c4d4;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.03em;
+}
+.lp-nav-lang:hover { background: rgba(255,255,255,0.13); color: #fff; }
 
 /* ══════════════════════════════════════════════════
    HERO

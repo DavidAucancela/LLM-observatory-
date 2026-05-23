@@ -20,7 +20,12 @@ const GitHubIcon = () => (
    1. NAVBAR
 ══════════════════════════════════════════════════════ */
 function Nav({ onDashboard }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const toggleLang = () => {
+    const next = i18n.language === 'en' ? 'es' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('lang', next);
+  };
   return (
     <nav className="lp-nav">
       <a className="lp-nav-brand" href="#">
@@ -34,6 +39,9 @@ function Nav({ onDashboard }) {
         <a className="lp-nav-link lp-nav-link-gh" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
           <GitHubIcon /> GitHub
         </a>
+        <button className="lp-nav-lang" onClick={toggleLang} title={t('sidebar.language')}>
+          {i18n.language === 'en' ? '🇪🇸 ES' : '🇬🇧 EN'}
+        </button>
         <button className="lp-nav-cta" onClick={onDashboard}>{t('landing.navDashboard')}</button>
       </div>
     </nav>
