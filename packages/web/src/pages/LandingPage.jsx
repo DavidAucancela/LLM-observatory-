@@ -152,7 +152,7 @@ function Providers() {
 
 /* ══════════════════════════════════════════════════════
    4. STATS BAR
-══════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════ 
 function Stats() {
   return (
     <div className="lp-stats">
@@ -169,7 +169,7 @@ function Stats() {
       ))}
     </div>
   );
-}
+}*/
 
 /* ══════════════════════════════════════════════════════
    5. PROBLEM → SOLUTION
@@ -590,10 +590,6 @@ export default function LandingPage() {
       <section className="lp-hero">
         <div className="lp-hero-bg" />
         <div className="lp-hero-grid" />
-        <div className="lp-badge">
-          <span className="lp-badge-dot" />
-          Open source · Self-hosted · MIT License
-        </div>
         <h1>
           Observability for your<br />
           <span className="lp-grad">Claude &amp; OpenAI calls</span>

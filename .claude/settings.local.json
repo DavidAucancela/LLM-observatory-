@@ -58,7 +58,11 @@
       "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/test_anthropic.py -v)",
       "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/test_openai.py -v)",
       "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/ -v)",
-      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/ -q)"
+      "Bash(PYTHONPATH=. /opt/homebrew/bin/python3.12 -m pytest tests/ -q)",
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)"
     ]
   }
 }
