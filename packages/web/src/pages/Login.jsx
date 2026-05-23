@@ -118,8 +118,13 @@ export default function Login() {
           </Link>
         </div>
 
-        <div style={{ fontSize: 11, color: 'var(--faint)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>
-          LLM Observatory · internal tooling
+        <div style={{ textAlign: 'center' }}>
+          <Link to="/" style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={e => e.target.style.color = 'var(--text)'}
+            onMouseLeave={e => e.target.style.color = 'var(--muted)'}
+          >
+            ← Back to home
+          </Link>
         </div>
       </div>
     </div>
