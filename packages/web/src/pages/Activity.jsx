@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
 import HBar from '../components/HBar';
+import { fmtDateTime } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
@@ -161,7 +162,7 @@ function RequestsTab({ range, onRangeChange }) {
             const ok = row.status_code === 200;
             return (
               <tr key={row.id} onClick={() => setSelectedId(row.id)}>
-                <td className="col-muted col-mono">{new Date(row.timestamp).toLocaleTimeString('en-GB', { hour12: false })}</td>
+                <td className="col-muted col-mono">{fmtDateTime(row.timestamp)}</td>
                 <td><ProviderBadge provider={row.provider} /></td>
                 <td className="col-mono">{row.model}</td>
                 <td className="col-num">{parseInt(row.input_tokens || 0).toLocaleString()} / {parseInt(row.output_tokens || 0).toLocaleString()}</td>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ProviderBadge from './ProviderBadge';
+import { fmtDateTime } from '../utils/fmt';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -55,7 +56,7 @@ export default function RequestDrawer({ requestId, onClose }) {
                 <div className="obs-section-label" style={{ marginBottom: 10 }}>Metadata</div>
                 <dl className="meta-grid">
                   <dt>Time</dt>
-                  <dd>{new Date(data.timestamp).toLocaleString('en-GB', { hour12: false })}</dd>
+                  <dd>{fmtDateTime(data.timestamp)}</dd>
                   <dt>Provider</dt>
                   <dd><ProviderBadge provider={data.provider} /></dd>
                   <dt>Model</dt>

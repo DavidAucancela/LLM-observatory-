@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../auth/AuthProvider';
+import { fmtDateTime, fmtDate } from '../utils/fmt';
 
 // ── Keys tab ──────────────────────────────────────────────────
 function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
@@ -307,10 +308,10 @@ function ObservatoryTokensSection() {
             <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{t.token_prefix}…</code>
           </div>
           <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-            {t.last_used_at ? `Last used ${new Date(t.last_used_at).toLocaleDateString()}` : 'Never used'}
+            {t.last_used_at ? `Last used ${fmtDateTime(t.last_used_at)}` : 'Never used'}
           </span>
           <span style={{ fontSize: 11, color: t.revoked_at ? 'var(--error)' : 'var(--muted)' }}>
-            {t.revoked_at ? 'Revoked' : `Created ${new Date(t.created_at).toLocaleDateString()}`}
+            {t.revoked_at ? 'Revoked' : `Created ${fmtDate(t.created_at)}`}
           </span>
           {isAdmin && !t.revoked_at && (
             <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleRevoke(t.id)}>
@@ -372,7 +373,7 @@ function SyncTab() {
           <ProviderBadge provider={p} size="lg" />
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {logs.find(l => l.provider === p) ? (
-              <>Last sync <span style={{ color: 'var(--text)' }}>{new Date(logs.find(l => l.provider === p).started_at).toLocaleTimeString('en-GB', { hour12: false })}</span></>
+              <>Last sync <span style={{ color: 'var(--text)' }}>{fmtDateTime(logs.find(l => l.provider === p).started_at)}</span></>
             ) : 'Never synced'}
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -414,7 +415,7 @@ function SyncTab() {
                 {l.records_synced > 0 ? `+${l.records_synced}` : '—'}
               </span>
               <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 11, textAlign: 'right' }}>
-                {new Date(l.started_at).toLocaleTimeString('en-GB', { hour12: false })}
+                {fmtDateTime(l.started_at)}
               </span>
             </div>
           ))}
@@ -583,7 +584,7 @@ function AlertsTab() {
             }}>
               <span className="dot" style={{ background: h.success ? 'var(--success)' : 'var(--error)', width: 7, height: 7 }} />
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>
-                {new Date(h.sent_at).toLocaleTimeString('en-GB', { hour12: false })}
+                {fmtDateTime(h.sent_at)}
               </span>
               <ProviderBadge provider={h.provider} />
               <span style={{ color: 'var(--muted)' }}>${parseFloat(h.current_value).toFixed(4)} vs limit ${parseFloat(h.threshold_usd).toFixed(2)}</span>
@@ -717,7 +718,7 @@ function TeamTab() {
             {m.invited_by_email && <div style={{ fontSize: 11, color: 'var(--muted)' }}>Invited by {m.invited_by_email}</div>}
           </div>
           <span className="kchip" style={{ textTransform: 'capitalize' }}>{m.role}</span>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>Joined {new Date(m.joined_at).toLocaleDateString()}</span>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>Joined {fmtDate(m.joined_at)}</span>
           {isAdmin && m.id !== user?.id && (
             <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleRemove(m.id, m.email)}>
               Remove
@@ -744,7 +745,7 @@ function TeamTab() {
             }}>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>{inv.email}</span>
               <span className="kchip" style={{ textTransform: 'capitalize' }}>{inv.role}</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Expires {fmtDate(inv.expires_at)}</span>
               <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleCancelInvite(inv.id)}>
                 Cancel
               </button>

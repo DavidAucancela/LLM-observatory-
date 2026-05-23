@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
+import { fmtDateTime, fmtDate } from '../utils/fmt';
 
 // ── Balances tab ──────────────────────────────────────────────
 function BalancesTab() {
@@ -140,7 +141,7 @@ function BalancesTab() {
             <tbody>
               {history.map(h => (
                 <tr key={h.id} style={{ cursor: 'default' }}>
-                  <td className="col-muted col-mono">{new Date(h.recharged_at).toLocaleDateString('en-CA')}</td>
+                  <td className="col-muted col-mono">{fmtDateTime(h.recharged_at)}</td>
                   <td><ProviderBadge provider={h.provider} /></td>
                   <td className="col-num">${parseFloat(h.amount_usd).toFixed(2)}</td>
                   <td className="col-muted">{h.note || '—'}</td>
