@@ -29,7 +29,7 @@ function Nav({ onDashboard }) {
   return (
     <nav className="lp-nav">
       <a className="lp-nav-brand" href="#">
-        <div className="lp-brand-mark">◐</div>
+        <img src="/logoMain.png" alt="Observatory" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
         Observatory
       </a>
       <div className="lp-nav-links">
@@ -509,7 +509,7 @@ function Footer() {
       <div className="lp-footer-cols">
         <div className="lp-footer-col">
           <a className="lp-nav-brand" href="#" style={{ marginBottom: 10, display: 'inline-flex' }}>
-            <div className="lp-brand-mark" style={{ width: 22, height: 22, fontSize: 10 }}>◐</div>
+            <img src="/logoMain.png" alt="Observatory" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'cover' }} />
             LLM Observatory
           </a>
           <p className="lp-footer-tagline">{t('landing.footerTagline')}</p>

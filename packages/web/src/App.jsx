@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
@@ -13,7 +13,6 @@ import Register       from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword  from './pages/ResetPassword';
 import AcceptInvite   from './pages/AcceptInvite';
-import { useApi } from './hooks/useApi';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -37,14 +36,12 @@ function RootRoute() {
 
 function AppShell() {
   const [darkMode, setDarkMode] = useState(
-    () => localStorage.getItem('dark-mode') === 'true'
+    () => localStorage.getItem('dark-mode') !== 'false'
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('sidebar-collapsed') === 'true'
   );
-  const [liveProviders, setLiveProviders] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { apiFetch } = useApi();
 
   const toggleDarkMode = (value) => {
     localStorage.setItem('dark-mode', String(value));
@@ -58,15 +55,6 @@ function AppShell() {
     });
   };
 
-  useEffect(() => {
-    apiFetch('/api/credentials')
-      .then(r => r.json())
-      .then(data => {
-        const providers = [...new Set((data.data || []).map(c => c.provider))];
-        setLiveProviders(providers);
-      })
-      .catch(() => {});
-  }, []);
 
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
@@ -91,7 +79,6 @@ function AppShell() {
         <Sidebar
           darkMode={darkMode}
           setDarkMode={toggleDarkMode}
-          liveProviders={liveProviders}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           collapsed={sidebarCollapsed}

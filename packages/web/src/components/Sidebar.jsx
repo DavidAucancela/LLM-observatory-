@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
@@ -7,7 +7,7 @@ import i18n from '../i18n';
 /* ── Nav icons ── */
 function IconGrid() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -18,7 +18,7 @@ function IconGrid() {
 
 function IconActivity() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
     </svg>
   );
@@ -26,7 +26,7 @@ function IconActivity() {
 
 function IconFinance() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <line x1="12" y1="1" x2="12" y2="23" />
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
     </svg>
@@ -35,7 +35,7 @@ function IconFinance() {
 
 function IconSettings() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
@@ -62,12 +62,40 @@ function IconMoon() {
   );
 }
 
+function IconGlobe() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
 function IconLogout() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function IconUser() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function IconAccount() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
@@ -89,30 +117,21 @@ function IconChevronRight() {
 }
 
 const navDefs = [
-  { to: '/dashboard', labelKey: 'nav.overview', Icon: IconGrid     },
-  { to: '/activity',  labelKey: 'nav.activity',  Icon: IconActivity },
-  { to: '/finance',   labelKey: 'nav.finance',   Icon: IconFinance  },
-  { to: '/settings',  labelKey: 'nav.settings',  Icon: IconSettings },
+  { to: '/dashboard', labelKey: 'nav.overview', descKey: 'nav.overview_desc', Icon: IconGrid     },
+  { to: '/activity',  labelKey: 'nav.activity',  descKey: 'nav.activity_desc', Icon: IconActivity },
+  { to: '/finance',   labelKey: 'nav.finance',   descKey: 'nav.finance_desc',  Icon: IconFinance  },
+  { to: '/settings',  labelKey: 'nav.settings',  descKey: 'nav.settings_desc', Icon: IconSettings },
 ];
 
-const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
-
-function StatusDot({ color, pulse }) {
-  return (
-    <span
-      className={pulse ? 'dot dot-pulse' : 'dot'}
-      style={{ background: color, width: 7, height: 7 }}
-    />
-  );
-}
-
-export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isOpen, onClose, collapsed, onToggleCollapse }) {
+export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const userBlockRef = useRef(null);
 
-  const initials  = user?.email ? user.email[0].toUpperCase() : '?';
   const roleLabel = user?.role === 'admin' ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
+  const isAdmin   = user?.role === 'admin';
 
   const toggleLanguage = () => {
     const next = i18n.language === 'en' ? 'es' : 'en';
@@ -120,11 +139,38 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
     localStorage.setItem('lang', next);
   };
 
+  // Close menu on click outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (userBlockRef.current && !userBlockRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
+  const handleLogout = () => {
+    setMenuOpen(false);
+    logout();
+  };
+
+  const handleTheme = () => {
+    setDarkMode(!darkMode);
+    setMenuOpen(false);
+  };
+
+  const handleLang = () => {
+    toggleLanguage();
+    setMenuOpen(false);
+  };
+
   return (
     <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
       {/* Brand */}
       <div className="obs-brand">
-        <div className="obs-brand-mark">◐</div>
+        <img src="/logoMain.png" alt="Observatory" className="obs-brand-logo" />
         <span className="obs-brand-text">Observatory</span>
         <button
           className="obs-sidebar-toggle"
@@ -137,7 +183,7 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
 
       {/* Nav */}
       <nav className="obs-nav">
-        {navDefs.map(({ to, labelKey, Icon }) => {
+        {navDefs.map(({ to, labelKey, descKey, Icon }) => {
           const label = t(labelKey);
           return (
             <NavLink
@@ -149,7 +195,10 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
               title={collapsed ? label : undefined}
             >
               <span className="obs-nav-icon"><Icon /></span>
-              <span className="obs-nav-label">{label}</span>
+              <span className="obs-nav-body">
+                <span className="obs-nav-label">{label}</span>
+                <span className="obs-nav-desc">{t(descKey)}</span>
+              </span>
             </NavLink>
           );
         })}
@@ -157,75 +206,59 @@ export default function Sidebar({ darkMode, setDarkMode, liveProviders = [], isO
 
       <div className="obs-nav-spacer" />
 
-      {/* Provider status */}
-      <div className="obs-status-block">
-        <div className="obs-status-label">{t('sidebar.providers')}</div>
-        {['anthropic', 'openai'].map(p => {
-          const active = liveProviders.includes(p);
-          return (
-            <div key={p} className="obs-status-row">
-              <StatusDot color={active ? PROVIDER_COLORS[p] : 'var(--faint)'} pulse={active} />
-              <span style={{ color: 'var(--text)', textTransform: 'capitalize' }}>
-                {p === 'openai' ? 'OpenAI' : 'Anthropic'}
-              </span>
-              <span style={{
-                marginLeft: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: active ? 'var(--success)' : 'var(--faint)',
-              }}>
-                {active ? t('sidebar.statusOk') : '--'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
       {/* User block */}
-      <div className="obs-user-block">
-        {user && (
-          <button
-            className="obs-user-info obs-user-info--btn"
-            onClick={() => navigate('/account')}
-            title={t('sidebar.myAccount')}
-          >
-            <div className="obs-user-avatar">{initials}</div>
-            <div className="obs-user-meta">
-              {user.orgName && (
-                <div className="obs-user-org">{user.orgName}</div>
-              )}
-              <div className="obs-user-email">{user.email}</div>
-            </div>
-            <span className="obs-role-badge">{roleLabel}</span>
-          </button>
-        )}
-        <div className="obs-user-actions">
-          <button
-            className="obs-user-action-btn"
-            onClick={() => setDarkMode(!darkMode)}
-            title={darkMode ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
-          >
-            {darkMode ? <IconSun /> : <IconMoon />}
-            <span>{darkMode ? t('sidebar.themeLight') : t('sidebar.themeDark')}</span>
-          </button>
-          <button
-            className="obs-user-action-btn"
-            onClick={toggleLanguage}
-            title={t('sidebar.language')}
-          >
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-              {i18n.language === 'en' ? 'ES' : 'EN'}
-            </span>
-          </button>
-          <button
-            className="obs-user-action-btn obs-user-action-btn--danger"
-            onClick={logout}
-            title={t('sidebar.signOut')}
-          >
-            <IconLogout />
-            <span>{t('sidebar.signOut')}</span>
-          </button>
+      <div className="obs-user-block" ref={userBlockRef}>
+        {/* Collapsed: show user icon only */}
+        <div
+          className="obs-user-icon-collapsed"
+          title={user?.email}
+          onClick={() => navigate('/account')}
+          style={{ cursor: 'pointer' }}
+        >
+          <IconUser />
         </div>
+
+        {/* Expanded: clickable user info + dropdown */}
+        {user && (
+          <>
+            <button
+              className="obs-user-info--btn"
+              onClick={() => setMenuOpen(v => !v)}
+              title={t('sidebar.myAccount')}
+            >
+              <div className="obs-user-text-block">
+                {user.orgName && (
+                  <div className="obs-user-org">{user.orgName}</div>
+                )}
+                <div className="obs-user-email">{user.email}</div>
+              </div>
+              <span className={`obs-role-badge${isAdmin ? ' role-admin' : ''}`}>{roleLabel}</span>
+            </button>
+
+            {menuOpen && (
+              <div className="obs-user-menu">
+                <button className="obs-user-menu-item" onClick={() => { setMenuOpen(false); navigate('/account'); }}>
+                  <IconAccount />
+                  <span>{t('sidebar.myAccount')}</span>
+                </button>
+                <div className="obs-user-menu-sep" />
+                <button className="obs-user-menu-item" onClick={handleTheme}>
+                  {darkMode ? <IconSun /> : <IconMoon />}
+                  <span>{darkMode ? t('sidebar.themeLight') : t('sidebar.themeDark')}</span>
+                </button>
+                <button className="obs-user-menu-item" onClick={handleLang}>
+                  <IconGlobe />
+                  <span>{i18n.language === 'en' ? 'Español' : 'English'}</span>
+                </button>
+                <div className="obs-user-menu-sep" />
+                <button className="obs-user-menu-item obs-user-menu-item--danger" onClick={handleLogout}>
+                  <IconLogout />
+                  <span>{t('sidebar.signOut')}</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </aside>
   );
