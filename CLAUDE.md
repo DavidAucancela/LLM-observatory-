@@ -2,10 +2,11 @@
 
 ## Project Overview
 
-**LLM Observatory** is a multi-tenant SaaS observability platform for monitoring Claude API (and OpenAI) usage in real-time. It provides cost tracking, latency monitoring, token analysis, budget alerts, Discord notifications, team management, and data export with a WebSocket-driven dashboard.
+**LLM Observatory** is a multi-tenant SaaS observability platform for monitoring Claude API (and OpenAI) usage in real-time. It provides cost tracking, latency monitoring, token analysis, budget alerts, Discord notifications, team management, outbound webhooks, and data export with a WebSocket-driven dashboard.
 
-**Monorepo with 3 packages:**
+**Monorepo with 4 packages:**
 - `packages/sdk` — Drop-in Node.js wrapper for Anthropic/OpenAI SDKs
+- `packages/sdk-python` — Drop-in Python wrapper for Anthropic/OpenAI SDKs
 - `packages/api` — Express + PostgreSQL backend with Socket.io
 - `packages/web` — React + Vite + Tailwind frontend dashboard
 
@@ -15,14 +16,15 @@
 
 ```
 User Application
-  └─► MonitoredAnthropic / MonitoredOpenAI  (SDK)
+  └─► MonitoredAnthropic / MonitoredOpenAI  (SDK — Node.js or Python)
       │   Authorization: Bearer obs_sk_xxx   ← Observatory token (org identity)
       ├─► Claude / OpenAI API               (real request, awaited)
       └─► Observatory API                   (async metric POST, fire & forget)
           ├─► org_id resolution             (token hash → org)
           ├─► PostgreSQL                    (persists metrics, scoped by org_id)
           ├─► Socket.io                     (broadcasts to clients)
-          └─► React Dashboard               (WebSocket real-time updates)
+          ├─► React Dashboard               (WebSocket real-time updates)
+          └─► Outbound Webhooks             (HMAC-signed POST to customer URLs, fire & forget)
 ```
 
 **Key principles:**
@@ -124,6 +126,61 @@ new MonitoredAnthropic({
 
 **`api_key_hint` in metrics:** Both wrappers compute `maskKey(apiKey)` in the constructor and include it as `api_key_hint` in every metric POST. This links each `api_calls` record to the credential that generated it.
 
+---
+
+### `packages/sdk-python`
+
+**Entry point:** `llm_observatory/__init__.py`
+
+**Exports:**
+- `MonitoredAnthropic`, `AsyncMonitoredAnthropic` — Wraps `anthropic.Anthropic` / `anthropic.AsyncAnthropic`
+- `MonitoredOpenAI`, `AsyncMonitoredOpenAI` — Wraps `openai.OpenAI` / `openai.AsyncOpenAI`
+- `calculate_cost()`, `calculate_openai_cost()` — Pricing helpers
+- `ANTHROPIC_PRICING`, `OPENAI_PRICING` — Pricing tables
+
+**Install:**
+```bash
+pip install -e packages/sdk-python              # Anthropic only
+pip install -e "packages/sdk-python[openai]"    # With OpenAI support
+```
+
+**Constructor options (all 4 classes share the same signature):**
+```python
+MonitoredAnthropic(
+    api_key="sk-ant-...",           # Optional — falls back to ANTHROPIC_API_KEY env var
+    observatory_url="http://localhost:3001",
+    observatory_token="obs_sk_...", # Required for multi-tenant mode
+    tags={"env": "prod"},           # Optional key-value metadata
+    # Any other kwargs forwarded to anthropic.Anthropic()
+)
+```
+
+**Fire-and-forget mechanism:**
+- Sync classes: spawn daemon thread (`threading.Thread(daemon=True)`)
+- Async classes: `loop.run_in_executor(None, ...)` — never blocks the event loop
+- Both: 1 retry after 1s on failure, 5s timeout per attempt
+
+**Metric payload:** same shape as Node.js SDK, including:
+- `cache_read_tokens` / `cache_write_tokens` — from `usage.cache_read_input_tokens` / `usage.cache_creation_input_tokens`
+- `error_type` — classified by `classify_error()`: `auth_error`, `rate_limit`, `invalid_request`, `network_error`, `timeout`, `server_error`, `unknown_error`
+- `error_message` — raw exception message, truncated to 500 chars
+
+**Key files:**
+```
+llm_observatory/
+├── __init__.py      Exports
+├── anthropic.py     MonitoredAnthropic + AsyncMonitoredAnthropic
+├── openai.py        MonitoredOpenAI + AsyncMonitoredOpenAI
+├── _utils.py        _post_metric(), send_metric_background(), classify_error(), mask_key()
+└── _pricing.py      Pricing tables (keep in sync with Node.js SDK)
+```
+
+**Tests:**
+```bash
+cd packages/sdk-python
+pytest tests/ -v
+```
+
 ### `packages/api`
 
 **Entry point:** `src/index.js`
@@ -135,7 +192,7 @@ src/
 ├── db/
 │   ├── pool.js         PostgreSQL connection pool
 │   ├── schema.sql      Table definitions + indexes + multi-tenancy backfill
-│   ├── migrate.js      Runs schema.sql
+│   ├── migrate.js      Runs schema.sql (also runs automatically on Docker container start)
 │   ├── seed.js         600 demo records (org-scoped)
 │   └── crypto.js       AES-256-CBC encrypt/decrypt for API keys
 ├── middleware/
@@ -149,9 +206,11 @@ src/
 │   ├── alerts.js       Alert rules + Discord webhooks (org-scoped)
 │   ├── sync.js         Historical data sync from provider APIs (org-scoped)
 │   ├── tokens.js       Observatory token CRUD (create/list/revoke)
-│   └── team.js         Team member management + email invitations
+│   ├── team.js         Team member management + email invitations
+│   └── webhooks.js     Outbound webhook endpoints CRUD + test delivery
 ├── services/
-│   └── email.js        Resend integration: activation, password reset, invitations
+│   ├── email.js        Resend integration: activation, password reset, invitations
+│   └── webhooks.js     deliverWebhooks() — HMAC-SHA256 signed POST, fire-and-forget
 └── jobs/
     └── alertChecker.js Hourly cron: check spend per org → Discord alerts
 ```
@@ -172,6 +231,7 @@ Tenant-scoped tables (existing, all have `org_id`):
 - `alert_rules` — Discord alert configs with thresholds, `org_id`
 - `alert_history` — Alert audit log, `org_id`
 - `sync_logs` — Data sync history, `org_id`
+- `webhook_endpoints` — Outbound webhook URLs with HMAC secret. Columns: `org_id`, `name`, `url`, `secret` (plaintext, not hashed), `events` (TEXT[] default `{metric.created}`), `is_active`. Secret shown once on creation, never again. Partial index on `(org_id) WHERE is_active = true`.
 
 Auth tables:
 - `users` — Accounts with bcrypt passwords. Columns: `email`, `password_hash`, `is_active`, `activation_token`, `reset_token`, `reset_token_expires`
@@ -204,7 +264,7 @@ Auth tables:
 - `/` → `Dashboard.jsx` — KPI strip con sparklines, MultiLineChart tokens over time, provider breakdown, proyección mensual
 - `/activity` → `Activity.jsx` — Tab **Requests** (tabla paginada, filtros, drawer, CSV export) + Tab **Models** (HBar chart, tabla comparativa)
 - `/finance` → `Finance.jsx` — Tab **Balances** (saldo por provider, historial recargas) + Tab **Budgets** (límites de gasto con progress bars)
-- `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord) + Tab **Team** (members + invitations + Observatory tokens)
+- `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord) + Tab **Webhooks** (outbound endpoints) + Tab **Team** (members + invitations + Observatory tokens)
 
 **Public pages (outside ProtectedRoute):**
 - `/login` → `Login.jsx`
@@ -218,7 +278,7 @@ Auth tables:
 **Páginas que ya no están en rutas** (archivos existen pero sin ruta): `Requests.jsx`, `Models.jsx`, `Providers.jsx`, `Budgets.jsx`
 
 **Key components:**
-- `Sidebar.jsx` — 220px fijo, 4 nav items, indicador borde izquierdo, provider status con dots pulsantes, sin collapse
+- `Sidebar.jsx` — 220px fijo, colapsable a 64px. Nav items con icono 18px + label + subtítulo descriptivo. User block (sin avatar): org + email + role badge; click abre dropdown con Mi cuenta / Tema / Idioma / Logout. Sin sección de proveedores. Props: `darkMode`, `setDarkMode`, `isOpen`, `onClose`, `collapsed`, `onToggleCollapse`.
 - `ProviderBadge.jsx` — dot cuadrado amber/green. Props: `provider` (lowercase), `size` (`sm`|`lg`)
 - `RequestDrawer.jsx` — Panel derecho con metadata, token breakdown, prompt preview
 - `Sparkline.jsx` — SVG sparkline inline (sin Recharts)
@@ -228,6 +288,7 @@ Auth tables:
 
 **Settings.jsx internal components:**
 - `ObservatoryTokensSection` — Create/list/revoke `obs_sk_` tokens; shows full token once on creation with copy button
+- `WebhooksTab` — Create/list/delete outbound webhook endpoints; shows secret once on creation with copy button; Test button sends sample payload
 - `TeamTab` — Invite by email, list members with role badges, remove members, cancel pending invitations
 
 **Auth context (`auth/AuthProvider.jsx`):**
@@ -237,6 +298,14 @@ Auth tables:
 **Real-time pattern:** `useSocket` hook listens for `new-metric` event → triggers summary refetch.
 
 **Sistema de diseño:** CSS custom properties en `index.css` — NO usar clase `dark` de Tailwind. Usar `.theme-light` / `.theme-dark` en el div raíz. Variables: `--page`, `--surface`, `--border`, `--text`, `--muted`, `--accent`, `--anthropic`, `--openai`. Fuentes: Inter (sans) + JetBrains Mono (mono via `var(--font-mono)`).
+
+**Paleta de colores (alineada al logo):**
+- Dark mode: navy profundo — `--d-page: #080D1A`, `--d-surface: #0D1628`, `--d-accent: #06B6D4` (cyan)
+- Light mode: `--l-accent: #0891B2` (cyan-600)
+- Metric colors: `--tokens-color: #06B6D4`, `--cost-color: #7C3AED`, `--latency-color: #F59E0B`
+- Dark mode es el default para nuevos usuarios (`localStorage.getItem('dark-mode') !== 'false'`)
+
+**Logo:** `packages/web/public/logoMain.png` — referenciado como `/logoMain.png` en Sidebar, Login, Register, LandingPage. Clase `.obs-brand-logo` (28×28px, border-radius 6px, object-fit cover). También usado como favicon en `index.html`.
 
 **Layout obligatorio por página:**
 ```jsx
@@ -295,6 +364,20 @@ Auth tables:
 | `/api/metrics/export` | GET | JWT | CSV download |
 | `/api/metrics/:id` | GET | JWT | Single metric detail |
 
+### Webhooks (outbound delivery)
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/webhooks` | GET | JWT | List org's webhook endpoints (secret shown as `…xxxx` hint) |
+| `/api/webhooks` | POST | JWT | Create endpoint — returns secret once in full |
+| `/api/webhooks/:id` | DELETE | JWT | Delete endpoint |
+| `/api/webhooks/:id/test` | POST | JWT | Send test payload (`webhook.test` event) |
+
+**Webhook delivery:** After every `POST /api/metrics` insert, `deliverWebhooks(orgId, 'metric.created', row)` fires for all active endpoints of the org. Each POST includes headers:
+- `X-Observatory-Signature: sha256=<hmac-hex>` — HMAC-SHA256 of the full JSON body using the endpoint secret
+- `X-Observatory-Event: metric.created`
+
+Delivery is fire-and-forget with 1 retry after 1s. Failures are silent (metric already saved).
+
 ### Other resources (all JWT, all org-scoped)
 | Route | Method | Description |
 |-------|--------|-------------|
@@ -331,6 +414,8 @@ docker-compose up -d --build
 
 Services: `postgres:16`, `api` (Node 20 Alpine), `web` (Nginx with multi-stage build).
 
+**Auto-migrate on start:** The API Dockerfile CMD runs `node src/db/migrate.js && node src/index.js` — schema migrations run automatically on every container start. All DDL uses `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ADD COLUMN IF NOT EXISTS` so it is idempotent.
+
 The web Dockerfile uses `entrypoint.sh` for runtime environment variable substitution in nginx config. `entrypoint.sh` also reads the DNS resolver from `/etc/resolv.conf` at container start and injects it as `${RESOLVER}` into the nginx template — this allows nginx to re-resolve `api.railway.internal` dynamically on each request (IPv6 nameservers are wrapped in `[brackets]` automatically).
 
 ---
@@ -357,6 +442,9 @@ The web Dockerfile uses `entrypoint.sh` for runtime environment variable substit
 - **Zod validation:** All POST body inputs validated with Zod schemas in route files.
 - **Async DB ops:** All database operations use async/await with the pg pool.
 - **Socket.io broadcast:** After inserting a metric, always `io.emit('new-metric', metric)` so dashboards update in real-time.
+- **Webhook delivery after metric insert:** After the socket.io emit, always call `deliverWebhooks(req.user.orgId, 'metric.created', row).catch(() => {})`. Never await it. Import from `../services/webhooks`.
+- **Webhook secret:** Generated server-side as `crypto.randomBytes(32).toString('hex')`. Stored in plaintext in `webhook_endpoints.secret` (unlike observatory tokens which store only the hash). Shown once on creation, never returned again by the API.
+- **Webhook signature verification (receiver side):** `HMAC-SHA256(secret, JSON.stringify(payload))` — compare against `X-Observatory-Signature` header after stripping `sha256=` prefix.
 - **Time zone:** All timestamps stored as `TIMESTAMPTZ`. Always use timezone-aware comparisons.
 - **Cost precision:** Use `DECIMAL(10,6)` for costs. Don't round until display layer.
 - **Encryption key:** Default key exists in code but should always be overridden via `ENCRYPTION_KEY` env var in production.
@@ -367,6 +455,8 @@ The web Dockerfile uses `entrypoint.sh` for runtime environment variable substit
 - **Dark mode:** Use `theme-light` / `theme-dark` CSS classes (CSS custom properties), NOT Tailwind's `dark` class strategy. The App.jsx shell applies `className={darkMode ? 'theme-dark' : 'theme-light'}` on the root div.
 - **New page pattern:** Every new page must render `<main className="obs-main">` with `obs-header` + `obs-content` children. Use `obs-tabbar` + `obs-tab` for sub-navigation within a page.
 - **CSS classes:** Use `.obs-btn`, `.obs-btn-primary`, `.obs-table`, `.obs-section-label`, `.obs-field`, `.obs-input`, `.obs-select`, `.kchip`, `.vbadge`, `.tsw`, `.iprog-bar/.iprog-fill`, `.dot/.dot-pulse` from `index.css`. Do not create new Tailwind utility classes for these patterns.
+
+Sidebar-specific classes: `.obs-brand-logo` (logo img), `.obs-nav-body` (flex column container for label+desc), `.obs-nav-desc` (subtitle 10px), `.obs-user-menu` (dropdown absolute above user block), `.obs-user-menu-item` (action row), `.obs-user-menu-item--danger` (red hover), `.obs-user-menu-sep` (divider), `.obs-role-badge.role-admin` (cyan accent color), `.obs-user-icon-collapsed` (user icon shown in collapsed state).
 - **Role checks:** `requireAdmin` middleware blocks non-admins and observatory tokens. For frontend-only role gating, read `user.role` from `useAuth()`. Admins can invite/remove members and manage tokens.
 
 ---
@@ -384,7 +474,6 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 
 ## Known Limitations / Production Considerations
 
-- Rate limiting not implemented on metrics ingestion — add nginx limit or Express middleware in production
 - HTTPS not enforced in code (delegate to reverse proxy)
 - CORS allows all origins (`*`) — restrict in production
 - Alert debounce is 6h — cannot be configured per rule
@@ -392,6 +481,7 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 - No superadmin panel — org management done directly in DB for now
 - Observatory tokens do not expire automatically — revoke manually via Settings or `DELETE /api/tokens/:id`
 - `AUTH_EMAIL` / `AUTH_PASSWORD_HASH` env vars still supported for legacy single-admin bootstrapping; on startup the API creates an org + org_member for that user if none exists
+- Webhook delivery has no retry queue or delivery log — failures are silently swallowed after 1 retry. For production, consider adding a `webhook_deliveries` audit table.
 
 ---
 
@@ -406,6 +496,8 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 ### Medium-term
 - [x] Cache hit rate tracking — `cache_read_tokens` + `cache_write_tokens` in DB, SDK, API and UI drawer
 - [x] Error capture — `error_message` in DB, SDK, API; filter in Activity tab (status=error/success)
+- [x] Python SDK (`packages/sdk-python`) — `observatory_token` auth, cache tracking, `error_type` classification, sync/async variants
+- [x] Webhook delivery for metric events (outbound to customer systems) — HMAC-signed, fire-and-forget, Settings UI
 - [ ] Superadmin panel — cross-org visibility for platform operators
 - [ ] Per-org usage quotas — hard limits on metrics volume
 - [ ] Audit log — record sensitive actions (member added/removed, token revoked, key deleted)
@@ -415,5 +507,4 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 ### Long-term / SaaS
 - [ ] Billing integration (Stripe) — free tier + paid plans per org
 - [ ] Self-serve org deletion with data purge
-- [ ] Python SDK (`packages/sdk-python`) — stub exists, needs full implementation
-- [ ] Webhook delivery for metric events (outbound to customer systems)
+- [ ] Webhook delivery log — `webhook_deliveries` table for audit trail and retry visibility
