@@ -1,6 +1,7 @@
 const express = require('express');
 const { z } = require('zod');
 const pool = require('../db/pool');
+const { deliverWebhooks } = require('../services/webhooks');
 
 const router = express.Router();
 
@@ -50,6 +51,7 @@ router.post('/', async (req, res) => {
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
+    deliverWebhooks(req.user.orgId, 'metric.created', result.rows[0]).catch(() => {});
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });

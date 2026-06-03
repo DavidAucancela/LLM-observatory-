@@ -248,3 +248,17 @@ BEGIN
     UPDATE sync_logs            SET org_id = v_org_id WHERE org_id IS NULL;
   END IF;
 END $$;
+
+-- ── Webhook endpoints (outbound delivery) ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+  id          SERIAL PRIMARY KEY,
+  org_id      INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name        VARCHAR(100) NOT NULL,
+  url         TEXT NOT NULL,
+  secret      TEXT NOT NULL,
+  events      TEXT[] NOT NULL DEFAULT '{metric.created}',
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org
+  ON webhook_endpoints(org_id) WHERE is_active = true;

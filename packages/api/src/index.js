@@ -30,6 +30,7 @@ const alertsRouter      = require('./routes/alerts');
 const syncRouter        = require('./routes/sync');
 const tokensRouter      = require('./routes/tokens');
 const teamRouter        = require('./routes/team');
+const webhooksRouter    = require('./routes/webhooks');
 const { checkAlerts }   = require('./jobs/alertChecker');
 
 const app = express();
@@ -84,6 +85,7 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/tokens', tokensRouter);
 app.use('/api/team', teamRouter);
+app.use('/api/webhooks', webhooksRouter);
 
 // ── 404 handler — must be after all routes ────────────────────────────────────
 app.use((req, res) => {

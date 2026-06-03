@@ -625,6 +625,176 @@ function AlertsTab() {
   );
 }
 
+// ── Webhooks tab ──────────────────────────────────────────────
+function WebhooksTab() {
+  const { apiFetch } = useApi();
+  const { user }     = useAuth();
+  const { t }        = useTranslation();
+  const isAdmin = user?.role === 'admin';
+
+  const [items,     setItems]     = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [showForm,  setShowForm]  = useState(false);
+  const [form,      setForm]      = useState({ name: '', url: '' });
+  const [saving,    setSaving]    = useState(false);
+  const [newSecret, setNewSecret] = useState(null);
+  const [copied,    setCopied]    = useState(false);
+  const [testState, setTestState] = useState({});
+
+  const fetchItems = async () => {
+    try {
+      const res = await apiFetch('/api/webhooks');
+      const d = await res.json();
+      setItems(d.webhooks || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { fetchItems(); }, []);
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.url.trim()) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/webhooks', {
+        method: 'POST',
+        body: JSON.stringify({ name: form.name.trim(), url: form.url.trim(), events: ['metric.created'] }),
+      });
+      const d = await res.json();
+      if (!res.ok) return;
+      setNewSecret(d.secret || null);
+      setShowForm(false);
+      setForm({ name: '', url: '' });
+      fetchItems();
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Delete webhook "${name}"?`)) return;
+    await apiFetch(`/api/webhooks/${id}`, { method: 'DELETE' });
+    fetchItems();
+  };
+
+  const handleTest = async (id) => {
+    setTestState(s => ({ ...s, [id]: 'testing' }));
+    try {
+      const res = await apiFetch(`/api/webhooks/${id}/test`, { method: 'POST' });
+      const d = await res.json();
+      setTestState(s => ({ ...s, [id]: d.success ? 'ok' : 'fail' }));
+      setTimeout(() => setTestState(s => { const n = { ...s }; delete n[id]; return n; }), 3000);
+    } catch {
+      setTestState(s => ({ ...s, [id]: 'fail' }));
+      setTimeout(() => setTestState(s => { const n = { ...s }; delete n[id]; return n; }), 3000);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(newSecret).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <>
+      {newSecret && (
+        <div style={{
+          background: 'color-mix(in oklab, var(--success, #22c55e) 8%, transparent)',
+          border: '1px solid color-mix(in oklab, var(--success, #22c55e) 30%, transparent)',
+          borderRadius: 6, padding: '10px 14px', marginBottom: 14,
+          fontSize: 12, display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ color: 'var(--muted)', flexShrink: 0 }}>{t('settings.webhooks.secretBanner')}</span>
+          <code style={{ fontFamily: 'var(--font-mono)', flex: 1, wordBreak: 'break-all', fontSize: 11 }}>{newSecret}</code>
+          <button className="obs-btn obs-btn-sm" onClick={handleCopy}>
+            {copied ? '✓' : t('common.copy', 'Copy')}
+          </button>
+          <button className="obs-btn obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => setNewSecret(null)}>✕</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div className="obs-section-label">{t('settings.webhooks.title')}</div>
+        {isAdmin && (
+          <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>
+            {t('settings.webhooks.addButton')}
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+            <div className="obs-field">
+              <label>{t('settings.webhooks.nameLabel')}</label>
+              <input
+                className="obs-input"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="My system"
+              />
+            </div>
+            <div className="obs-field">
+              <label>{t('settings.webhooks.urlLabel')}</label>
+              <input
+                className="obs-input"
+                value={form.url}
+                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                placeholder="https://example.com/webhook"
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+            <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={saving} onClick={handleSave}>
+              {saving ? '…' : t('common.save')}
+            </button>
+            <button className="obs-btn obs-btn-sm" onClick={() => { setShowForm(false); setForm({ name: '', url: '' }); }}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="obs-skeleton" style={{ height: 40, borderRadius: 4 }} />
+      ) : items.length === 0 && !showForm ? (
+        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>
+          {t('settings.webhooks.noWebhooks')}
+        </div>
+      ) : items.map(wh => (
+        <div key={wh.id} style={{
+          display: 'grid', gridTemplateColumns: '140px 1fr 80px auto auto',
+          gap: 12, alignItems: 'center', padding: '11px 0',
+          borderBottom: '1px solid var(--border-soft)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {wh.name}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {wh.url.length > 50 ? wh.url.slice(0, 50) + '…' : wh.url}
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {(wh.events || []).map(ev => (
+              <span key={ev} className="kchip">{ev}</span>
+            ))}
+          </div>
+          <button
+            className="obs-btn obs-btn-sm"
+            disabled={testState[wh.id] === 'testing'}
+            onClick={() => handleTest(wh.id)}
+            style={testState[wh.id] === 'ok' ? { color: 'var(--success, #22c55e)' } : testState[wh.id] === 'fail' ? { color: 'var(--error, #ef4444)' } : {}}
+          >
+            {testState[wh.id] === 'testing' ? '…' : testState[wh.id] === 'ok' ? '✓' : testState[wh.id] === 'fail' ? '✗' : t('settings.webhooks.testButton')}
+          </button>
+          {isAdmin && (
+            <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleDelete(wh.id, wh.name)}>
+              {t('common.delete')}
+            </button>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 // ── Team tab ──────────────────────────────────────────────────
 function TeamTab() {
   const { apiFetch } = useApi();
@@ -809,14 +979,16 @@ export default function Settings() {
         <div className="obs-tabbar">
           <button className={`obs-tab${tab === 'keys'   ? ' active' : ''}`} onClick={() => setTab('keys')}>{t('settings.keysTab')}</button>
           <button className={`obs-tab${tab === 'sync'   ? ' active' : ''}`} onClick={() => setTab('sync')}>{t('settings.syncTab')}</button>
-          <button className={`obs-tab${tab === 'alerts' ? ' active' : ''}`} onClick={() => setTab('alerts')}>{t('settings.alertsTab')}</button>
-          <button className={`obs-tab${tab === 'team'   ? ' active' : ''}`} onClick={() => setTab('team')}>{t('settings.teamTab')}</button>
+          <button className={`obs-tab${tab === 'alerts'   ? ' active' : ''}`} onClick={() => setTab('alerts')}>{t('settings.alertsTab')}</button>
+          <button className={`obs-tab${tab === 'webhooks' ? ' active' : ''}`} onClick={() => setTab('webhooks')}>{t('settings.webhooksTab')}</button>
+          <button className={`obs-tab${tab === 'team'     ? ' active' : ''}`} onClick={() => setTab('team')}>{t('settings.teamTab')}</button>
         </div>
 
         {tab === 'keys'   && <KeysTab />}
         {tab === 'sync'   && <SyncTab />}
-        {tab === 'alerts' && <AlertsTab />}
-        {tab === 'team'   && <TeamTab />}
+        {tab === 'alerts'   && <AlertsTab />}
+        {tab === 'webhooks' && <WebhooksTab />}
+        {tab === 'team'     && <TeamTab />}
       </div>
     </main>
   );
