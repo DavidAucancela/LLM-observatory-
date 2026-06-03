@@ -46,7 +46,7 @@ export default function Register() {
 
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-          <div className="obs-brand-mark" style={{ width: 22, height: 22, fontSize: 12 }}>◐</div>
+          <img src="/logoMain.png" alt="Observatory" className="obs-brand-logo" style={{ width: 26, height: 26 }} />
           <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.brand')}</span>
         </div>
 

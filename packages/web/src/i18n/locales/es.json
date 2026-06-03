@@ -1,9 +1,13 @@
 {
   "nav": {
     "overview": "Resumen",
+    "overview_desc": "KPIs y métricas en tiempo real",
     "activity": "Actividad",
+    "activity_desc": "Llamadas, modelos y exportación",
     "finance": "Finanzas",
-    "settings": "Ajustes"
+    "finance_desc": "Balances, presupuestos y alertas",
+    "settings": "Ajustes",
+    "settings_desc": "Claves, equipo y webhooks"
   },
   "sidebar": {
     "providers": "Proveedores",
@@ -259,6 +263,7 @@
     "keysTab": "Claves",
     "syncTab": "Sincronización",
     "alertsTab": "Alertas",
+    "webhooksTab": "Webhooks",
     "teamTab": "Equipo",
     "keys": {
       "sdkTitle": "Claves SDK",
@@ -317,6 +322,17 @@
       "testSuccess": "Enviado a Discord ✓",
       "testError": "Error al enviar",
       "recentAlerts": "Alertas recientes"
+    },
+    "webhooks": {
+      "title": "Endpoints de Webhook",
+      "addButton": "+ Agregar Webhook",
+      "nameLabel": "Nombre",
+      "urlLabel": "URL del endpoint",
+      "noWebhooks": "No hay webhooks configurados. Agrega uno para recibir eventos de métricas.",
+      "secretBanner": "Secret (se muestra una vez — cópialo ahora):",
+      "testButton": "Probar",
+      "testSuccess": "Webhook de prueba enviado correctamente",
+      "testFailed": "Error al enviar la prueba"
     },
     "team": {
       "orgLabel": "Organización",

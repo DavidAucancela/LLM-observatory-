@@ -1,9 +1,13 @@
 {
   "nav": {
     "overview": "Overview",
+    "overview_desc": "KPIs and real-time metrics",
     "activity": "Activity",
+    "activity_desc": "Requests, models and export",
     "finance": "Finance",
-    "settings": "Settings"
+    "finance_desc": "Balances, budgets and alerts",
+    "settings": "Settings",
+    "settings_desc": "Keys, team and webhooks"
   },
   "sidebar": {
     "providers": "Providers",
@@ -259,6 +263,7 @@
     "keysTab": "Keys",
     "syncTab": "Sync",
     "alertsTab": "Alerts",
+    "webhooksTab": "Webhooks",
     "teamTab": "Team",
     "keys": {
       "sdkTitle": "SDK Keys",
@@ -317,6 +322,17 @@
       "testSuccess": "Sent to Discord ✓",
       "testError": "Error sending",
       "recentAlerts": "Recent alerts"
+    },
+    "webhooks": {
+      "title": "Webhook Endpoints",
+      "addButton": "+ Add Webhook",
+      "nameLabel": "Name",
+      "urlLabel": "Endpoint URL",
+      "noWebhooks": "No webhooks configured. Add one to receive metric events.",
+      "secretBanner": "Secret (shown once — copy it now):",
+      "testButton": "Test",
+      "testSuccess": "Test webhook sent successfully",
+      "testFailed": "Test failed"
     },
     "team": {
       "orgLabel": "Organization",
