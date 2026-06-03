@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Iterator
 
 from ._pricing import calculate_openai_cost
 from ._utils import (
+    classify_error,
     extract_prompt_preview,
     mask_key,
     send_metric_background,
@@ -44,20 +45,24 @@ class _CompletionsProxy:
         input_t  = getattr(usage, "prompt_tokens",     0) if usage else 0
         output_t = getattr(usage, "completion_tokens", 0) if usage else 0
 
-        send_metric_background(self._w._observatory_url, {
-            "provider":      "openai",
-            "model":         params["model"],
-            "input_tokens":  input_t,
-            "output_tokens": output_t,
-            "total_tokens":  input_t + output_t,
-            "cost_usd":      calculate_openai_cost(params["model"], input_t, output_t),
-            "latency_ms":    int((time.perf_counter() - start) * 1000),
-            "status_code":   status_code,
-            "tools_used":    tools,
+        metric = {
+            "provider":       "openai",
+            "model":          params["model"],
+            "input_tokens":   input_t,
+            "output_tokens":  output_t,
+            "total_tokens":   input_t + output_t,
+            "cost_usd":       calculate_openai_cost(params["model"], input_t, output_t),
+            "latency_ms":     int((time.perf_counter() - start) * 1000),
+            "status_code":    status_code,
+            "tools_used":     tools,
             "prompt_preview": prompt_preview,
-            "tags":          self._w._tags,
-            "api_key_hint":  self._w._api_key_hint,
-        })
+            "tags":           self._w._tags,
+            "api_key_hint":   self._w._api_key_hint,
+        }
+        if error:
+            metric.update(classify_error(error))
+
+        send_metric_background(self._w._observatory_url, metric, token=self._w._observatory_token)
 
         if error:
             raise error
@@ -79,14 +84,16 @@ class _CompletionsProxy:
         try:
             raw_stream = self._w._client.chat.completions.create(**stream_params)
         except Exception as err:
-            send_metric_background(self._w._observatory_url, {
+            metric = {
                 "provider": "openai", "model": params["model"],
                 "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0,
                 "latency_ms": int((time.perf_counter() - start) * 1000),
                 "status_code": getattr(err, "status_code", 500) or 500,
                 "tools_used": tools, "prompt_preview": prompt_preview,
                 "tags": self._w._tags, "api_key_hint": self._w._api_key_hint,
-            })
+                **classify_error(err),
+            }
+            send_metric_background(self._w._observatory_url, metric, token=self._w._observatory_token)
             raise
 
         return self._stream_generator(raw_stream, params, start, prompt_preview, tools)
@@ -109,19 +116,19 @@ class _CompletionsProxy:
                 yield chunk
         finally:
             send_metric_background(self._w._observatory_url, {
-                "provider":      "openai",
-                "model":         params["model"],
-                "input_tokens":  input_t,
-                "output_tokens": output_t,
-                "total_tokens":  input_t + output_t,
-                "cost_usd":      calculate_openai_cost(params["model"], input_t, output_t),
-                "latency_ms":    int((time.perf_counter() - start) * 1000),
-                "status_code":   200,
-                "tools_used":    tools,
+                "provider":       "openai",
+                "model":          params["model"],
+                "input_tokens":   input_t,
+                "output_tokens":  output_t,
+                "total_tokens":   input_t + output_t,
+                "cost_usd":       calculate_openai_cost(params["model"], input_t, output_t),
+                "latency_ms":     int((time.perf_counter() - start) * 1000),
+                "status_code":    200,
+                "tools_used":     tools,
                 "prompt_preview": prompt_preview,
-                "tags":          self._w._tags,
-                "api_key_hint":  self._w._api_key_hint,
-            })
+                "tags":           self._w._tags,
+                "api_key_hint":   self._w._api_key_hint,
+            }, token=self._w._observatory_token)
 
 
 class _ChatProxy:
@@ -137,6 +144,7 @@ class MonitoredOpenAI:
         *,
         api_key: str | None = None,
         observatory_url: str = "http://localhost:3001",
+        observatory_token: str | None = None,
         tags: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -149,11 +157,12 @@ class MonitoredOpenAI:
             ) from e
 
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY", "")
-        self._observatory_url = observatory_url
-        self._tags = tags or {}
-        self._api_key_hint = mask_key(resolved_key)
-        self._client = _OpenAI(api_key=api_key, **kwargs)
-        self.chat = _ChatProxy(self)
+        self._observatory_url   = observatory_url
+        self._observatory_token = observatory_token
+        self._tags              = tags or {}
+        self._api_key_hint      = mask_key(resolved_key)
+        self._client            = _OpenAI(api_key=api_key, **kwargs)
+        self.chat               = _ChatProxy(self)
 
 
 # ---------------------------------------------------------------------------
@@ -189,20 +198,24 @@ class _AsyncCompletionsProxy:
         input_t  = getattr(usage, "prompt_tokens",     0) if usage else 0
         output_t = getattr(usage, "completion_tokens", 0) if usage else 0
 
-        await send_metric_background_async(self._w._observatory_url, {
-            "provider":      "openai",
-            "model":         params["model"],
-            "input_tokens":  input_t,
-            "output_tokens": output_t,
-            "total_tokens":  input_t + output_t,
-            "cost_usd":      calculate_openai_cost(params["model"], input_t, output_t),
-            "latency_ms":    int((time.perf_counter() - start) * 1000),
-            "status_code":   status_code,
-            "tools_used":    tools,
+        metric = {
+            "provider":       "openai",
+            "model":          params["model"],
+            "input_tokens":   input_t,
+            "output_tokens":  output_t,
+            "total_tokens":   input_t + output_t,
+            "cost_usd":       calculate_openai_cost(params["model"], input_t, output_t),
+            "latency_ms":     int((time.perf_counter() - start) * 1000),
+            "status_code":    status_code,
+            "tools_used":     tools,
             "prompt_preview": prompt_preview,
-            "tags":          self._w._tags,
-            "api_key_hint":  self._w._api_key_hint,
-        })
+            "tags":           self._w._tags,
+            "api_key_hint":   self._w._api_key_hint,
+        }
+        if error:
+            metric.update(classify_error(error))
+
+        await send_metric_background_async(self._w._observatory_url, metric, token=self._w._observatory_token)
 
         if error:
             raise error
@@ -223,14 +236,16 @@ class _AsyncCompletionsProxy:
         try:
             raw_stream = await self._w._client.chat.completions.create(**stream_params)
         except Exception as err:
-            await send_metric_background_async(self._w._observatory_url, {
+            metric = {
                 "provider": "openai", "model": params["model"],
                 "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0,
                 "latency_ms": int((time.perf_counter() - start) * 1000),
                 "status_code": getattr(err, "status_code", 500) or 500,
                 "tools_used": tools, "prompt_preview": prompt_preview,
                 "tags": self._w._tags, "api_key_hint": self._w._api_key_hint,
-            })
+                **classify_error(err),
+            }
+            await send_metric_background_async(self._w._observatory_url, metric, token=self._w._observatory_token)
             raise
 
         return self._stream_generator(raw_stream, params, start, prompt_preview, tools)
@@ -253,19 +268,19 @@ class _AsyncCompletionsProxy:
                 yield chunk
         finally:
             await send_metric_background_async(self._w._observatory_url, {
-                "provider":      "openai",
-                "model":         params["model"],
-                "input_tokens":  input_t,
-                "output_tokens": output_t,
-                "total_tokens":  input_t + output_t,
-                "cost_usd":      calculate_openai_cost(params["model"], input_t, output_t),
-                "latency_ms":    int((time.perf_counter() - start) * 1000),
-                "status_code":   200,
-                "tools_used":    tools,
+                "provider":       "openai",
+                "model":          params["model"],
+                "input_tokens":   input_t,
+                "output_tokens":  output_t,
+                "total_tokens":   input_t + output_t,
+                "cost_usd":       calculate_openai_cost(params["model"], input_t, output_t),
+                "latency_ms":     int((time.perf_counter() - start) * 1000),
+                "status_code":    200,
+                "tools_used":     tools,
                 "prompt_preview": prompt_preview,
-                "tags":          self._w._tags,
-                "api_key_hint":  self._w._api_key_hint,
-            })
+                "tags":           self._w._tags,
+                "api_key_hint":   self._w._api_key_hint,
+            }, token=self._w._observatory_token)
 
 
 class _AsyncChatProxy:
@@ -281,6 +296,7 @@ class AsyncMonitoredOpenAI:
         *,
         api_key: str | None = None,
         observatory_url: str = "http://localhost:3001",
+        observatory_token: str | None = None,
         tags: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -293,8 +309,9 @@ class AsyncMonitoredOpenAI:
             ) from e
 
         resolved_key = api_key or os.environ.get("OPENAI_API_KEY", "")
-        self._observatory_url = observatory_url
-        self._tags = tags or {}
-        self._api_key_hint = mask_key(resolved_key)
-        self._client = _AsyncOpenAI(api_key=api_key, **kwargs)
-        self.chat = _AsyncChatProxy(self)
+        self._observatory_url   = observatory_url
+        self._observatory_token = observatory_token
+        self._tags              = tags or {}
+        self._api_key_hint      = mask_key(resolved_key)
+        self._client            = _AsyncOpenAI(api_key=api_key, **kwargs)
+        self.chat               = _AsyncChatProxy(self)
