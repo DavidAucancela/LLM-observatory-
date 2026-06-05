@@ -86,3 +86,31 @@ describe('GET /api/auth/me', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('POST /api/auth/logout', () => {
+  it('returns 200 and subsequent requests with the same token return 401', async () => {
+    const { email, password } = await createOrg('Logout Test');
+    // Login to get a fresh JWT with jti claim
+    const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+    expect(loginRes.status).toBe(200);
+    const token = loginRes.body.token;
+
+    // Token works before logout
+    const before = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(before.status).toBe(200);
+
+    // Logout — server adds jti to blacklist
+    const logoutRes = await request(app).post('/api/auth/logout').set('Authorization', `Bearer ${token}`);
+    expect(logoutRes.status).toBe(200);
+    expect(logoutRes.body.success).toBe(true);
+
+    // Same token is now rejected
+    const after = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+    expect(after.status).toBe(401);
+  });
+
+  it('returns 401 when called without a token', async () => {
+    const res = await request(app).post('/api/auth/logout');
+    expect(res.status).toBe(401);
+  });
+});

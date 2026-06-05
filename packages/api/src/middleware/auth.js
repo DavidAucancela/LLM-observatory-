@@ -51,12 +51,26 @@ function authMiddleware(req, res, next) {
       .catch(() => res.status(500).json({ error: 'Internal server error' }));
   }
 
+  let decoded;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    res.status(401).json({ error: 'Token inválido o expirado' });
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
+
+  if (decoded.jti) {
+    pool.query('SELECT 1 FROM revoked_tokens WHERE jti = $1', [decoded.jti])
+      .then(result => {
+        if (result.rows.length) return res.status(401).json({ error: 'Token revocado' });
+        req.user = decoded;
+        next();
+      })
+      .catch(() => { req.user = decoded; next(); });
+    return;
+  }
+
+  req.user = decoded;
+  next();
 }
 
 function requireAdmin(req, res, next) {

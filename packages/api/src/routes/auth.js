@@ -40,9 +40,9 @@ router.post('/login', async (req, res, next) => {
     const { org_id, role, org_name } = memberRes.rows[0];
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, orgId: org_id, role },
+      { id: user.id, email: user.email, orgId: org_id, role, jti: crypto.randomUUID() },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
     );
 
     res.json({ token, email: user.email, orgId: org_id, orgName: org_name, role });
@@ -411,6 +411,20 @@ router.put('/password', async (req, res, next) => {
       return res.status(400).json({ error: err.errors[0].message });
     next(err);
   }
+});
+
+// ── POST /api/auth/logout — server-side JWT revocation via JTI blacklist ───────
+router.post('/logout', async (req, res, next) => {
+  try {
+    const { jti, exp } = req.user;
+    if (jti && exp) {
+      await pool.query(
+        `INSERT INTO revoked_tokens (jti, exp) VALUES ($1, to_timestamp($2)) ON CONFLICT DO NOTHING`,
+        [jti, exp]
+      );
+    }
+    res.json({ success: true });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
