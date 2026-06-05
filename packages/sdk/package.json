@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --test src/__tests__/wrapper.test.js"
+    "test": "node --test src/__tests__/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3"
@@ -12,9 +12,12 @@
     "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
-    "openai": { "optional": true }
+    "openai": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "openai": "^6.42.0",
     "sinon": "^17.0.1"
   }
 }

@@ -202,4 +202,6 @@ async function startServer() {
   server.listen(port, () => logger.info(`🚀 API server running on port ${port}`));
 }
 
-startServer();
+if (require.main === module) startServer();
+
+module.exports = { app, server };
