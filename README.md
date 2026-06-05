@@ -36,7 +36,7 @@
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/DavidAucancela/LLM-observatory-
+git clone https://github.com/DavidAucancela/llm-observatory
 cd llm-observatory
 npm install
 ```
@@ -108,7 +108,7 @@ const client = new MonitoredAnthropic({
 
 // Use exactly like the official Anthropic SDK
 const response = await client.messages.create({
-  model: 'claude-sonnet-4-6',
+  model: 'claude-opus-4-8', // or your preferred model
   max_tokens: 1024,
   messages: [{ role: 'user', content: 'Hello!' }]
 });
@@ -197,10 +197,37 @@ User Application
 | Backend | Node.js 20, Express 4, Socket.io 4, Zod, node-cron, bcrypt, jsonwebtoken |
 | Database | PostgreSQL 16 — shared schema multi-tenancy with org_id scoping |
 | Real-time | Socket.io WebSocket (auto-reconnect) |
-| Auth | JWT (7d expiry) + bcrypt (cost 12) + Observatory tokens (SHA-256 hashed) |
+| Auth | JWT (1h expiry, server-side revocation) + bcrypt (cost 12) + Observatory tokens (SHA-256 hashed) |
 | Email | Resend (account activation, password reset, team invitations) |
-| Encryption | AES-256-CBC for stored provider API keys |
+| Encryption | AES-256-GCM (authenticated) for stored provider API keys |
 | Deployment | Docker Compose, Railway |
+
+---
+
+## Operational Limits
+
+### Rate limits (per IP)
+
+| Endpoint | Window | Limit |
+|---|---|---|
+| All API routes | 60 s | 300 req |
+| `POST /api/metrics` (SDK ingest) | 60 s | 1 000 req |
+
+Configure via `express-rate-limit` in `packages/api/src/index.js`.
+
+### Data retention
+
+- Default: **90 days** (records auto-deleted daily at 02:00 UTC)
+- Override: set `DATA_RETENTION_DAYS=<n>` in your `.env` (minimum 1)
+
+### JWT expiry
+
+- Default: **1 hour** — change with `JWT_EXPIRES_IN=8h` (any [ms](https://github.com/vercel/ms) string)
+- `POST /api/auth/logout` revokes the token server-side immediately (JTI blacklist, cleaned every 15 min)
+
+### Backups
+
+Railway free tier does **not** include automatic backups. Run `scripts/backup.sh` via cron or GitHub Actions (see `.github/workflows/backup.yml`) to push daily `pg_dump` archives to S3/R2.
 
 ---
 

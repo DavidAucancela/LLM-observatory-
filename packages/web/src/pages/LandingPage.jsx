@@ -36,7 +36,7 @@ function Nav({ onDashboard }) {
         <a className="lp-nav-link" href="#features">{t('landing.navFeatures')}</a>
         <a className="lp-nav-link" href="#architecture">{t('landing.navArchitecture')}</a>
         <a className="lp-nav-link" href="#how-it-works">{t('landing.navHowItWorks')}</a>
-        <a className="lp-nav-link lp-nav-link-gh" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
+        <a className="lp-nav-link lp-nav-link-gh" href="https://github.com/DavidAucancela/llm-observatory" target="_blank" rel="noreferrer">
           <GitHubIcon /> GitHub
         </a>
         <button className="lp-nav-lang" onClick={toggleLang} title={t('sidebar.language')}>
@@ -471,7 +471,7 @@ function OpenSourceCallout() {
           </div>
         ))}
       </div>
-      <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer"
+      <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/llm-observatory" target="_blank" rel="noreferrer"
         style={{ display: 'inline-flex', marginTop: 28 }}>
         <GitHubIcon /> {t('landing.viewOnGitHub')}
       </a>
@@ -491,7 +491,7 @@ function CTABanner({ onDashboard }) {
       <p>{t('landing.ctaSub')}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <button className="lp-btn-primary" onClick={onDashboard}>{t('landing.openDashboard')}</button>
-        <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
+        <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/llm-observatory" target="_blank" rel="noreferrer">
           <GitHubIcon /> {t('landing.viewOnGitHub')}
         </a>
       </div>
@@ -524,10 +524,10 @@ function Footer() {
         </div>
         <div className="lp-footer-col">
           <div className="lp-footer-col-title">{t('landing.footerResources')}</div>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">GitHub</a>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/LICENSE" target="_blank" rel="noreferrer">{t('landing.mitLicense')}</a>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/issues" target="_blank" rel="noreferrer">Issues</a>
-          <a className="lp-footer-link" href="https://github.com/DavidAucancela/LLM-observatory-/blob/main/README.md" target="_blank" rel="noreferrer">{t('landing.footerDocs')}</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/llm-observatory" target="_blank" rel="noreferrer">GitHub</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/llm-observatory/blob/main/LICENSE" target="_blank" rel="noreferrer">{t('landing.mitLicense')}</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/llm-observatory/issues" target="_blank" rel="noreferrer">Issues</a>
+          <a className="lp-footer-link" href="https://github.com/DavidAucancela/llm-observatory/blob/main/README.md" target="_blank" rel="noreferrer">{t('landing.footerDocs')}</a>
         </div>
       </div>
     </footer>
@@ -558,7 +558,7 @@ export default function LandingPage() {
         <p>{t('landing.heroSubtitle')}</p>
         <div className="lp-hero-actions">
           <button className="lp-btn-primary" onClick={onDashboard}>{t('landing.openDashboard')}</button>
-          <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/LLM-observatory-" target="_blank" rel="noreferrer">
+          <a className="lp-btn-secondary" href="https://github.com/DavidAucancela/llm-observatory" target="_blank" rel="noreferrer">
             <GitHubIcon /> {t('landing.starOnGitHub')}
           </a>
         </div>

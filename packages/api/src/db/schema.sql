@@ -262,3 +262,10 @@ CREATE TABLE IF NOT EXISTS webhook_endpoints (
 );
 CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org
   ON webhook_endpoints(org_id) WHERE is_active = true;
+
+-- ── revoked_tokens — JWT JTI blacklist for server-side logout ─────────────────
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  jti  VARCHAR(36)  PRIMARY KEY,
+  exp  TIMESTAMPTZ  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(exp);

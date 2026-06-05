@@ -6,8 +6,8 @@ async function deliverWebhooks(orgId, event, data) {
   try {
     ({ rows } = await pool.query(
       `SELECT id, url, secret FROM webhook_endpoints
-       WHERE org_id = $1 AND is_active = true`,
-      [orgId]
+       WHERE org_id = $1 AND is_active = true AND $2 = ANY(events)`,
+      [orgId, event]
     ));
   } catch {
     return;

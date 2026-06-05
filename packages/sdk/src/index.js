@@ -490,6 +490,8 @@ class MonitoredOpenAI {
 module.exports = {
   MonitoredAnthropic,
   MonitoredOpenAI,
+  maskKey,
+  classifyError,
   calculateCost,
   calculateOpenAICost,
   calculateOpenAIEmbeddingCost,

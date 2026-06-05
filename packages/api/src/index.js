@@ -179,6 +179,11 @@ async function startServer() {
     }
   }
 
+  // Cron: clean up expired revoked JWT tokens every 15 minutes
+  cron.schedule('*/15 * * * *', () => {
+    pool.query('DELETE FROM revoked_tokens WHERE exp < NOW()').catch(() => {});
+  });
+
   // Cron: check alerts every hour
   cron.schedule('0 * * * *', () => {
     logger.info('Running scheduled alert check...');
@@ -202,4 +207,6 @@ async function startServer() {
   server.listen(port, () => logger.info(`🚀 API server running on port ${port}`));
 }
 
-startServer();
+if (require.main === module) startServer();
+
+module.exports = { app, server };
