@@ -1,6 +1,6 @@
 # @llm-observatory/sdk
 
-Drop-in Node.js wrapper for the Anthropic and OpenAI SDKs that streams usage metrics to your [LLM Observatory](https://github.com/DavidAucancela/LLM-observatory-) dashboard with **zero latency overhead**.
+Drop-in Node.js wrapper for the Anthropic and OpenAI SDKs that streams usage metrics to your [LLM Observatory](https://github.com/DavidAucancela/llm-observatory) dashboard with **zero latency overhead**.
 
 ## How it works
 
