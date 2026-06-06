@@ -123,7 +123,7 @@ JWT_SECRET=<64-byte hex>
 
 # Email (Resend) — required for account activation and invitations
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
-EMAIL_FROM=noreply@yourdomain.com
+EMAIL_FROM=onboarding@resend.dev   # safe default; change once you verify a custom domain in Resend
 APP_URL=http://localhost:5173
 ```
 

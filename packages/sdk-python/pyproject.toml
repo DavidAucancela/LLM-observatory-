@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.urls]
-Repository = "https://github.com/DavidAucancela/LLM-observatory"
+Repository = "https://github.com/DavidAucancela/llm-observatory"
 
 [tool.hatch.build.targets.wheel]
 packages = ["llm_observatory"]
