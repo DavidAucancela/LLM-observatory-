@@ -79,7 +79,7 @@
     "backToHome": "← Volver al inicio",
     "registerTitle": "Crear cuenta",
     "registerSubtitle": "Configura tu acceso a Observatory",
-    "registrationSuccess": "Cuenta creada. Revisa tu correo (o el terminal del servidor en desarrollo) para el enlace de activación.",
+    "registrationSuccess": "¡Cuenta creada! Revisa tu correo para el enlace de activación.",
     "backToSignIn": "← Volver al inicio de sesión",
     "orgNameLabel": "Nombre de la organización",
     "orgNameOptional": "(opcional)",

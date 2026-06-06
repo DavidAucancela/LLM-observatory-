@@ -79,7 +79,7 @@
     "backToHome": "← Back to home",
     "registerTitle": "Create account",
     "registerSubtitle": "Set up your Observatory access",
-    "registrationSuccess": "Account created. Check your email (or the server terminal in development) for the activation link.",
+    "registrationSuccess": "Account created! Check your inbox for the activation link.",
     "backToSignIn": "← Back to sign in",
     "orgNameLabel": "Organization name",
     "orgNameOptional": "(optional)",
