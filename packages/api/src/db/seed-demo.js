@@ -9,6 +9,16 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const pool   = require('./pool');
 
+// Encryption is optional — credentials seeding is skipped gracefully if key missing
+let encrypt, maskKey;
+try {
+  ({ encrypt, maskKey } = require('./crypto'));
+} catch { /* no ENCRYPTION_KEY set — credentials won't be seeded */ }
+
+// Fake demo keys (clearly non-functional, used only for UI display)
+const DEMO_ANT_KEY = 'sk-ant-api03-demo-observatory-showcase-anthropic-key-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA01';
+const DEMO_OAI_KEY = 'sk-proj-demo-observatory-showcase-openai-key-OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO01';
+
 const DEMO_EMAIL    = 'demo@llm-observatory.com';
 const DEMO_PASSWORD = 'Demo1234!';
 const DEMO_ORG      = 'LLM Observatory Demo';
@@ -108,7 +118,23 @@ async function seedDemo() {
     ON CONFLICT (org_id, user_id) DO NOTHING
   `, [orgId, userId]);
 
-  // ── 4. Observatory token (one sample token, visible in Settings) ──────────
+  // ── 4. Provider credentials (fake keys — only for UI display) ────────────
+  await pool.query('DELETE FROM provider_credentials WHERE org_id = $1', [orgId]);
+  if (encrypt && maskKey) {
+    const antHint = maskKey(DEMO_ANT_KEY);
+    const oaiHint = maskKey(DEMO_OAI_KEY);
+    await pool.query(`
+      INSERT INTO provider_credentials (org_id, provider, key_type, label, api_key_encrypted, key_hint, is_valid)
+      VALUES
+        ($1, 'anthropic', 'sdk', 'Demo Anthropic Key', $2, $3, true),
+        ($1, 'openai',    'sdk', 'Demo OpenAI Key',    $4, $5, true)
+    `, [orgId, encrypt(DEMO_ANT_KEY), antHint, encrypt(DEMO_OAI_KEY), oaiHint]);
+    console.log('  Credentials seeded');
+  } else {
+    console.log('  ⚠ ENCRYPTION_KEY not set — skipping credentials');
+  }
+
+  // ── 5. Observatory token (one sample token, visible in Settings) ──────────
   const rawToken   = 'obs_sk_demo_' + crypto.randomBytes(20).toString('hex');
   const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
   const tokenPrefix= rawToken.slice(0, 20);
@@ -118,8 +144,10 @@ async function seedDemo() {
     ON CONFLICT (token_hash) DO NOTHING
   `, [orgId, tokenHash, tokenPrefix, userId]);
 
-  // ── 5. api_calls — delete old demo data and re-insert fresh ──────────────
+  // ── 6. api_calls — delete old demo data and re-insert fresh ──────────────
   await pool.query('DELETE FROM api_calls WHERE org_id = $1', [orgId]);
+  const antHint = maskKey ? maskKey(DEMO_ANT_KEY) : null;
+  const oaiHint = maskKey ? maskKey(DEMO_OAI_KEY) : null;
 
   const now     = new Date();
   const records = [];
@@ -166,12 +194,14 @@ async function seedDemo() {
     const tags = Math.random() < 0.6 ? TAGS_POOL[Math.floor(Math.random() * TAGS_POOL.length)] : {};
     const prompt = SAMPLE_PROMPTS[Math.floor(Math.random() * SAMPLE_PROMPTS.length)];
 
+    const keyHint = provider === 'anthropic' ? antHint : oaiHint;
+
     records.push([
       orgId, timestamp.toISOString(), provider, model,
       inputTokens, outputTokens, totalTokens,
       costUsd.toFixed(6), Math.max(100, latencyMs), statusCode,
       JSON.stringify(tools), prompt, JSON.stringify(tags),
-      cacheRead, cacheWrite, errorType, errorMsg,
+      cacheRead, cacheWrite, errorType, errorMsg, keyHint,
     ]);
   }
 
@@ -179,14 +209,14 @@ async function seedDemo() {
   for (let i = 0; i < records.length; i += batchSize) {
     const batch  = records.slice(i, i + batchSize);
     const values = batch.map((_, idx) => {
-      const b = idx * 17;
-      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15},$${b+16},$${b+17})`;
+      const b = idx * 18;
+      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15},$${b+16},$${b+17},$${b+18})`;
     }).join(',');
     await pool.query(
       `INSERT INTO api_calls
          (org_id,timestamp,provider,model,input_tokens,output_tokens,total_tokens,
           cost_usd,latency_ms,status_code,tools_used,prompt_preview,tags,
-          cache_read_tokens,cache_write_tokens,error_type,error_message)
+          cache_read_tokens,cache_write_tokens,error_type,error_message,api_key_hint)
        VALUES ${values}`,
       batch.flat()
     );
@@ -194,7 +224,7 @@ async function seedDemo() {
   }
   console.log();
 
-  // ── 6. Budgets ────────────────────────────────────────────────────────────
+  // ── 7. Budgets ────────────────────────────────────────────────────────────
   await pool.query('DELETE FROM budgets WHERE org_id = $1', [orgId]);
   for (const [name, limit, period] of [
     ['Daily API Budget',          5,   'daily'],
@@ -208,7 +238,7 @@ async function seedDemo() {
   }
   console.log('  Budgets seeded');
 
-  // ── 7. Provider balances ──────────────────────────────────────────────────
+  // ── 8. Provider balances ──────────────────────────────────────────────────
   await pool.query('DELETE FROM provider_balances WHERE org_id = $1', [orgId]);
   for (const [provider, amount, note, interval] of [
     ['anthropic',  50.00, 'Initial credit',  '30 days'],
