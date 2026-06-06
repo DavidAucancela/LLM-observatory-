@@ -75,8 +75,9 @@ POSTGRES_DB=llm_observatory
 DATABASE_URL=postgresql://postgres:changeme@localhost:5432/llm_observatory
 PORT=3001
 NODE_ENV=development
-ENCRYPTION_KEY=<32-byte hex>   # For AES-256-CBC encryption of stored API keys
+ENCRYPTION_KEY=<32-byte hex>   # For AES-256-GCM encryption of stored API keys
 JWT_SECRET=<64-byte hex>       # For signing JWTs
+JWT_EXPIRES_IN=1h              # JWT expiry (default 1h); change to e.g. 8h if needed
 ```
 
 Frontend build-time:
@@ -87,8 +88,8 @@ VITE_API_URL=http://localhost:3001   # Empty string for Docker (nginx proxy hand
 Email (Resend) y URLs públicas:
 ```bash
 RESEND_API_KEY=<resend api key>
-EMAIL_FROM=noreply@tudominio.com
-APP_URL=http://localhost:5173   # URL pública del frontend — usada en links de email
+EMAIL_FROM=onboarding@resend.dev   # Use Resend's own domain until custom domain verified
+APP_URL=http://localhost:5173      # URL pública del frontend — usada en links de email
 ```
 
 Docker/Railway internal networking:
@@ -194,7 +195,7 @@ src/
 │   ├── schema.sql      Table definitions + indexes + multi-tenancy backfill
 │   ├── migrate.js      Runs schema.sql (also runs automatically on Docker container start)
 │   ├── seed.js         600 demo records (org-scoped)
-│   └── crypto.js       AES-256-CBC encrypt/decrypt for API keys
+│   └── crypto.js       AES-256-GCM encrypt/decrypt for API keys (v2: format); CBC legacy fallback for old values
 ├── middleware/
 │   └── auth.js         JWT + Observatory token resolution; requireAdmin guard
 ├── routes/
@@ -235,14 +236,16 @@ Tenant-scoped tables (existing, all have `org_id`):
 
 Auth tables:
 - `users` — Accounts with bcrypt passwords. Columns: `email`, `password_hash`, `is_active`, `activation_token`, `reset_token`, `reset_token_expires`
+- `revoked_tokens` — JWT JTI blacklist for server-side logout. Columns: `jti` (PK), `exp`. Cleaned every 15 min by cron.
 
 **Auth middleware (`middleware/auth.js`):**
 - Public paths: `GET /health`, `POST /api/auth/login`, `POST /api/auth/register`, `GET /api/auth/activate`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/auth/invite-info`, `POST /api/auth/accept-invite`
 - `POST /api/metrics`: requires `Authorization: Bearer obs_sk_xxx` (Observatory token)
 - All other routes: require `Authorization: Bearer <jwt>`
 - Observatory token path: SHA-256 hash lookup → sets `req.user = { orgId, isObservatoryToken: true }`
-- JWT path: verifies signature → sets `req.user = { id, email, orgId, role }`
+- JWT path: verifies signature → checks `revoked_tokens` table by `jti` → sets `req.user = { id, email, orgId, role, jti, exp }`
 - `requireAdmin`: blocks observatory tokens; requires `req.user.role === 'admin'`
+- `POST /api/auth/logout`: inserts `jti` into `revoked_tokens` — token rejected on all subsequent requests
 
 **Data integrity — cascade delete:** `DELETE /api/credentials/:id` automatically deletes all `api_calls` where `api_key_hint = key_hint`. Admin key deletions also remove `sync:provider` records. All constrained by `org_id`.
 
@@ -252,7 +255,7 @@ Auth tables:
 
 **Alert debounce:** 6 hours per rule to prevent spam. Checker groups by `${org_id}:${metric}`.
 
-**Encryption format:** `iv_hex:encrypted_hex` (AES-256-CBC with random IV).
+**Encryption format:** `v2:iv_hex:ciphertext_hex:tag_hex` (AES-256-GCM, 12-byte IV, 16-byte auth tag). Legacy CBC format `iv_hex:ciphertext_hex` still decrypts transparently — new writes always use GCM. No ENCRYPTION_KEY rotation needed.
 
 **org_id in queries:** Every route uses `req.user.orgId` as the first param (`$1`) in all SQL queries. Dynamic filter params start at `$2` onwards.
 
@@ -464,11 +467,24 @@ Sidebar-specific classes: `.obs-brand-logo` (logo img), `.obs-nav-body` (flex co
 ## Testing
 
 ```bash
-cd packages/sdk
-npm test    # Runs src/__tests__/wrapper.test.js via Node.js built-in test runner
+# SDK Node.js (39 tests — pricing, anthropic wrapper, openai wrapper, helpers)
+cd packages/sdk && npm test
+
+# SDK Python (38 tests)
+cd packages/sdk-python && pytest tests/ -v
+
+# API integration (42 tests — auth, metrics scoping, webhooks, middleware)
+# Requires PostgreSQL running on :5432
+DATABASE_URL=postgresql://postgres:changeme@localhost:5432/llm_observatory_test \
+JWT_SECRET=<hex> ENCRYPTION_KEY=<hex> \
+cd packages/api && npm test
 ```
 
-Tests cover SDK wrapper behavior. API has no automated tests currently — manual testing via curl or the dashboard.
+CI: `.github/workflows/test.yml` — 3 jobs paralelos (sdk-node, sdk-python, api + postgres service).
+
+**Test files:**
+- `packages/sdk/src/__tests__/` — pricing.test.js, anthropic.test.js, openai.test.js, helpers.test.js
+- `packages/api/src/__tests__/` — auth.test.js, metrics.test.js, webhooks-service.test.js, webhooks-routes.test.js, middleware.test.js
 
 ---
 
@@ -482,6 +498,10 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 - Observatory tokens do not expire automatically — revoke manually via Settings or `DELETE /api/tokens/:id`
 - `AUTH_EMAIL` / `AUTH_PASSWORD_HASH` env vars still supported for legacy single-admin bootstrapping; on startup the API creates an org + org_member for that user if none exists
 - Webhook delivery has no retry queue or delivery log — failures are silently swallowed after 1 retry. For production, consider adding a `webhook_deliveries` audit table.
+- `EMAIL_FROM` must be `onboarding@resend.dev` (or a verified custom domain in Resend) — unverified custom domains cause Resend to reject all emails to non-owner addresses.
+- `trust proxy` is set to `1` in Express (`app.set('trust proxy', 1)`) — required for Railway's reverse proxy so `express-rate-limit` reads the real client IP from `X-Forwarded-For`.
+- JWT tokens expire after **1 hour** by default (`JWT_EXPIRES_IN=1h`). Server-side revocation via `POST /api/auth/logout` adds the JTI to `revoked_tokens` table. Cron cleans expired JTIs every 15 min.
+- DB backups: `scripts/backup.sh` + `.github/workflows/backup.yml` — pg_dump daily to S3/R2. Requires secrets: `DATABASE_URL`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET`, `R2_ACCOUNT_ID` in GitHub Actions.
 
 ---
 
@@ -498,6 +518,11 @@ Tests cover SDK wrapper behavior. API has no automated tests currently — manua
 - [x] Error capture — `error_message` in DB, SDK, API; filter in Activity tab (status=error/success)
 - [x] Python SDK (`packages/sdk-python`) — `observatory_token` auth, cache tracking, `error_type` classification, sync/async variants
 - [x] Webhook delivery for metric events (outbound to customer systems) — HMAC-signed, fire-and-forget, Settings UI
+- [x] AES-256-GCM encryption — replaces CBC; backwards compatible; no key rotation needed
+- [x] JWT 1h expiry + server-side revocation (`POST /api/auth/logout`, JTI blacklist, 15-min cleanup cron)
+- [x] Comprehensive test suite — 79 tests (SDK Node.js 39 + API integration 42), CI via GitHub Actions
+- [x] DB backup workflow — `scripts/backup.sh` + `.github/workflows/backup.yml` (pg_dump → R2/S3)
+- [x] Operational limits documented in README (rate limits, data retention, JWT expiry)
 - [ ] Superadmin panel — cross-org visibility for platform operators
 - [ ] Per-org usage quotas — hard limits on metrics volume
 - [ ] Audit log — record sensitive actions (member added/removed, token revoked, key deleted)
