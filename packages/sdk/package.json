@@ -1,7 +1,20 @@
 {
   "name": "@llm-observatory/sdk",
   "version": "1.0.0",
+  "description": "Drop-in Node.js wrapper for Anthropic and OpenAI SDKs with zero-latency observability",
   "main": "src/index.js",
+  "license": "MIT",
+  "keywords": ["llm", "observability", "anthropic", "openai", "monitoring", "claude", "sdk"],
+  "author": "LLM Observatory",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavidAucancela/llm-observatory.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/DavidAucancela/llm-observatory",
+  "files": [
+    "src/index.js"
+  ],
   "scripts": {
     "test": "node --test src/__tests__/*.test.js"
   },
