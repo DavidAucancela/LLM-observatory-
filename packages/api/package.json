@@ -8,6 +8,7 @@
     "migrate": "node src/db/migrate.js",
     "migrate-admin": "node src/db/migrate-admin.js",
     "seed": "node src/db/seed.js",
+    "seed:demo": "node src/db/seed-demo.js",
     "test": "jest --runInBand --forceExit"
   },
   "jest": {

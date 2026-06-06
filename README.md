@@ -10,6 +10,21 @@
 
 ---
 
+## Live Demo
+
+Try it instantly — no registration required:
+
+🔗 **[https://llm-web-production.up.railway.app](https://llm-web-production.up.railway.app)**
+
+```
+Email:    demo@llm-observatory.com
+Password: Demo1234!
+```
+
+> Read-only account with 30 days of pre-loaded data across Anthropic and OpenAI models.
+
+---
+
 ## Features
 
 - **Drop-in SDK Wrapper** — Replace `new Anthropic()` with `new MonitoredAnthropic()`. Zero code changes elsewhere.
