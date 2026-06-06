@@ -67,6 +67,30 @@ const linkNote = (href) =>
      <span style="color:#64748b">${href}</span>
    </p>`;
 
+// ── sendWithFallback ──────────────────────────────────────────────────────────
+// Tries sending with the configured FROM address. If Resend rejects it due to
+// an unverified custom domain, automatically retries with onboarding@resend.dev
+// (Resend's own verified domain, usable on any account without domain setup).
+async function sendWithFallback({ to, subject, html }) {
+  const FALLBACK_FROM = 'onboarding@resend.dev';
+
+  const attempt = async (from) => {
+    const { error } = await getResend().emails.send({ from, to, subject, html });
+    if (error) throw new Error(`Resend error: ${error.message}`);
+  };
+
+  try {
+    await attempt(FROM);
+  } catch (err) {
+    // Retry with Resend's own verified domain if the custom one isn't verified yet
+    if (FROM !== FALLBACK_FROM && err.message.includes('domain')) {
+      await attempt(FALLBACK_FROM);
+    } else {
+      throw err;
+    }
+  }
+}
+
 // ── sendActivationEmail ───────────────────────────────────────────────────────
 async function sendActivationEmail(to, token) {
   const link = `${APP_URL}/api/auth/activate?token=${token}`;
@@ -89,14 +113,7 @@ async function sendActivationEmail(to, token) {
     return;
   }
 
-  const { error } = await getResend().emails.send({
-    from:    FROM,
-    to,
-    subject: 'Activa tu cuenta — LLM Observatory',
-    html,
-  });
-
-  if (error) throw new Error(`Resend error: ${error.message}`);
+  await sendWithFallback({ to, subject: 'Activa tu cuenta — LLM Observatory', html });
 }
 
 // ── sendPasswordResetEmail ────────────────────────────────────────────────────
@@ -128,14 +145,7 @@ async function sendPasswordResetEmail(to, token) {
     return;
   }
 
-  const { error } = await getResend().emails.send({
-    from:    FROM,
-    to,
-    subject: 'Restablece tu contraseña — LLM Observatory',
-    html,
-  });
-
-  if (error) throw new Error(`Resend error: ${error.message}`);
+  await sendWithFallback({ to, subject: 'Restablece tu contraseña — LLM Observatory', html });
 }
 
 // ── sendInviteEmail ───────────────────────────────────────────────────────────
@@ -159,14 +169,7 @@ async function sendInviteEmail(to, token, orgName) {
     return;
   }
 
-  const { error } = await getResend().emails.send({
-    from:    FROM,
-    to,
-    subject: `Invitación a ${orgName} — LLM Observatory`,
-    html,
-  });
-
-  if (error) throw new Error(`Resend error: ${error.message}`);
+  await sendWithFallback({ to, subject: `Invitación a ${orgName} — LLM Observatory`, html });
 }
 
 module.exports = { sendActivationEmail, sendPasswordResetEmail, sendInviteEmail };
