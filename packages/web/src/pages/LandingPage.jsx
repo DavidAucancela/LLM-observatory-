@@ -424,9 +424,24 @@ function ArchDiagram() {
 function HowItWorks() {
   const { t } = useTranslation();
   const STEPS = [
-    { title: t('landing.step0Title'), desc: t('landing.step0Desc'), code: 'docker-compose up -d --build' },
-    { title: t('landing.step1Title'), desc: t('landing.step1Desc'), code: 'obs_sk_xxxxxxxxxxxxxxxxxxxxxxxx' },
-    { title: t('landing.step2Title'), desc: t('landing.step2Desc'), code: 'npm install @llm-observatory/sdk' },
+    {
+      title: t('landing.step0Title'),
+      desc:  t('landing.step0Desc'),
+      code:  'demo@llm-observatory.com',
+      img:   '/screenshots/login.png',
+    },
+    {
+      title: t('landing.step1Title'),
+      desc:  t('landing.step1Desc'),
+      code:  'Settings → Keys → Add API key',
+      img:   '/screenshots/config.png',
+    },
+    {
+      title: t('landing.step2Title'),
+      desc:  t('landing.step2Desc'),
+      code:  'npm install @llm-observatory/sdk',
+      img:   '/screenshots/request.png',
+    },
   ];
   return (
     <section id="how-it-works" className="lp-section" style={{ paddingTop: 0 }}>
@@ -441,6 +456,7 @@ function HowItWorks() {
               <div className="lp-step-title">{s.title}</div>
               <div className="lp-step-desc">{s.desc}</div>
               <div className="lp-code-chip">{s.code}</div>
+              <img src={s.img} alt={s.title} className="lp-step-screenshot" />
             </div>
           </div>
         ))}
