@@ -36,6 +36,10 @@ const { checkAlerts }   = require('./jobs/alertChecker');
 const app = express();
 const server = http.createServer(app);
 
+// Trust Railway/nginx reverse proxy so express-rate-limit reads the real client IP
+// from X-Forwarded-For instead of the internal proxy address
+app.set('trust proxy', 1);
+
 // CORS origin: restrict in production via CORS_ORIGIN env var
 const corsOrigin = process.env.CORS_ORIGIN || '*';
 const io = new Server(server, { cors: { origin: corsOrigin, methods: ['GET', 'POST'] } });
