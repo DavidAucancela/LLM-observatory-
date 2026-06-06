@@ -23,6 +23,24 @@ Password: Demo1234!
 
 > Read-only account with 30 days of pre-loaded data across Anthropic and OpenAI models.
 
+### Preview
+
+![Dashboard](media/dashboard.png)
+
+<details>
+<summary>More screenshots</summary>
+
+**Activity — request log with detail drawer**
+![Activity](media/request.png)
+
+**Settings — API keys & Observatory tokens**
+![Settings](media/config.png)
+
+**Login**
+![Login](media/login.png)
+
+</details>
+
 ---
 
 ## Features
@@ -43,6 +61,36 @@ Password: Demo1234!
 - **Authentication** — Self-registration with email activation, password reset, and JWT sessions.
 - **Dark Mode** — Full dark/light theme toggle.
 - **OpenAI Support** — Full parity with `MonitoredOpenAI` wrapper for multi-provider monitoring.
+- **Outbound Webhooks** — HMAC-signed `POST` to your own endpoints on every metric event.
+- **Cache Hit Tracking** — Anthropic prompt cache read/write tokens tracked per request.
+- **Error Classification** — Captures `error_type` and `error_message` for failed API calls.
+
+---
+
+## vs. Helicone / Langfuse
+
+| Feature | **LLM Observatory** | Helicone | Langfuse |
+|---|:---:|:---:|:---:|
+| Open source (MIT) | ✅ | ✅ | ✅ |
+| Self-hosted | ✅ | ✅ | ✅ |
+| Zero-latency (async SDK, no proxy) | ✅ | ⚠️ proxy | ✅ |
+| Anthropic + OpenAI support | ✅ | ✅ | ✅ |
+| Node.js SDK | ✅ | ✅ | ✅ |
+| Python SDK | ✅ | ✅ | ✅ |
+| Real-time WebSocket dashboard | ✅ | ❌ | ❌ |
+| Cost & token tracking | ✅ | ✅ | ✅ |
+| Budget alerts | ✅ | ✅ (cloud) | ⚠️ limited |
+| Discord notifications (native) | ✅ | ❌ | ❌ |
+| Outbound webhooks (HMAC-signed) | ✅ | ✅ | ✅ |
+| Provider balance tracking | ✅ | ❌ | ❌ |
+| Historical sync from provider API | ✅ | ❌ | ❌ |
+| Prompt cache hit tracking | ✅ | ✅ | ❌ |
+| Multi-tenant with team roles | ✅ | ✅ | ✅ |
+| CSV export | ✅ | ✅ | ✅ |
+| Usage-based cloud pricing | ❌ (self-host = free) | ✅ | ✅ |
+| LLM evals / tracing spans | ❌ | ⚠️ limited | ✅ |
+
+> **When to choose LLM Observatory:** you want a self-hosted, zero-overhead cost dashboard with real-time updates and no per-request cloud fees. **When to choose Langfuse:** you need deep LLM evaluation pipelines and tracing spans. **When to choose Helicone:** you want a managed cloud with minimal setup.
 
 ---
 
@@ -184,7 +232,7 @@ Keys with elevated permissions needed for the **history sync** feature. Not the 
 - **Anthropic Admin Key**: generate at [console.anthropic.com](https://console.anthropic.com) → Settings → Admin Keys. Requires admin role in the Anthropic org. Starts with `sk-ant-admin-`
 - **OpenAI Organization Key**: key with organization permissions to read usage via `/v1/organization/usage`
 
-All keys are stored encrypted with AES-256-CBC. They are never shown in full in the UI.
+All keys are stored encrypted with AES-256-GCM (authenticated encryption). They are never shown in full in the UI.
 
 ---
 
