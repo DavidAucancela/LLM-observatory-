@@ -45,7 +45,7 @@ const corsOrigin = process.env.CORS_ORIGIN || '*';
 const io = new Server(server, { cors: { origin: corsOrigin, methods: ['GET', 'POST'] } });
 
 // Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet());
 
 // CORS
 app.use(cors({ origin: corsOrigin }));

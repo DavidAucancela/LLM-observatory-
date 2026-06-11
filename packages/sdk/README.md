@@ -21,6 +21,11 @@ npm install @llm-observatory/sdk
 npm install openai
 ```
 
+> If the package is not yet available on npm, install directly from GitHub:
+> ```bash
+> npm install github:DavidAucancela/llm-observatory/packages/sdk
+> ```
+
 ## Usage
 
 ### Anthropic

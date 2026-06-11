@@ -11,6 +11,13 @@ pip install llm-observatory
 pip install "llm-observatory[openai]"
 ```
 
+> If the package is not yet available on PyPI, install directly from GitHub:
+> ```bash
+> pip install "git+https://github.com/DavidAucancela/llm-observatory.git#subdirectory=packages/sdk-python"
+> # With OpenAI support:
+> pip install "llm-observatory[openai] @ git+https://github.com/DavidAucancela/llm-observatory.git#subdirectory=packages/sdk-python"
+> ```
+
 ## Quick start
 
 ### Anthropic
