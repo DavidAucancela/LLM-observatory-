@@ -951,12 +951,81 @@ body {
   50%       { opacity: 0.5; }
 }
 
-/* ── Login page ── */
+/* ── Login / Auth pages ── */
 .obs-login-root {
-  width: 100vw; height: 100vh;
+  width: 100vw; min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
-  background: var(--page);
+  padding: 24px 16px;
+  background: #080D1A;
+  background-image:
+    radial-gradient(ellipse 700px 450px at 80% 0%, rgba(6,182,212,0.09) 0%, transparent 70%),
+    radial-gradient(ellipse 500px 350px at 10% 100%, rgba(6,182,212,0.05) 0%, transparent 65%),
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.025) 1px, transparent 0);
+  background-size: auto, auto, 28px 28px;
   font-family: var(--font-sans);
+}
+
+.obs-auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: #0D1628;
+  border: 1px solid #162035;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 0 0 1px rgba(6,182,212,0.06), 0 24px 48px rgba(0,0,0,0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.obs-auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.obs-auth-brand img {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.obs-auth-brand-name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #E2EAF4 20%, #06B6D4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.obs-auth-divider {
+  height: 1px;
+  background: #162035;
+  margin: 0 -4px;
+}
+
+.obs-auth-title {
+  text-align: center;
+}
+
+.obs-auth-title h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #E2EAF4;
+}
+
+.obs-auth-title p {
+  margin: 0;
+  font-size: 13px;
+  color: #5580A0;
+  line-height: 1.5;
 }
 
 /* ── Inline form row ── */

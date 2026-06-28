@@ -47,33 +47,35 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="theme-light obs-login-root">
-      <div style={{ width: 360, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="theme-dark obs-login-root">
+      <div className="obs-auth-card">
 
-        {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-          <div className="obs-brand-mark" style={{ width: 22, height: 22, fontSize: 12 }}>◐</div>
-          <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.brand')}</span>
+        <div className="obs-auth-brand">
+          <img src="/logoMain.png" alt="Observatory" />
+          <span className="obs-auth-brand-name">{t('auth.brand')}</span>
         </div>
 
+        <div className="obs-auth-divider" />
+
         {done ? (
-          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{t('auth.passwordUpdatedTitle')}</div>
-            <p style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{t('auth.passwordUpdatedMsg')}</p>
-            <p style={{ fontSize: 11, color: 'var(--faint)' }}>{t('auth.redirecting')}</p>
-            <Link to="/login" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', marginTop: 4 }}>
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
+            <div style={{ fontSize: 28 }}>✅</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: '#E2EAF4' }}>{t('auth.passwordUpdatedTitle')}</div>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>{t('auth.passwordUpdatedMsg')}</p>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--faint)' }}>{t('auth.redirecting')}</p>
+            <Link to="/login" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', marginTop: 4, fontWeight: 500 }}>
               {t('auth.goToLogin')}
             </Link>
           </div>
         ) : (
           <>
-            <div style={{ textAlign: 'center', marginTop: -8 }}>
-              <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)' }}>{t('auth.newPasswordTitle')}</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{t('auth.newPasswordHint')}</div>
+            <div className="obs-auth-title">
+              <h2>{t('auth.newPasswordTitle')}</h2>
+              <p>{t('auth.newPasswordHint')}</p>
             </div>
 
             {error && (
-              <div style={{ fontSize: 12, color: 'var(--error)', background: 'color-mix(in oklab, var(--error) 8%, transparent)', border: '1px solid color-mix(in oklab, var(--error) 25%, transparent)', borderRadius: 5, padding: '8px 12px' }}>
+              <div style={{ fontSize: 12, color: 'var(--error)', background: 'color-mix(in oklab, var(--error) 8%, transparent)', border: '1px solid color-mix(in oklab, var(--error) 25%, transparent)', borderRadius: 6, padding: '8px 12px' }}>
                 {error}
               </div>
             )}
@@ -91,7 +93,7 @@ export default function ResetPassword() {
                     autoComplete="new-password"
                     placeholder={t('auth.newPasswordPlaceholder')}
                     required
-                    style={{ width: '100%', paddingRight: 40 }}
+                    style={{ width: '100%', paddingRight: 48 }}
                   />
                   <button type="button" onClick={() => setShowPw(v => !v)}
                     style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
@@ -123,7 +125,7 @@ export default function ResetPassword() {
                 type="submit"
                 className="obs-btn obs-btn-primary"
                 disabled={loading || !token || !passwordsMatch || passwordTooShort}
-                style={{ height: 38, fontSize: 13, justifyContent: 'center', marginTop: 4 }}
+                style={{ height: 40, fontSize: 13, justifyContent: 'center', marginTop: 4, borderRadius: 8 }}
               >
                 {loading ? t('auth.savingButton') : t('auth.changePasswordButton')}
               </button>
