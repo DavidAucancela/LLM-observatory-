@@ -78,14 +78,8 @@ router.post('/register', async (req, res, next) => {
 
     const existing = await pool.query('SELECT id, is_active FROM users WHERE email = $1', [email]);
 
-    if (existing.rows.length) {
-      const user = existing.rows[0];
-      if (user.is_active)
-        return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
-
-      await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [user.id]);
-      return res.status(200).json({ message: 'Cuenta activada. Ya puedes iniciar sesión.' });
-    }
+    if (existing.rows.length)
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
 
     const client = await pool.connect();
     try {
