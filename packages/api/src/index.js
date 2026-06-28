@@ -53,10 +53,10 @@ app.use(express.json());
 app.set('io', io);
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
-// General API: 300 req/min per IP
+// General API: 1000 req/min per IP
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
