@@ -22,9 +22,6 @@ router.post('/login', async (req, res, next) => {
     if (invalid)
       return res.status(401).json({ error: 'Credenciales incorrectas' });
 
-    if (!user.is_active)
-      return res.status(403).json({ error: 'Cuenta no activada. Revisa tu email para el link de activación.' });
-
     await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
     const memberRes = await pool.query(
@@ -86,12 +83,8 @@ router.post('/register', async (req, res, next) => {
       if (user.is_active)
         return res.status(409).json({ error: 'Ya existe una cuenta con ese email' });
 
-      const token = crypto.randomBytes(32).toString('hex');
-      await pool.query(`UPDATE users SET activation_token = $1 WHERE id = $2`, [token, user.id]);
-      sendActivationEmail(email, token).catch(err =>
-        console.error('[email] sendActivationEmail failed:', err.message)
-      );
-      return res.status(201).json({ message: 'Cuenta creada. Revisa tu email para activarla.' });
+      await pool.query(`UPDATE users SET is_active = true WHERE id = $1`, [user.id]);
+      return res.status(200).json({ message: 'Cuenta activada. Ya puedes iniciar sesión.' });
     }
 
     const client = await pool.connect();
@@ -99,12 +92,11 @@ router.post('/register', async (req, res, next) => {
       await client.query('BEGIN');
 
       const hash  = await bcrypt.hash(password, 12);
-      const token = crypto.randomBytes(32).toString('hex');
 
       const userRes = await client.query(
-        `INSERT INTO users (email, password_hash, role, is_active, activation_token)
-         VALUES ($1, $2, 'admin', false, $3) RETURNING id`,
-        [email, hash, token]
+        `INSERT INTO users (email, password_hash, role, is_active)
+         VALUES ($1, $2, 'admin', true) RETURNING id`,
+        [email, hash]
       );
       const userId = userRes.rows[0].id;
 
@@ -126,11 +118,7 @@ router.post('/register', async (req, res, next) => {
 
       await client.query('COMMIT');
 
-      sendActivationEmail(email, token).catch(err =>
-        console.error('[email] sendActivationEmail failed:', err.message)
-      );
-
-      res.status(201).json({ message: 'Cuenta creada. Revisa tu email para activarla.' });
+      res.status(201).json({ message: 'Cuenta creada exitosamente.' });
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

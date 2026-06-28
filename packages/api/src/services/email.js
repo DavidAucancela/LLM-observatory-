@@ -118,34 +118,33 @@ async function sendActivationEmail(to, token) {
 
 // ── sendPasswordResetEmail ────────────────────────────────────────────────────
 async function sendPasswordResetEmail(to, token) {
-  const link = `${APP_URL}/reset-password?token=${token}`;
+  const link        = `${APP_URL}/reset-password?token=${token}`;
+  const supportEmail = process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
   const html = base(`
-    <h2 style="margin:0 0 8px;color:#0f172a;font-size:20px">Restablecer contraseña</h2>
+    <h2 style="margin:0 0 8px;color:#0f172a;font-size:20px">Solicitud de restablecimiento de contraseña</h2>
     <p style="color:#475569;margin:0 0 4px;font-size:14px;line-height:1.6">
-      Recibimos una solicitud para restablecer la contraseña de
-      <strong>${to}</strong>.
+      El usuario <strong>${to}</strong> ha solicitado restablecer su contraseña.
     </p>
     <p style="color:#475569;margin:0;font-size:14px;line-height:1.6">
       Este link expira en <strong>1 hora</strong>.
-      Si no lo solicitaste, ignora este email.
     </p>
-    ${btn(link, 'Cambiar contraseña')}
+    ${btn(link, 'Restablecer contraseña')}
     ${linkNote(link)}
-    <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
                 padding:12px 16px;margin-top:16px">
-      <p style="margin:0;color:#713f12;font-size:12px">
-        ⚠️ Por seguridad nunca compartas este link con nadie.
+      <p style="margin:0;color:#14532d;font-size:12px">
+        Comparte este link de forma segura con el usuario que lo solicitó.
       </p>
     </div>
   `);
 
   if (!process.env.RESEND_API_KEY) {
-    logEmailToConsole('Restablece tu contraseña — LLM Observatory', to, link);
+    logEmailToConsole('Reset solicitado por: ' + to, supportEmail, link);
     return;
   }
 
-  await sendWithFallback({ to, subject: 'Restablece tu contraseña — LLM Observatory', html });
+  await sendWithFallback({ to: supportEmail, subject: `[Soporte] Reset de contraseña para ${to}`, html });
 }
 
 // ── sendInviteEmail ───────────────────────────────────────────────────────────
