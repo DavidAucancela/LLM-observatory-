@@ -19,12 +19,15 @@ router.get('/', async (req, res) => {
       [orgId]
     );
 
+    const periodMap = { daily: '1 day', weekly: '7 days' };
     const budgetsWithSpend = await Promise.all(budgets.rows.map(async (budget) => {
-      const periodMap = { daily: '1 day', weekly: '7 days', monthly: '30 days' };
-      const interval  = periodMap[budget.period] || '30 days';
+      const interval = periodMap[budget.period];
+      const sinceClause = interval
+        ? `NOW() - INTERVAL '${interval}'`
+        : `DATE_TRUNC('month', NOW())`;
       const spend = await pool.query(
         `SELECT COALESCE(SUM(cost_usd), 0) as current_spend
-         FROM api_calls WHERE org_id = $1 AND timestamp > NOW() - INTERVAL '${interval}'`,
+         FROM api_calls WHERE org_id = $1 AND timestamp > ${sinceClause}`,
         [orgId]
       );
       return { ...budget, current_spend: parseFloat(spend.rows[0].current_spend) };

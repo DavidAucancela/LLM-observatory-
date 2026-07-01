@@ -3,11 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
-import { fmtDateTime } from '../utils/fmt';
+import { fmtDateTime, formatCost } from '../utils/fmt';
 
 // ── Balances tab ──────────────────────────────────────────────
-function BalancesTab() {
+function BalancesTab({ range, configuredProviders }) {
   const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ provider: 'anthropic', amount_usd: '', note: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -15,13 +17,22 @@ function BalancesTab() {
   const { t } = useTranslation();
 
   const fetchData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await apiFetch(`/api/balances?range=all`);
+      const res = await apiFetch(`/api/balances?range=${range}`);
       setData(await res.json());
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); setError(t('finance.loadError') || 'Failed to load balances'); }
+    finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [range]);
+
+  useEffect(() => {
+    if (configuredProviders.length && !configuredProviders.includes(form.provider)) {
+      setForm(f => ({ ...f, provider: configuredProviders[0] }));
+    }
+  }, [configuredProviders]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,8 +55,20 @@ function BalancesTab() {
     fetchData();
   };
 
-  const providers = data?.providers || [];
+  const providers = (data?.providers || []).filter(p => !configuredProviders.length || configuredProviders.includes(p.provider));
   const history   = data?.history   || [];
+
+  if (loading) {
+    return <div className="obs-skeleton" style={{ height: 160, borderRadius: 6 }} />;
+  }
+
+  if (error) {
+    return (
+      <div className="obs-empty">
+        <div className="obs-empty-title">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -73,14 +96,14 @@ function BalancesTab() {
             <div>
               <div className="obs-section-label" style={{ fontSize: 10, marginBottom: 2 }}>{t('finance.remaining')}</div>
               <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', color: 'var(--text)' }}>
-                ${parseFloat(p.remaining || 0).toFixed(2)}
+                {formatCost(p.remaining)}
               </div>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {t('finance.consumed')}{' '}
-              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_spent || 0).toFixed(2)}</span>
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(p.total_spent)}</span>
               {' '}{t('common.of')}{' '}
-              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(p.total_loaded || 0).toFixed(2)}</span>
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(p.total_loaded)}</span>
             </div>
             <div className="iprog-bar">
               <div className={`iprog-fill ${fillCls}`} style={{ width: `${pct}%` }} />
@@ -106,8 +129,9 @@ function BalancesTab() {
             <div className="obs-field">
               <label>{t('finance.providerLabel')}</label>
               <select className="obs-select" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
+                {(configuredProviders.length ? configuredProviders : ['anthropic', 'openai']).map(p => (
+                  <option key={p} value={p}>{p === 'anthropic' ? 'Anthropic' : p === 'openai' ? 'OpenAI' : p}</option>
+                ))}
               </select>
             </div>
             <div className="obs-field">
@@ -147,7 +171,7 @@ function BalancesTab() {
                 <tr key={h.id} style={{ cursor: 'default' }}>
                   <td className="col-muted col-mono">{fmtDateTime(h.recharged_at)}</td>
                   <td><ProviderBadge provider={h.provider} /></td>
-                  <td className="col-num">${parseFloat(h.amount_usd).toFixed(2)}</td>
+                  <td className="col-num">{formatCost(h.amount_usd)}</td>
                   <td className="col-muted">{h.note || '—'}</td>
                   <td className="col-num">
                     <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleDelete(h.id)}>
@@ -167,6 +191,8 @@ function BalancesTab() {
 // ── Budgets tab ───────────────────────────────────────────────
 function BudgetsTab() {
   const [budgets, setBudgets]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ name: '', limit_usd: '', period: 'monthly' });
   const [submitting, setSubmitting] = useState(false);
@@ -174,11 +200,14 @@ function BudgetsTab() {
   const { t } = useTranslation();
 
   const fetchBudgets = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await apiFetch(`/api/budgets`);
       const d = await res.json();
       setBudgets(d.data || []);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); setError(t('finance.loadError') || 'Failed to load budgets'); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchBudgets(); }, []);
@@ -203,6 +232,18 @@ function BudgetsTab() {
     await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' });
     fetchBudgets();
   };
+
+  if (loading) {
+    return <div className="obs-skeleton" style={{ height: 160, borderRadius: 6 }} />;
+  }
+
+  if (error) {
+    return (
+      <div className="obs-empty">
+        <div className="obs-empty-title">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -248,7 +289,7 @@ function BudgetsTab() {
           <div className="obs-empty-sub">{t('finance.budgetHint')}</div>
         </div>
       ) : budgets.map(b => {
-        const pct = Math.min(100, (parseFloat(b.spent_usd || 0) / parseFloat(b.limit_usd)) * 100);
+        const pct = Math.min(100, (parseFloat(b.current_spend || 0) / parseFloat(b.limit_usd)) * 100);
         const isOver  = pct >= 100;
         const isWarn  = pct >= 75 && pct < 100;
         const fillCls = isOver ? 'error' : isWarn ? 'warning' : '';
@@ -264,12 +305,12 @@ function BudgetsTab() {
             <span className="period-badge" style={{ justifySelf: 'start', textTransform: 'capitalize' }}>{b.period}</span>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {t('finance.limitDisplay')}{' '}
-              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${parseFloat(b.limit_usd).toFixed(2)}</span>
+              <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(b.limit_usd)}</span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {t('finance.spentDisplay')}{' '}
               <span style={{ color: isOver ? 'var(--error)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                ${parseFloat(b.spent_usd || 0).toFixed(2)}
+                {formatCost(b.current_spend)}
               </span>
             </div>
             <div className="iprog-bar">
@@ -285,10 +326,15 @@ function BudgetsTab() {
   );
 }
 
+const RANGES = ['24h', '7d', '30d', '90d'];
+
 // ── Page ──────────────────────────────────────────────────────
 export default function Finance() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'budgets' ? 'budgets' : 'balances');
+  const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
+  const [configuredProviders, setConfiguredProviders] = useState([]);
+  const { apiFetch } = useApi();
   const { t } = useTranslation();
 
   const handleTabChange = (newTab) => {
@@ -296,10 +342,34 @@ export default function Finance() {
     setSearchParams(newTab === 'budgets' ? { tab: 'budgets' } : {}, { replace: true });
   };
 
+  useEffect(() => {
+    apiFetch('/api/credentials')
+      .then(r => r.json())
+      .then(d => {
+        const credList = d.credentials || d.data || [];
+        setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <main className="obs-main obs-fade-in">
       <div className="obs-header">
         <div className="obs-page-title">{t('finance.title')}</div>
+        {tab === 'balances' && (
+          <>
+            <div className="obs-divider-v" />
+            <div className="obs-range-picker">
+              {RANGES.map(r => (
+                <button
+                  key={r}
+                  className={`obs-range-btn${range === r ? ' active' : ''}`}
+                  onClick={() => { setRange(r); localStorage.setItem('obs-range', r); }}
+                >{r}</button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
@@ -312,7 +382,7 @@ export default function Finance() {
           </button>
         </div>
 
-        {tab === 'balances' && <BalancesTab />}
+        {tab === 'balances' && <BalancesTab range={range} configuredProviders={configuredProviders} />}
         {tab === 'budgets'  && <BudgetsTab />}
       </div>
     </main>

@@ -26,8 +26,8 @@
   --d-border:      #162035;
   --d-border-soft: #101C30;
   --d-text:        #E2EAF4;
-  --d-muted:       #5580A0;
-  --d-faint:       #2E4A68;
+  --d-muted:       #8AA8C4;
+  --d-faint:       #5C7A99;
   --d-accent:      #06B6D4;
   --d-hover:       #101D32;
 
@@ -494,7 +494,7 @@ body {
 }
 
 .obs-range-btn:hover { color: var(--text); background: var(--hover); }
-.obs-range-btn.active { background: var(--surface); color: var(--text); font-weight: 500; }
+.obs-range-btn.active { background: var(--accent); color: var(--d-page, #fff); font-weight: 600; }
 .obs-range-btn + .obs-range-btn { border-left: 1px solid var(--border); }
 
 .obs-header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }

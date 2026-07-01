@@ -215,7 +215,8 @@ router.get('/summary', async (req, res) => {
         `SELECT COUNT(*) as total_requests,
                 COALESCE(SUM(total_tokens),0) as total_tokens,
                 COALESCE(SUM(cost_usd),0)     as total_cost_usd,
-                COALESCE(AVG(latency_ms),0)   as avg_latency_ms
+                COALESCE(AVG(latency_ms),0)   as avg_latency_ms,
+                COUNT(*) FILTER (WHERE status_code >= 400) as error_count
          FROM api_calls WHERE ${prevFilter}`,
         prevParams
       ),
@@ -251,7 +252,7 @@ router.get('/projection', async (req, res) => {
     const dayOfMonth    = now.getDate();
     const daysRemaining = daysInMonth - dayOfMonth;
 
-    const [monthSpend, weekAvg] = await Promise.all([
+    const [monthSpend, weekAvg, credProviders] = await Promise.all([
       pool.query(
         `SELECT provider, COALESCE(SUM(cost_usd), 0) as spent
          FROM api_calls WHERE org_id = $1 AND timestamp >= $2 GROUP BY provider`,
@@ -262,9 +263,13 @@ router.get('/projection', async (req, res) => {
          FROM api_calls WHERE org_id = $1 AND timestamp > NOW() - INTERVAL '7 days' GROUP BY provider`,
         [orgId]
       ),
+      pool.query(
+        `SELECT DISTINCT provider FROM provider_credentials WHERE org_id = $1`,
+        [orgId]
+      ),
     ]);
 
-    const providers  = ['anthropic', 'openai'];
+    const providers = credProviders.rows.map(r => r.provider);
     const projection = providers.map(p => {
       const spent    = parseFloat(monthSpend.rows.find(r => r.provider === p)?.spent || 0);
       const avgDaily = parseFloat(weekAvg.rows.find(r => r.provider === p)?.avg_daily || 0);
@@ -290,6 +295,11 @@ router.get('/export', async (req, res) => {
     const interval = rangeMap[range] || '30 days';
     const startDate= req.query.start;
     const endDate  = req.query.end;
+    const provider = req.query.provider;
+    const status   = req.query.status;
+    const search   = req.query.search?.trim();
+    const tagKey   = req.query.tag_key?.trim();
+    const tagValue = req.query.tag_value?.trim();
 
     const params = [orgId];
     let where = 'WHERE org_id = $1';
@@ -298,6 +308,20 @@ router.get('/export', async (req, res) => {
       where += ` AND timestamp >= $${params.length - 1} AND timestamp <= $${params.length}`;
     } else {
       where += ` AND timestamp > NOW() - INTERVAL '${interval}'`;
+    }
+    if (provider) { params.push(provider); where += ` AND provider = $${params.length}`; }
+    if (status === 'error')   where += ` AND status_code >= 400`;
+    if (status === 'success') where += ` AND status_code < 400`;
+    if (search) {
+      params.push(`%${search}%`);
+      where += ` AND (prompt_preview ILIKE $${params.length} OR model ILIKE $${params.length})`;
+    }
+    if (tagKey && tagValue) {
+      params.push(tagKey, tagValue);
+      where += ` AND tags->>$${params.length - 1} = $${params.length}`;
+    } else if (tagKey) {
+      params.push(tagKey);
+      where += ` AND tags ? $${params.length}`;
     }
 
     const result = await pool.query(
