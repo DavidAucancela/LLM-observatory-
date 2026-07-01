@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
 import HBar from '../components/HBar';
-import { fmtDateTime } from '../utils/fmt';
+import { fmtDateTime, formatCost } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
@@ -28,7 +28,7 @@ function fmt(n) {
 const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
 
 // ── Requests tab ──────────────────────────────────────────────
-function RequestsTab({ range, onRangeChange }) {
+function RequestsTab({ range, onRangeChange, configuredProviders }) {
   const [data, setData]         = useState(null);
   const [page, setPage]         = useState(1);
   const [provider, setProvider] = useState('');
@@ -92,6 +92,11 @@ function RequestsTab({ range, onRangeChange }) {
   const handleExport = async () => {
     try {
       const params = new URLSearchParams({ range });
+      if (provider) params.set('provider', provider);
+      if (status)   params.set('status',   status);
+      if (search)   params.set('search',   search);
+      if (tagKey)   params.set('tag_key',  tagKey);
+      if (tagValue) params.set('tag_value', tagValue);
       const res = await apiFetch(`/api/metrics/export?${params}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -127,8 +132,9 @@ function RequestsTab({ range, onRangeChange }) {
           onChange={e => { setProvider(e.target.value); setPage(1); }}
         >
           <option value="">{t('activity.allProviders')}</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="openai">OpenAI</option>
+          {(configuredProviders.length ? configuredProviders : ['anthropic', 'openai']).map(p => (
+            <option key={p} value={p}>{p === 'anthropic' ? 'Anthropic' : p === 'openai' ? 'OpenAI' : p}</option>
+          ))}
         </select>
 
         <select
@@ -227,7 +233,7 @@ function RequestsTab({ range, onRangeChange }) {
                 <td><ProviderBadge provider={row.provider} /></td>
                 <td className="col-mono">{row.model}</td>
                 <td className="col-num">{parseInt(row.input_tokens || 0).toLocaleString()} / {parseInt(row.output_tokens || 0).toLocaleString()}</td>
-                <td className="col-num">${parseFloat(row.cost_usd).toFixed(5)}</td>
+                <td className="col-num">{formatCost(row.cost_usd, { small: true })}</td>
                 <td className="col-num col-muted">{row.latency_ms}ms</td>
                 <td>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -304,7 +310,7 @@ function ModelsTab({ range, onRangeChange }) {
                     value={m.total_cost}
                     max={maxCost}
                     color={PROVIDER_COLORS[m.provider] ?? 'var(--text)'}
-                    valueLabel={`$${m.total_cost.toFixed(4)}`}
+                    valueLabel={formatCost(m.total_cost, { small: true })}
                   />
                 ))}
               </div>
@@ -332,7 +338,7 @@ function ModelsTab({ range, onRangeChange }) {
                   <td><ProviderBadge provider={m.provider} /></td>
                   <td className="col-num">{m.requests.toLocaleString()}</td>
                   <td className="col-num">{fmt(m.total_tokens)}</td>
-                  <td className="col-num">${m.total_cost.toFixed(4)}</td>
+                  <td className="col-num">{formatCost(m.total_cost, { small: true })}</td>
                   <td className="col-num col-muted">{Math.round(m.avg_latency)}ms</td>
                 </tr>
               ))}
@@ -348,8 +354,20 @@ function ModelsTab({ range, onRangeChange }) {
 export default function Activity() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'models' ? 'models' : 'requests');
-  const [range, setRange] = useState(() => localStorage.getItem('activity-range') || '7d');
+  const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
+  const [configuredProviders, setConfiguredProviders] = useState([]);
+  const { apiFetch } = useApi();
   const { t } = useTranslation();
+
+  useEffect(() => {
+    apiFetch('/api/credentials')
+      .then(r => r.json())
+      .then(d => {
+        const credList = d.credentials || d.data || [];
+        setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleTabChange = (newTab) => {
     setTab(newTab);
@@ -358,7 +376,7 @@ export default function Activity() {
 
   const handleRangeChange = (r) => {
     setRange(r);
-    localStorage.setItem('activity-range', r);
+    localStorage.setItem('obs-range', r);
   };
 
   return (
@@ -377,7 +395,7 @@ export default function Activity() {
           </button>
         </div>
 
-        {tab === 'requests' && <RequestsTab range={range} onRangeChange={handleRangeChange} />}
+        {tab === 'requests' && <RequestsTab range={range} onRangeChange={handleRangeChange} configuredProviders={configuredProviders} />}
         {tab === 'models'   && <ModelsTab   range={range} onRangeChange={handleRangeChange} />}
       </div>
     </main>

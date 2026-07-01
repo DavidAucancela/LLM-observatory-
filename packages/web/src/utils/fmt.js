@@ -16,3 +16,12 @@ export function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', DATE_OPTS);
 }
+
+/**
+ * "$0.92" for totals/KPIs, "$0.0043" for small per-request amounts that would
+ * otherwise round to $0.00. Pass `small: true` for per-row/per-request costs.
+ */
+export function formatCost(usd, { small = false } = {}) {
+  const n = parseFloat(usd) || 0;
+  return `$${n.toFixed(small ? 4 : 2)}`;
+}

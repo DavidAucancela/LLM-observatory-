@@ -105,7 +105,7 @@ export default function MultiLineChart({ series = [], height = 180, labelFormat 
         {n >= 2 && series.map((s, si) => {
           const d = `M ${s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' L ')}`;
           return (
-            <path key={si} d={d} stroke={s.color} strokeWidth="1.5"
+            <path key={si} d={d} stroke={s.color} strokeWidth={s.strokeWidth || 1.5}
               fill="none" strokeLinejoin="round" strokeLinecap="round" />
           );
         })}
