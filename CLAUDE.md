@@ -47,6 +47,7 @@ cd packages/api
 npm run dev       # nodemon
 npm run migrate   # Run schema.sql
 npm run seed
+npm run seed:demo # Public showcase org: demo@llm-observatory.com / Demo1234! + fake credentials
 
 # Web only
 cd packages/web
@@ -90,6 +91,7 @@ Email (Resend) y URLs públicas:
 RESEND_API_KEY=<resend api key>
 EMAIL_FROM=onboarding@resend.dev   # Use Resend's own domain until custom domain verified
 APP_URL=http://localhost:5173      # URL pública del frontend — usada en links de email
+SUPPORT_EMAIL=<support inbox>      # Recibe los emails de password reset (fallback: EMAIL_FROM)
 ```
 
 Docker/Railway internal networking:
@@ -103,7 +105,7 @@ API_INTERNAL_URL=http://api.railway.internal:3001
 
 ### `packages/sdk`
 
-**Entry point:** `src/index.js`
+**Entry point:** `src/index.js` — published to npm as `@llm-observatory/sdk`
 
 **Exports:**
 - `MonitoredAnthropic` — Wraps `@anthropic-ai/sdk`, intercepts `messages.create()`
@@ -121,8 +123,8 @@ new MonitoredAnthropic({
 })
 ```
 
-**Pricing tables** in `src/index.js` (update when providers change prices):
-- Anthropic: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001, claude-3-opus, claude-3-5-sonnet, claude-3-haiku
+**Pricing tables** in `src/index.js` (update when providers change prices; keep in sync with `packages/sdk-python/llm_observatory/_pricing.py`):
+- Anthropic: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001 (+ alias claude-haiku-4-5), claude-3-opus, claude-3-5-sonnet, claude-3-haiku
 - OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo, o1, o1-mini, o3-mini
 
 **`api_key_hint` in metrics:** Both wrappers compute `maskKey(apiKey)` in the constructor and include it as `api_key_hint` in every metric POST. This links each `api_calls` record to the credential that generated it.
@@ -131,7 +133,7 @@ new MonitoredAnthropic({
 
 ### `packages/sdk-python`
 
-**Entry point:** `llm_observatory/__init__.py`
+**Entry point:** `llm_observatory/__init__.py` — published to PyPI as `llm-observatory`
 
 **Exports:**
 - `MonitoredAnthropic`, `AsyncMonitoredAnthropic` — Wraps `anthropic.Anthropic` / `anthropic.AsyncAnthropic`
@@ -195,6 +197,7 @@ src/
 │   ├── schema.sql      Table definitions + indexes + multi-tenancy backfill
 │   ├── migrate.js      Runs schema.sql (also runs automatically on Docker container start)
 │   ├── seed.js         600 demo records (org-scoped)
+│   ├── seed-demo.js    Public showcase org + demo user + fake credentials (npm run seed:demo)
 │   └── crypto.js       AES-256-GCM encrypt/decrypt for API keys (v2: format); CBC legacy fallback for old values
 ├── middleware/
 │   └── auth.js         JWT + Observatory token resolution; requireAdmin guard
@@ -219,7 +222,7 @@ src/
 **Database tables:**
 
 Multi-tenancy tables (new):
-- `organizations` — Tenant orgs. Columns: `id`, `name`, `created_at`
+- `organizations` — Tenant orgs. Columns: `id`, `name`, `slug` (unique), `created_at`
 - `org_members` — User ↔ org membership with role. Columns: `org_id`, `user_id`, `role` (`admin`|`member`), `joined_at`
 - `invitations` — Email invitations with 7-day expiry tokens. Columns: `org_id`, `email`, `token`, `invited_by`, `expires_at`, `accepted_at`
 - `observatory_tokens` — SDK auth tokens (hash stored, never plaintext). Columns: `org_id`, `name`, `token_hash`, `token_prefix`, `created_by`, `last_used_at`, `revoked_at`
@@ -247,6 +250,13 @@ Auth tables:
 - `requireAdmin`: blocks observatory tokens; requires `req.user.role === 'admin'`
 - `POST /api/auth/logout`: inserts `jti` into `revoked_tokens` — token rejected on all subsequent requests
 
+**Registration & password reset flow (changed 2026-06-28):**
+- Registration **auto-activates** accounts (`is_active = true` on INSERT) — no activation email is sent and login does NOT check `is_active`. `GET /api/auth/activate` still exists but is legacy.
+- Duplicate email on register always returns 409, even if the existing account is inactive (prevents account takeover via re-registration).
+- Password reset is **support-mediated**: `sendPasswordResetEmail()` sends the reset link to `SUPPORT_EMAIL` (fallback `EMAIL_FROM`), not to the user — support forwards it manually. Reason: Resend cannot email arbitrary addresses without a verified custom domain.
+
+**Rate limiting (`src/index.js`):** `express-rate-limit`, two limiters, both **1000 req/min** — `generalLimiter` (all routes) and `metricsLimiter` (`POST /api/metrics`). Was 300; raised because the dashboard's parallel fetches hit the limit.
+
 **Data integrity — cascade delete:** `DELETE /api/credentials/:id` automatically deletes all `api_calls` where `api_key_hint = key_hint`. Admin key deletions also remove `sync:provider` records. All constrained by `org_id`.
 
 **Orphan cleanup on startup:** Deletes `test:sdk_integration` records for providers with no credentials (scoped to org), and `sync:*` records for providers with no admin key.
@@ -264,10 +274,12 @@ Auth tables:
 **Entry point:** `src/main.jsx`
 
 **Pages (react-router-dom v6):**
-- `/` → `Dashboard.jsx` — KPI strip con sparklines, MultiLineChart tokens over time, provider breakdown, proyección mensual
+- `/` → `LandingPage.jsx` (público, con su propio `LandingPage.css`); si hay sesión activa redirige a `/dashboard`
+- `/dashboard` → `Dashboard.jsx` — KPI strip con sparklines, MultiLineChart tokens over time, provider breakdown, proyección mensual
 - `/activity` → `Activity.jsx` — Tab **Requests** (tabla paginada, filtros, drawer, CSV export) + Tab **Models** (HBar chart, tabla comparativa)
 - `/finance` → `Finance.jsx` — Tab **Balances** (saldo por provider, historial recargas) + Tab **Budgets** (límites de gasto con progress bars)
 - `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord) + Tab **Webhooks** (outbound endpoints) + Tab **Team** (members + invitations + Observatory tokens)
+- `/account` → `Account.jsx` — Mi cuenta (perfil del usuario)
 
 **Public pages (outside ProtectedRoute):**
 - `/login` → `Login.jsx`
@@ -276,9 +288,11 @@ Auth tables:
 - `/reset-password` → `ResetPassword.jsx`
 - `/accept-invite` → `AcceptInvite.jsx` — accept team invitation with token from URL
 
-**Redirects legacy:** `/requests` → `/activity`, `/models` → `/activity?tab=models`, `/providers` → `/finance`, `/budgets` → `/finance?tab=budgets`
+Las páginas de auth (Login/Register/ForgotPassword/ResetPassword) usan el tema dark navy con clases `obs-auth-*` de `index.css`.
 
-**Páginas que ya no están en rutas** (archivos existen pero sin ruta): `Requests.jsx`, `Models.jsx`, `Providers.jsx`, `Budgets.jsx`
+**Redirects legacy:** `/requests` → `/activity`, `/models` → `/activity?tab=models`, `/providers` → `/finance`, `/budgets` → `/finance?tab=budgets` (los archivos `Requests.jsx`, `Models.jsx`, `Providers.jsx`, `Budgets.jsx` fueron eliminados)
+
+**i18n (react-i18next):** `src/i18n/index.js` + `src/i18n/locales/{en,es}.json`. Idioma en `localStorage('lang')`, default `en`. Toda string visible en UI debe ir vía `useTranslation()` / `t('key')` y añadirse a **ambos** locale files — nunca hardcodear texto en JSX.
 
 **Key components:**
 - `Sidebar.jsx` — 220px fijo, colapsable a 64px. Nav items con icono 18px + label + subtítulo descriptivo. User block (sin avatar): org + email + role badge; click abre dropdown con Mi cuenta / Tema / Idioma / Logout. Sin sección de proveedores. Props: `darkMode`, `setDarkMode`, `isOpen`, `onClose`, `collapsed`, `onToggleCollapse`.
@@ -287,7 +301,9 @@ Auth tables:
 - `Sparkline.jsx` — SVG sparkline inline (sin Recharts)
 - `MultiLineChart.jsx` — SVG multi-línea con gridlines y tick labels
 - `HBar.jsx` — Barra horizontal: label | barra | valor
-- `hooks/useSocket.js` — Socket.io connection and event listeners
+- `hooks/useSocket.js` — Socket.io connection and event listeners (una sola conexión — no crear sockets adicionales por componente)
+- `hooks/useApi.js` — `useApi()` devuelve `apiFetch` (referencia estable, segura en deps de useEffect): inyecta el header Authorization y en 401 hace logout + redirect a /login. Usar siempre este hook para llamadas a la API, no `fetch` directo.
+- `utils/fmt.js` — `formatCost(usd, { small })`, `fmtDate()`, `fmtDateTime()`. Usar `formatCost` para todo costo mostrado en UI (consistencia de decimales).
 
 **Settings.jsx internal components:**
 - `ObservatoryTokensSection` — Create/list/revoke `obs_sk_` tokens; shows full token once on creation with copy button
@@ -333,10 +349,10 @@ Auth tables:
 | Route | Method | Auth | Description |
 |-------|--------|------|-------------|
 | `/api/auth/login` | POST | Public | Login → JWT |
-| `/api/auth/register` | POST | Public | Register user + create org atomically |
+| `/api/auth/register` | POST | Public | Register user + create org atomically (account queda activa de inmediato) |
 | `/api/auth/me` | GET | JWT | Current session info |
-| `/api/auth/activate` | GET | Public | Activate account with email token |
-| `/api/auth/forgot-password` | POST | Public | Request password reset email |
+| `/api/auth/activate` | GET | Public | Legacy — activation email ya no se envía en el registro |
+| `/api/auth/forgot-password` | POST | Public | Request password reset (link se envía a `SUPPORT_EMAIL`, no al usuario) |
 | `/api/auth/reset-password` | POST | Public | Reset password with token |
 | `/api/auth/invite-info` | GET | Public | Get invite details (`?token=`) |
 | `/api/auth/accept-invite` | POST | Public | Accept invite, create/login account |
@@ -499,6 +515,7 @@ CI: `.github/workflows/test.yml` — 3 jobs paralelos (sdk-node, sdk-python, api
 - `AUTH_EMAIL` / `AUTH_PASSWORD_HASH` env vars still supported for legacy single-admin bootstrapping; on startup the API creates an org + org_member for that user if none exists
 - Webhook delivery has no retry queue or delivery log — failures are silently swallowed after 1 retry. For production, consider adding a `webhook_deliveries` audit table.
 - `EMAIL_FROM` must be `onboarding@resend.dev` (or a verified custom domain in Resend) — unverified custom domains cause Resend to reject all emails to non-owner addresses.
+- Password reset is support-mediated (reset link goes to `SUPPORT_EMAIL` for manual forwarding). Once a custom domain is verified in Resend, `sendPasswordResetEmail()` can be switched back to emailing the user directly.
 - `trust proxy` is set to `1` in Express (`app.set('trust proxy', 1)`) — required for Railway's reverse proxy so `express-rate-limit` reads the real client IP from `X-Forwarded-For`.
 - JWT tokens expire after **1 hour** by default (`JWT_EXPIRES_IN=1h`). Server-side revocation via `POST /api/auth/logout` adds the JTI to `revoked_tokens` table. Cron cleans expired JTIs every 15 min.
 - DB backups: `scripts/backup.sh` + `.github/workflows/backup.yml` — pg_dump daily to S3/R2. Requires secrets: `DATABASE_URL`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET`, `R2_ACCOUNT_ID` in GitHub Actions.
