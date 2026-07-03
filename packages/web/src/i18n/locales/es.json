@@ -171,7 +171,12 @@
     "tags": "Etiquetas",
     "promptPreview": "Vista previa del prompt",
     "noPreview": "(sin vista previa disponible)",
-    "loadError": "No se pudo cargar la solicitud"
+    "loadError": "No se pudo cargar la solicitud",
+    "apiKey": "API key",
+    "totalTokens": "Tokens totales",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "close": "Cerrar"
   },
   "dashboard": {
     "title": "Resumen",

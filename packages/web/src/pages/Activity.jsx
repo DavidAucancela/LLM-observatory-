@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
 import HBar from '../components/HBar';
-import { fmtDateTime, formatCost } from '../utils/fmt';
+import { fmtDateTime, formatCost, fmtLatency } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
@@ -234,7 +234,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
                 <td className="col-mono">{row.model}</td>
                 <td className="col-num">{parseInt(row.input_tokens || 0).toLocaleString()} / {parseInt(row.output_tokens || 0).toLocaleString()}</td>
                 <td className="col-num">{formatCost(row.cost_usd, { small: true })}</td>
-                <td className="col-num col-muted">{row.latency_ms}ms</td>
+                <td className="col-num col-muted">{fmtLatency(row.latency_ms)}</td>
                 <td>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                     <span className="dot" style={{ background: ok ? 'var(--success)' : 'var(--error)', width: 6, height: 6 }} />
@@ -339,7 +339,7 @@ function ModelsTab({ range, onRangeChange }) {
                   <td className="col-num">{m.requests.toLocaleString()}</td>
                   <td className="col-num">{fmt(m.total_tokens)}</td>
                   <td className="col-num">{formatCost(m.total_cost, { small: true })}</td>
-                  <td className="col-num col-muted">{Math.round(m.avg_latency)}ms</td>
+                  <td className="col-num col-muted">{fmtLatency(m.avg_latency)}</td>
                 </tr>
               ))}
             </tbody>

@@ -171,7 +171,12 @@
     "tags": "Tags",
     "promptPreview": "Prompt preview",
     "noPreview": "(no preview available)",
-    "loadError": "Could not load request"
+    "loadError": "Could not load request",
+    "apiKey": "API key",
+    "totalTokens": "Total tokens",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close"
   },
   "dashboard": {
     "title": "Overview",

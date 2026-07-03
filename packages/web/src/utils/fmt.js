@@ -25,3 +25,9 @@ export function formatCost(usd, { small = false } = {}) {
   const n = parseFloat(usd) || 0;
   return `$${n.toFixed(small ? 4 : 2)}`;
 }
+
+/** "845ms" under a second, "1.52s" from there up */
+export function fmtLatency(ms) {
+  const n = Math.round(ms ?? 0);
+  return n >= 1000 ? `${(n / 1000).toFixed(2)}s` : `${n}ms`;
+}

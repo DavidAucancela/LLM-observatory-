@@ -6,7 +6,7 @@ import MultiLineChart from '../components/MultiLineChart';
 import HBar from '../components/HBar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
-import { formatCost } from '../utils/fmt';
+import { formatCost, fmtLatency } from '../utils/fmt';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -402,11 +402,6 @@ export default function Dashboard() {
   const prevTotalReqs  = parseInt(prev?.total_requests || 0);
   const prevErrorPct   = prevTotalReqs > 0 ? (prevErrorCount / prevTotalReqs) * 100 : 0;
   const errorDelta      = calcDelta(errorPct, prevErrorPct);
-
-  function fmtLatency(ms) {
-    const n = Math.round(ms ?? 0);
-    return n >= 1000 ? `${(n / 1000).toFixed(2)}s` : `${n}ms`;
-  }
 
   if (!loading && !hasCredentials) {
     return (
