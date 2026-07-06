@@ -440,6 +440,7 @@
     "kpiTokens": "Tokens",
     "kpiCost": "Costo total",
     "kpiLatency": "Lat. promedio",
+    "kpiErrorRate": "Error Rate",
     "mockTokensOverTime": "Tokens en el tiempo",
     "mockTopModels": "Modelos principales",
     "mockOverview": "Resumen",

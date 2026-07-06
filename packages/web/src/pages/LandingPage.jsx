@@ -91,11 +91,11 @@ function DashboardMockup() {
               { label: t('landing.kpiTokens'),   val: '1.84M',  color: '#06B6D4', spark: SPARK_PATHS.tokens },
               { label: t('landing.kpiCost'),      val: '$4.21',  color: '#7C3AED', spark: SPARK_PATHS.cost },
               { label: t('landing.kpiLatency'),   val: '312ms',  color: '#F59E0B', spark: SPARK_PATHS.latency },
-              { label: 'Error Rate',              val: '0.2%',   color: '#DC2626', spark: null },
+              { label: t('landing.kpiErrorRate'),  val: '0.2%',   color: '#DC2626', spark: null },
             ].map(k => (
               <div key={k.label} className="lp-mockup-kpi" style={{ borderTopColor: k.color }}>
                 <div className="lp-mockup-kpi-label">{k.label}</div>
-                <div className="lp-mockup-kpi-val" style={{ color: k.color === '#E2EAF4' ? undefined : k.color }}>{k.val}</div>
+                <div className="lp-mockup-kpi-val" style={{ color: k.color }}>{k.val}</div>
                 {k.spark && (
                   <svg viewBox="0 0 70 12" preserveAspectRatio="none" className="lp-mockup-kpi-spark">
                     <polyline points={k.spark} fill="none" stroke={k.color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
