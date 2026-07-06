@@ -53,6 +53,12 @@ function Nav({ onDashboard }) {
 ══════════════════════════════════════════════════════ */
 const CHART_A = '0,58 32,42 64,50 96,28 128,44 160,32 192,20 224,36 256,24 288,38 320,16';
 const CHART_O = '0,68 32,64 64,58 96,54 128,61 160,52 192,56 224,49 256,54 288,46 320,50';
+const SPARK_PATHS = {
+  requests: '0,10 10,9 20,9.5 30,7 40,8 50,5 60,6 70,2',
+  tokens:   '0,9 10,10 20,8 30,9 40,7 50,8 60,4 70,3',
+  cost:     '0,4 10,5 20,6 30,4 40,7 50,6 60,8 70,9',
+  latency:  '0,8 10,6 20,7 30,5 40,6 50,4 60,3 70,2',
+};
 
 function DashboardMockup() {
   const { t } = useTranslation();
@@ -67,17 +73,34 @@ function DashboardMockup() {
             <span className="lp-mockup-topbar-title">Observatory — Dashboard</span>
           </div>
 
+          {/* Range bar */}
+          <div className="lp-mockup-rangebar">
+            <span className="lp-mockup-rangebar-title">{t('landing.mockOverview')}</span>
+            <div className="lp-mockup-ranges">
+              {['24h', '7d', '30d', '90d'].map(r => (
+                <span key={r} className={`lp-mockup-range${r === '7d' ? ' active' : ''}`}>{r}</span>
+              ))}
+            </div>
+            <span className="lp-mockup-live"><span className="lp-mockup-live-dot" />{t('landing.mockLive')}</span>
+          </div>
+
           {/* KPI strip */}
           <div className="lp-mockup-kpi-strip">
             {[
-              { label: t('landing.kpiRequests'), val: '12.4K',  color: '#6366f1' },
-              { label: t('landing.kpiTokens'),   val: '1.84M',  color: '#3b82f6' },
-              { label: t('landing.kpiCost'),      val: '$4.21',  color: '#a855f7' },
-              { label: t('landing.kpiLatency'),   val: '312ms',  color: '#f59e0b' },
+              { label: t('landing.kpiRequests'), val: '12.4K',  color: '#E2EAF4', spark: SPARK_PATHS.requests },
+              { label: t('landing.kpiTokens'),   val: '1.84M',  color: '#06B6D4', spark: SPARK_PATHS.tokens },
+              { label: t('landing.kpiCost'),      val: '$4.21',  color: '#7C3AED', spark: SPARK_PATHS.cost },
+              { label: t('landing.kpiLatency'),   val: '312ms',  color: '#F59E0B', spark: SPARK_PATHS.latency },
+              { label: 'Error Rate',              val: '0.2%',   color: '#DC2626', spark: null },
             ].map(k => (
-              <div key={k.label} className="lp-mockup-kpi">
-                <div className="lp-mockup-kpi-val" style={{ color: k.color }}>{k.val}</div>
+              <div key={k.label} className="lp-mockup-kpi" style={{ borderTopColor: k.color }}>
                 <div className="lp-mockup-kpi-label">{k.label}</div>
+                <div className="lp-mockup-kpi-val" style={{ color: k.color === '#E2EAF4' ? undefined : k.color }}>{k.val}</div>
+                {k.spark && (
+                  <svg viewBox="0 0 70 12" preserveAspectRatio="none" className="lp-mockup-kpi-spark">
+                    <polyline points={k.spark} fill="none" stroke={k.color} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
               </div>
             ))}
           </div>
@@ -89,30 +112,43 @@ function DashboardMockup() {
               <svg viewBox="0 0 320 72" preserveAspectRatio="none" className="lp-mockup-svg">
                 <defs>
                   <linearGradient id="lgA" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#d97706" stopOpacity="0.28" />
-                    <stop offset="100%" stopColor="#d97706" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#D97706" stopOpacity="0.28" />
+                    <stop offset="100%" stopColor="#D97706" stopOpacity="0" />
                   </linearGradient>
                   <linearGradient id="lgO" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                    <stop offset="0%" stopColor="#059669" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#059669" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <polygon points={`${CHART_A} 320,72 0,72`} fill="url(#lgA)" />
                 <polygon points={`${CHART_O} 320,72 0,72`} fill="url(#lgO)" />
-                <polyline points={CHART_A} fill="none" stroke="#d97706" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                <polyline points={CHART_O} fill="none" stroke="#10b981" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={CHART_A} fill="none" stroke="#D97706" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points={CHART_O} fill="none" stroke="#059669" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <div className="lp-mockup-legend">
-                <span><span className="lp-mockup-dot" style={{ background: '#d97706' }} />Anthropic</span>
-                <span><span className="lp-mockup-dot" style={{ background: '#10b981' }} />OpenAI</span>
+                <span><span className="lp-mockup-dot" style={{ background: '#D97706' }} />Anthropic</span>
+                <span><span className="lp-mockup-dot" style={{ background: '#059669' }} />OpenAI</span>
               </div>
             </div>
             <div className="lp-mockup-breakdown">
-              <div className="lp-mockup-breakdown-title">{t('landing.mockTopModels')}</div>
+              <div className="lp-mockup-breakdown-title">{t('landing.mockByProvider')}</div>
               {[
-                { name: 'claude-sonnet-4-6', pct: 72, color: '#d97706' },
-                { name: 'gpt-4o',            pct: 18, color: '#10b981' },
-                { name: 'claude-haiku-4-5',  pct: 10, color: '#6366f1' },
+                { name: 'Anthropic', pct: 95, color: '#D97706' },
+                { name: 'OpenAI',    pct: 5,  color: '#059669' },
+              ].map(m => (
+                <div key={m.name} className="lp-mockup-row">
+                  <div className="lp-mockup-row-name">{m.name}</div>
+                  <div className="lp-mockup-row-track">
+                    <div className="lp-mockup-row-fill" style={{ width: `${m.pct}%`, background: m.color }} />
+                  </div>
+                  <div className="lp-mockup-row-pct">{m.pct}%</div>
+                </div>
+              ))}
+              <div className="lp-mockup-breakdown-title lp-mockup-breakdown-title-2">{t('landing.mockTopModels')}</div>
+              {[
+                { name: 'claude-sonnet-4-6',       pct: 72, color: '#D97706' },
+                { name: 'claude-haiku-4-5-20251001', pct: 23, color: '#D97706' },
+                { name: 'whisper-1',               pct: 5,  color: '#059669' },
               ].map(m => (
                 <div key={m.name} className="lp-mockup-row">
                   <div className="lp-mockup-row-name">{m.name}</div>
@@ -448,18 +484,20 @@ function HowItWorks() {
       <div className="lp-section-tag">{t('landing.howTag')}</div>
       <h2 className="lp-section-title">{t('landing.howTitle')}</h2>
       <p className="lp-section-sub">{t('landing.howSub')}</p>
-      <div className="lp-steps">
-        {STEPS.map((s, i) => (
-          <div key={i} className="lp-step">
-            <div className="lp-step-num">{i + 1}</div>
-            <div className="lp-step-body">
-              <div className="lp-step-title">{s.title}</div>
-              <div className="lp-step-desc">{s.desc}</div>
-              <div className="lp-code-chip">{s.code}</div>
-              <img src={s.img} alt={s.title} className="lp-step-screenshot" />
+      <div className="lp-steps-scroller">
+        <div className="lp-steps">
+          {STEPS.map((s, i) => (
+            <div key={i} className="lp-step">
+              <div className="lp-step-num">{i + 1}</div>
+              <div className="lp-step-body">
+                <div className="lp-step-title">{s.title}</div>
+                <div className="lp-step-desc">{s.desc}</div>
+                <div className="lp-code-chip">{s.code}</div>
+                <img src={s.img} alt={s.title} className="lp-step-screenshot" />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -566,7 +604,6 @@ export default function LandingPage() {
       <section className="lp-hero">
         <div className="lp-hero-bg" />
         <div className="lp-hero-grid" />
-        <div className="lp-badge">{t('landing.badgeText')}</div>
         <h1>
           {t('landing.heroTitle1')}<br />
           <span className="lp-grad">{t('landing.heroTitle2')}</span>

@@ -361,7 +361,6 @@
     "navArchitecture": "Arquitectura",
     "navHowItWorks": "Cómo funciona",
     "navDashboard": "Dashboard →",
-    "badgeText": "Código abierto · Auto-alojado · Licencia MIT",
     "heroTitle1": "Observabilidad para tus",
     "heroTitle2": "llamadas a Claude y OpenAI",
     "heroSubtitle": "Wrapper SDK drop-in que transmite métricas de costo, tokens y latencia en tiempo real a tu dashboard de equipo — con cero overhead en tus llamadas API.",
@@ -442,6 +441,9 @@
     "kpiCost": "Costo total",
     "kpiLatency": "Lat. promedio",
     "mockTokensOverTime": "Tokens en el tiempo",
-    "mockTopModels": "Mejores modelos"
+    "mockTopModels": "Modelos principales",
+    "mockOverview": "Resumen",
+    "mockLive": "En vivo",
+    "mockByProvider": "Por proveedor"
   }
 }

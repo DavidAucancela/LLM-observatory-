@@ -603,6 +603,76 @@ body {
   margin-bottom: 22px;
 }
 
+/* ── Dashboard: single-viewport layout (no page scroll) ── */
+.dash-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-kpi { margin-bottom: 14px; flex-shrink: 0; }
+
+.dash-main-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2.3fr 1fr;
+  gap: 14px;
+}
+
+.dash-col-left,
+.dash-col-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 14px;
+}
+
+.dash-chart-card {
+  flex: 1.5;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-chart-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.dash-chart-body > * { width: 100%; }
+
+.dash-split-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+}
+
+.dash-sub-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dash-card-head { flex-shrink: 0; }
+
+.dash-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dash-col-right > .obs-card {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Card-style KPI */
 .kpi-card {
   display: flex;
@@ -1159,6 +1229,30 @@ body {
   .obs-content > div[style*="grid-template-columns: 2fr 1fr"] {
     display: flex !important;
     flex-direction: column !important;
+  }
+
+  /* Dashboard: fall back to normal stacked/scrollable layout on mobile */
+  .dash-content {
+    display: block;
+    overflow-y: auto;
+  }
+  .dash-main-grid {
+    display: block;
+  }
+  .dash-col-left,
+  .dash-col-right {
+    display: block;
+  }
+  .dash-chart-card,
+  .dash-sub-card,
+  .dash-col-right > .obs-card {
+    margin-bottom: 14px;
+  }
+  .dash-split-row {
+    display: block;
+  }
+  .dash-scroll {
+    overflow-y: visible;
   }
 
   /* Header: allow wrapping */

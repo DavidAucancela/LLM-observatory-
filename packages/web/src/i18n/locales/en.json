@@ -361,7 +361,6 @@
     "navArchitecture": "Architecture",
     "navHowItWorks": "How it works",
     "navDashboard": "Dashboard →",
-    "badgeText": "Open source · Self-hosted · MIT License",
     "heroTitle1": "Observability for your",
     "heroTitle2": "Claude & OpenAI calls",
     "heroSubtitle": "Drop-in SDK wrapper that streams real-time cost, token, and latency metrics to your team dashboard — with zero overhead on your API calls.",
@@ -442,6 +441,9 @@
     "kpiCost": "Total Cost",
     "kpiLatency": "Avg Latency",
     "mockTokensOverTime": "Tokens over time",
-    "mockTopModels": "Top models"
+    "mockTopModels": "Top models",
+    "mockOverview": "Overview",
+    "mockLive": "Live",
+    "mockByProvider": "By provider"
   }
 }
