@@ -216,8 +216,8 @@ function TagBreakdown({ range }) {
   const maxCost = Math.max(...data.map(d => parseFloat(d.total_cost || 0)), 0.0001);
 
   return (
-    <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+    <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+      <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div className="obs-section-label">{t('dashboard.tagBreakdown')}</div>
         <select
           className="obs-btn"
@@ -235,7 +235,7 @@ function TagBreakdown({ range }) {
       ) : data.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('common.noData')}</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="dash-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {data.map(row => (
             <HBar
               key={row.value}
@@ -262,9 +262,9 @@ function MonthlyProjection({ projection, configuredProviders }) {
   const daysInMonth = projection?.days_in_month || 30;
 
   return (
-    <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-      <div className="obs-section-label" style={{ marginBottom: 16 }}>{t('dashboard.monthlyProjection')}</div>
-      <div style={{
+    <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+      <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.monthlyProjection')}</div>
+      <div className="dash-scroll" style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${items.length}, 1fr)`,
         gap: 0,
@@ -462,9 +462,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="obs-content">
+      <div className="obs-content dash-content">
         {/* KPI Cards */}
-        <div className="kpi-strip" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <div className="kpi-strip dash-kpi" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <KpiCard
             label={t('activity.requestsCol')}
             value={loading ? '—' : fmt(s?.total_requests ?? 0)}
@@ -504,88 +504,95 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Chart + Provider breakdown */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 0.9fr', gap: 20 }}>
-          {/* Tokens over time */}
-          <div className="obs-card" style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div className="obs-section-label">{t('dashboard.tokensOverTime')}</div>
-              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
-                {configuredProviders.includes('anthropic') && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 10, height: 2, background: 'var(--anthropic)', display: 'inline-block', borderRadius: 1 }} />
-                    Anthropic
-                  </span>
-                )}
-                {configuredProviders.includes('openai') && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 10, height: 2, background: 'var(--openai)', display: 'inline-block', borderRadius: 1 }} />
-                    OpenAI
-                  </span>
+        {/* Main grid: chart + sub-breakdowns (left) | side panel (right) — fits one viewport, no page scroll */}
+        <div className="dash-main-grid">
+          <div className="dash-col-left">
+            {/* Tokens over time */}
+            <div className="obs-card dash-chart-card" style={{ padding: '16px 20px' }}>
+              <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div className="obs-section-label">{t('dashboard.tokensOverTime')}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
+                  {configuredProviders.includes('anthropic') && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ width: 10, height: 2, background: 'var(--anthropic)', display: 'inline-block', borderRadius: 1 }} />
+                      Anthropic
+                    </span>
+                  )}
+                  {configuredProviders.includes('openai') && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ width: 10, height: 2, background: 'var(--openai)', display: 'inline-block', borderRadius: 1 }} />
+                      OpenAI
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="dash-chart-body">
+                {loading ? (
+                  <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />
+                ) : timeSeries.length > 1 ? (
+                  <MultiLineChart
+                    series={(() => {
+                      const anthTotal = anthData.reduce((a, b) => a + b, 0);
+                      const oaiTotal  = oaiData.reduce((a, b) => a + b, 0);
+                      const lowVolume = anthTotal > 0 && oaiTotal > 0
+                        ? (anthTotal < oaiTotal ? 'anthropic' : 'openai')
+                        : null;
+                      return [
+                        ...(configuredProviders.includes('anthropic') ? [{ name: 'Anthropic', color: 'var(--anthropic)', data: anthData, xLabels, strokeWidth: lowVolume === 'anthropic' ? 2.5 : 1.5 }] : []),
+                        ...(configuredProviders.includes('openai')    ? [{ name: 'OpenAI',    color: 'var(--openai)',    data: oaiData,  xLabels, strokeWidth: lowVolume === 'openai' ? 2.5 : 1.5 }] : []),
+                      ];
+                    })()}
+                    height={160}
+                  />
+                ) : (
+                  <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
+                  </div>
                 )}
               </div>
             </div>
-            {loading ? (
-              <div className="obs-skeleton" style={{ height: 180, borderRadius: 4 }} />
-            ) : timeSeries.length > 1 ? (
-              <MultiLineChart
-                series={(() => {
-                  const anthTotal = anthData.reduce((a, b) => a + b, 0);
-                  const oaiTotal  = oaiData.reduce((a, b) => a + b, 0);
-                  const lowVolume = anthTotal > 0 && oaiTotal > 0
-                    ? (anthTotal < oaiTotal ? 'anthropic' : 'openai')
-                    : null;
-                  return [
-                    ...(configuredProviders.includes('anthropic') ? [{ name: 'Anthropic', color: 'var(--anthropic)', data: anthData, xLabels, strokeWidth: lowVolume === 'anthropic' ? 2.5 : 1.5 }] : []),
-                    ...(configuredProviders.includes('openai')    ? [{ name: 'OpenAI',    color: 'var(--openai)',    data: oaiData,  xLabels, strokeWidth: lowVolume === 'openai' ? 2.5 : 1.5 }] : []),
-                  ];
-                })()}
-                height={180}
-              />
-            ) : (
-              <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
+
+            {/* Top models + Error breakdown, side by side */}
+            <div className="dash-split-row">
+              <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+                <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div>
+                    <div className="obs-section-label">{t('dashboard.topModels')}</div>
+                    <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>sorted by cost</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16 }}>
+                    <span style={{ width: 52, textAlign: 'right' }}>{t('dashboard.cost')}</span>
+                    <span style={{ width: 42, textAlign: 'right' }}>{t('dashboard.reqs')}</span>
+                  </div>
+                </div>
+                <div className="dash-scroll">
+                  <TopModels byModel={byModel} loading={loading} />
+                </div>
               </div>
-            )}
+
+              <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+                <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
+                <div className="dash-scroll">
+                  <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Provider breakdown */}
-          <div className="obs-card" style={{ padding: '16px 20px' }}>
-            <div className="obs-section-label" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
-            <ProviderBreakdown byProvider={byProvider} loading={loading} />
+          {/* Side panel: provider breakdown, monthly projection, tag breakdown */}
+          <div className="dash-col-right">
+            <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+              <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
+              <div className="dash-scroll">
+                <ProviderBreakdown byProvider={byProvider} loading={loading} />
+              </div>
+            </div>
+
+            <MonthlyProjection projection={projection} configuredProviders={configuredProviders} />
+
+            <TagBreakdown range={range} />
           </div>
         </div>
-
-        {/* Top models */}
-        {(byModel.length > 0 || loading) && (
-          <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div>
-                <div className="obs-section-label">{t('dashboard.topModels')}</div>
-                <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>sorted by cost</div>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16 }}>
-                <span style={{ width: 52, textAlign: 'right' }}>{t('dashboard.cost')}</span>
-                <span style={{ width: 42, textAlign: 'right' }}>{t('dashboard.reqs')}</span>
-              </div>
-            </div>
-            <TopModels byModel={byModel} loading={loading} />
-          </div>
-        )}
-
-        {/* Error breakdown */}
-        {(errorBreakdown.length > 0 || loading) && (
-          <div className="obs-card" style={{ marginTop: 16, padding: '16px 20px' }}>
-            <div className="obs-section-label" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
-            <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
-          </div>
-        )}
-
-        {/* Tag breakdown */}
-        <TagBreakdown range={range} />
-
-        {/* Monthly projection */}
-        <MonthlyProjection projection={projection} configuredProviders={configuredProviders} />
 
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>

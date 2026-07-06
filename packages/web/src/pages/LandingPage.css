@@ -187,7 +187,7 @@
 .lp-mockup-glow {
   position: absolute;
   inset: 10% -5%; bottom: -20%;
-  background: radial-gradient(ellipse 70% 50% at 50% 90%, rgba(99,102,241,0.28), transparent);
+  background: radial-gradient(ellipse 70% 50% at 50% 90%, rgba(6,182,212,0.24), transparent);
   pointer-events: none; z-index: 0;
 }
 .lp-hero-mockup {
@@ -196,61 +196,92 @@
   will-change: transform;
 }
 .lp-mockup-window {
-  background: #0c0c1a;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #080D1A;
+  border: 1px solid #162035;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.12);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(6,182,212,0.1);
 }
 .lp-mockup-topbar {
   display: flex; align-items: center; gap: 6px;
   padding: 10px 16px;
-  background: rgba(255,255,255,0.025);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: #0D1628;
+  border-bottom: 1px solid #162035;
 }
 .lp-mockup-topbar-title {
   margin-left: 10px;
-  font-size: 11px; color: #444466;
+  font-size: 11px; color: #8AA8C4;
   font-family: 'JetBrains Mono', monospace;
 }
 .lp-dot-r { width: 10px; height: 10px; border-radius: 50%; background: #ff5f57; flex-shrink: 0; }
 .lp-dot-y { width: 10px; height: 10px; border-radius: 50%; background: #febc2e; flex-shrink: 0; }
 .lp-dot-g { width: 10px; height: 10px; border-radius: 50%; background: #28c840; flex-shrink: 0; }
 
+.lp-mockup-rangebar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #162035;
+}
+.lp-mockup-rangebar-title {
+  font-size: 12px; font-weight: 700; color: #E2EAF4;
+  margin-right: auto;
+}
+.lp-mockup-ranges { display: flex; gap: 3px; }
+.lp-mockup-range {
+  font-size: 9px; font-family: 'JetBrains Mono', monospace; color: #8AA8C4;
+  padding: 3px 7px; border-radius: 5px;
+}
+.lp-mockup-range.active { background: #06B6D4; color: #080D1A; font-weight: 700; }
+.lp-mockup-live {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 9px; color: #8AA8C4; margin-left: 8px;
+}
+.lp-mockup-live-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+  animation: lp-live-pulse 2s ease-in-out infinite;
+}
+@keyframes lp-live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50% { box-shadow: 0 0 0 3px rgba(16,185,129,0); }
+}
+
 .lp-mockup-kpi-strip {
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid #162035;
 }
 .lp-mockup-kpi {
-  padding: 12px 16px;
-  border-right: 1px solid rgba(255,255,255,0.05);
+  padding: 10px 14px 9px;
+  border-right: 1px solid #101C30;
+  border-top: 3px solid transparent;
 }
 .lp-mockup-kpi:last-child { border-right: none; }
 .lp-mockup-kpi-val {
-  font-size: 18px; font-weight: 700; letter-spacing: -0.03em;
+  font-size: 16px; font-weight: 700; letter-spacing: -0.03em;
   font-family: 'JetBrains Mono', monospace;
-  line-height: 1.2;
+  line-height: 1.3; color: #E2EAF4;
 }
 .lp-mockup-kpi-label {
-  font-size: 10px; color: #555577; margin-top: 3px;
+  font-size: 9px; color: #8AA8C4; margin-bottom: 3px;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
+.lp-mockup-kpi-spark { display: block; width: 100%; height: 12px; margin-top: 4px; }
 .lp-mockup-body {
   display: flex; gap: 0;
 }
 .lp-mockup-chart {
   flex: 2; padding: 14px 16px 12px;
-  border-right: 1px solid rgba(255,255,255,0.05);
+  border-right: 1px solid #101C30;
 }
 .lp-mockup-chart-title {
-  font-size: 10px; color: #555577;
+  font-size: 10px; color: #8AA8C4;
   text-transform: uppercase; letter-spacing: 0.06em;
   margin-bottom: 8px;
 }
 .lp-mockup-svg { display: block; width: 100%; }
 .lp-mockup-legend {
   display: flex; gap: 14px; margin-top: 8px;
-  font-size: 10px; color: #555577;
+  font-size: 10px; color: #8AA8C4;
 }
 .lp-mockup-legend span { display: flex; align-items: center; gap: 5px; }
 .lp-mockup-dot {
@@ -259,22 +290,23 @@
 }
 .lp-mockup-breakdown { flex: 1; padding: 14px 14px 12px; }
 .lp-mockup-breakdown-title {
-  font-size: 10px; color: #555577;
+  font-size: 10px; color: #8AA8C4;
   text-transform: uppercase; letter-spacing: 0.06em;
   margin-bottom: 10px;
 }
+.lp-mockup-breakdown-title-2 { margin-top: 14px; }
 .lp-mockup-row { margin-bottom: 9px; }
 .lp-mockup-row-name {
-  font-size: 9px; color: #666688; margin-bottom: 4px;
+  font-size: 9px; color: #8AA8C4; margin-bottom: 4px;
   font-family: 'JetBrains Mono', monospace;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .lp-mockup-row-track {
-  height: 4px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden;
+  height: 4px; background: #101C30; border-radius: 2px; overflow: hidden;
   position: relative;
 }
 .lp-mockup-row-fill { height: 100%; border-radius: 2px; }
-.lp-mockup-row-pct { font-size: 9px; color: #444466; margin-top: 3px; font-family: monospace; }
+.lp-mockup-row-pct { font-size: 9px; color: #8AA8C4; margin-top: 3px; font-family: monospace; }
 
 /* ══════════════════════════════════════════════════
    PROVIDER STRIP
@@ -553,14 +585,30 @@
 /* ══════════════════════════════════════════════════
    HOW IT WORKS
 ══════════════════════════════════════════════════ */
-.lp-steps { display: flex; flex-direction: column; gap: 0; }
-.lp-step {
-  display: grid; grid-template-columns: 44px 1fr;
-  gap: 20px; align-items: start;
-  padding: 0 0 32px;
+.lp-steps-scroller {
   position: relative;
+  margin: 0 -32px;
+  padding: 0 32px;
 }
-.lp-step:last-child { padding-bottom: 0; }
+.lp-steps {
+  display: flex; flex-direction: row; gap: 28px;
+  overflow-x: auto;
+  padding: 4px 4px 20px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99,102,241,0.4) transparent;
+}
+.lp-steps::-webkit-scrollbar { height: 6px; }
+.lp-steps::-webkit-scrollbar-track { background: transparent; }
+.lp-steps::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.35); border-radius: 3px; }
+.lp-steps::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.55); }
+.lp-step {
+  display: flex; flex-direction: column;
+  gap: 14px;
+  width: 420px; flex: 0 0 420px;
+  position: relative;
+  scroll-snap-align: start;
+}
 .lp-step-num {
   width: 36px; height: 36px; border-radius: 50%;
   background: rgba(99,102,241,0.12);
@@ -569,15 +617,13 @@
   font-size: 13px; font-weight: 700; color: #818cf8;
   flex-shrink: 0; position: relative; z-index: 1;
 }
-.lp-step:not(:last-child) .lp-step-num::after {
+.lp-step:not(:last-child)::after {
   content: '';
-  position: absolute; top: 100%; left: 50%;
-  transform: translateX(-50%);
-  width: 1px; height: calc(100% + 20px);
-  border-left: 1px dashed rgba(99,102,241,0.2);
-  margin-top: 6px;
+  position: absolute; top: 18px; left: calc(100% + 4px);
+  width: 20px; height: 1px;
+  border-top: 1px dashed rgba(99,102,241,0.25);
 }
-.lp-step-body { padding-top: 6px; }
+.lp-step-body { display: flex; flex-direction: column; }
 .lp-step-title { font-size: 15px; font-weight: 700; color: #d8d8f0; margin-bottom: 6px; }
 .lp-step-desc  { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 10px; }
 .lp-code-chip {
@@ -588,11 +634,12 @@
   border-radius: 6px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 12px; color: #a5b4fc;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .lp-step-screenshot {
   display: block;
   margin-top: 16px;
-  width: 100%; max-width: 560px;
+  width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
