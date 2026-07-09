@@ -4,7 +4,7 @@ const sinon  = require('sinon');
 
 const { MonitoredAnthropic } = require('../index.js');
 
-function makeResponse({ input = 100, output = 50, cacheRead = 0, cacheWrite = 0 } = {}) {
+function makeResponse({ input = 100, output = 50, cacheRead = 0, cacheWrite = 0, content, stop_reason } = {}) {
   return {
     usage: {
       input_tokens:                input,
@@ -12,6 +12,8 @@ function makeResponse({ input = 100, output = 50, cacheRead = 0, cacheWrite = 0 
       cache_read_input_tokens:     cacheRead,
       cache_creation_input_tokens: cacheWrite,
     },
+    content: content ?? [{ type: 'text', text: 'Hello there' }],
+    stop_reason: stop_reason ?? 'end_turn',
   };
 }
 
@@ -123,6 +125,60 @@ describe('MonitoredAnthropic — non-streaming', () => {
     assert.deepStrictEqual(metric.tools_used, ['get_weather', 'search_web']);
   });
 
+  it('sends prompt_full with the full messages array, not just the first message', async () => {
+    messagesStub.resolves(makeResponse());
+    const messages = [
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'second' },
+      { role: 'user', content: 'third' },
+    ];
+    await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 10, messages });
+    await new Promise(r => setImmediate(r));
+    const metric = JSON.parse(fetchStub.firstCall.args[1].body);
+    assert.deepStrictEqual(JSON.parse(metric.prompt_full), messages);
+  });
+
+  it('extracts system_prompt and request_params from params', async () => {
+    messagesStub.resolves(makeResponse());
+    await client.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 10, temperature: 0.7, top_p: 0.9,
+      system: 'You are a helpful assistant.',
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    await new Promise(r => setImmediate(r));
+    const metric = JSON.parse(fetchStub.firstCall.args[1].body);
+    assert.strictEqual(metric.system_prompt, 'You are a helpful assistant.');
+    assert.deepStrictEqual(metric.request_params, { temperature: 0.7, max_tokens: 10, top_p: 0.9, stream: false });
+  });
+
+  it('extracts tool_calls (name + arguments) from tool_use content blocks', async () => {
+    messagesStub.resolves(makeResponse({
+      content: [
+        { type: 'text', text: 'Let me check.' },
+        { type: 'tool_use', name: 'get_weather', input: { city: 'Paris' } },
+      ],
+    }));
+    await client.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 10,
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+    });
+    await new Promise(r => setImmediate(r));
+    const metric = JSON.parse(fetchStub.firstCall.args[1].body);
+    assert.deepStrictEqual(metric.tool_calls, [{ name: 'get_weather', arguments: { city: 'Paris' } }]);
+    assert.strictEqual(metric.response_full, 'Let me check.');
+  });
+
+  it('extracts stop_reason from the response', async () => {
+    messagesStub.resolves(makeResponse({ stop_reason: 'max_tokens' }));
+    await client.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 10,
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+    await new Promise(r => setImmediate(r));
+    const metric = JSON.parse(fetchStub.firstCall.args[1].body);
+    assert.strictEqual(metric.stop_reason, 'max_tokens');
+  });
+
   it('captures cache_read_tokens and cache_write_tokens', async () => {
     messagesStub.resolves(makeResponse({ input: 100, output: 50, cacheRead: 300, cacheWrite: 150 }));
     await client.messages.create({
@@ -170,7 +226,7 @@ describe('MonitoredAnthropic — non-streaming', () => {
 
 // ── Streaming ─────────────────────────────────────────────────────────────────
 describe('MonitoredAnthropic — streaming', () => {
-  function makeFakeStream({ input = 80, output = 40 } = {}) {
+  function makeFakeStream({ input = 80, output = 40, content, stop_reason } = {}) {
     return {
       finalMessage: () => Promise.resolve({
         usage: {
@@ -179,6 +235,8 @@ describe('MonitoredAnthropic — streaming', () => {
           cache_read_input_tokens: 0,
           cache_creation_input_tokens: 0,
         },
+        content: content ?? [{ type: 'text', text: 'streamed reply' }],
+        stop_reason: stop_reason ?? 'end_turn',
       }),
       [Symbol.asyncIterator]: async function*() {
         yield { type: 'content_block_delta' };
@@ -216,6 +274,8 @@ describe('MonitoredAnthropic — streaming', () => {
     assert.strictEqual(metric.output_tokens, 40);
     assert.strictEqual(metric.total_tokens,  120);
     assert.strictEqual(metric.status_code,   200);
+    assert.strictEqual(metric.response_full, 'streamed reply');
+    assert.strictEqual(metric.stop_reason,   'end_turn');
   });
 
   it('sends metric even when the stream errors before completing', async () => {

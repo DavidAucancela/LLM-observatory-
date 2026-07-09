@@ -23,6 +23,47 @@ function CopyButton({ text, style }) {
   );
 }
 
+// JSONB columns come back already-parsed from node-postgres, but fall back to
+// JSON.parse for safety (mirrors the pre-existing tools_used handling).
+function parseJsonField(value, fallback) {
+  if (value == null) return fallback;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function ExpandableText({ text, emptyLabel, threshold = 500 }) {
+  const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation();
+
+  if (!text) {
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{emptyLabel}</div>;
+  }
+
+  const isLong = text.length > threshold;
+  return (
+    <div>
+      <div style={{
+        fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55,
+        color: 'var(--muted)', padding: 10,
+        background: 'var(--hover)', borderRadius: 4,
+        maxHeight: expanded ? 'none' : 160, overflow: expanded ? 'visible' : 'auto',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+      }}>
+        {text}
+      </div>
+      {isLong && (
+        <button
+          className="obs-btn obs-btn-ghost"
+          style={{ marginTop: 6, fontSize: 10, padding: '2px 8px' }}
+          onClick={() => setExpanded(e => !e)}
+        >
+          {expanded ? t('drawer.showLess') : t('drawer.showMore')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function RequestDrawer({ requestId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,15 +93,21 @@ export default function RequestDrawer({ requestId, onClose }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  const tools = data && Array.isArray(data.tools_used)
-    ? data.tools_used
-    : (() => { try { return JSON.parse(data?.tools_used || '[]'); } catch { return []; } })();
+  const tools       = parseJsonField(data?.tools_used, []);
+  const toolCalls   = parseJsonField(data?.tool_calls, []);
+  const reqParams   = parseJsonField(data?.request_params, {});
 
-  const promptText = data?.prompt_full || data?.prompt_preview || '';
+  const promptText   = data?.prompt_full || data?.prompt_preview || '';
+  const responseText = data?.response_full || '';
   const totalTokens = data
     ? parseInt(data.total_tokens || 0) ||
       (parseInt(data.input_tokens || 0) + parseInt(data.output_tokens || 0))
     : 0;
+
+  const hasReqParams = reqParams && (
+    reqParams.temperature !== undefined || reqParams.max_tokens !== undefined ||
+    reqParams.top_p !== undefined || reqParams.stream !== undefined
+  );
 
   return (
     <>
@@ -143,6 +190,26 @@ export default function RequestDrawer({ requestId, onClose }) {
                 </dl>
               </div>
 
+              {hasReqParams && (
+                <div className="obs-drawer-section">
+                  <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('drawer.requestParams')}</div>
+                  <dl className="meta-grid">
+                    {reqParams.temperature !== undefined && (
+                      <><dt>{t('drawer.temperature')}</dt><dd>{reqParams.temperature}</dd></>
+                    )}
+                    {reqParams.max_tokens !== undefined && (
+                      <><dt>{t('drawer.maxTokens')}</dt><dd>{reqParams.max_tokens}</dd></>
+                    )}
+                    {reqParams.top_p !== undefined && (
+                      <><dt>{t('drawer.topP')}</dt><dd>{reqParams.top_p}</dd></>
+                    )}
+                    {reqParams.stream !== undefined && (
+                      <><dt>{t('drawer.streaming')}</dt><dd>{reqParams.stream ? t('common.yes') : t('common.no')}</dd></>
+                    )}
+                  </dl>
+                </div>
+              )}
+
               {tools.length > 0 && (
                 <div className="obs-drawer-section">
                   <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('drawer.toolsUsed')}</div>
@@ -163,19 +230,53 @@ export default function RequestDrawer({ requestId, onClose }) {
                 </div>
               )}
 
+              {data.system_prompt && (
+                <div className="obs-drawer-section">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div className="obs-section-label" style={{ marginBottom: 0 }}>{t('drawer.systemPrompt')}</div>
+                    <CopyButton text={data.system_prompt} />
+                  </div>
+                  <ExpandableText text={data.system_prompt} emptyLabel={t('drawer.noSystemPrompt')} />
+                </div>
+              )}
+
               <div className="obs-drawer-section">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div className="obs-section-label" style={{ marginBottom: 0 }}>{t('drawer.promptPreview')}</div>
                   {promptText && <CopyButton text={promptText} />}
                 </div>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55,
-                  color: 'var(--muted)', padding: 10,
-                  background: 'var(--hover)', borderRadius: 4,
-                  maxHeight: 160, overflow: 'auto',
-                }}>
-                  {promptText || t('drawer.noPreview')}
+                <ExpandableText text={promptText} emptyLabel={t('drawer.noPreview')} />
+              </div>
+
+              {toolCalls.length > 0 && (
+                <div className="obs-drawer-section">
+                  <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('drawer.toolCallsInvoked')}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {toolCalls.map((call, i) => (
+                      <div key={i} style={{
+                        background: 'var(--hover)', borderRadius: 4, padding: 8,
+                      }}>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                          {call.name}
+                        </div>
+                        <pre style={{
+                          margin: 0, fontFamily: 'var(--font-mono)', fontSize: 10.5,
+                          lineHeight: 1.5, color: 'var(--muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}>
+                          {JSON.stringify(call.arguments, null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              )}
+
+              <div className="obs-drawer-section">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div className="obs-section-label" style={{ marginBottom: 0 }}>{t('drawer.responseText')}</div>
+                  {responseText && <CopyButton text={responseText} />}
+                </div>
+                <ExpandableText text={responseText} emptyLabel={t('drawer.noResponse')} />
               </div>
             </>
           ) : (

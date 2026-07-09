@@ -79,6 +79,71 @@ function classifyError(err) {
   };
 }
 
+function truncate(str, max) {
+  if (typeof str !== 'string') return str;
+  return str.length > max ? str.slice(0, max) : str;
+}
+
+function safeJsonParse(str) {
+  try { return JSON.parse(str); } catch { return str; }
+}
+
+// ── Full request/response capture — Anthropic ────────────────────────────────
+// Scoped to messages.create only (see CLAUDE.md); embeddings/transcription/
+// speech keep the lightweight prompt_preview-only capture.
+function extractAnthropicRequestDetails(params) {
+  const promptFull = truncate(JSON.stringify(params.messages || []), 20000);
+  const systemPrompt = params.system
+    ? truncate(typeof params.system === 'string' ? params.system : JSON.stringify(params.system), 4000)
+    : null;
+  const requestParams = {
+    temperature: params.temperature,
+    max_tokens:  params.max_tokens,
+    top_p:       params.top_p,
+    stream:      !!params.stream,
+  };
+  return { promptFull, systemPrompt, requestParams };
+}
+
+function extractAnthropicResponseDetails(message) {
+  const content = message?.content || [];
+  const responseFull = truncate(
+    content.filter(b => b.type === 'text').map(b => b.text).join('\n'),
+    20000
+  );
+  const toolCalls = content
+    .filter(b => b.type === 'tool_use')
+    .map(b => ({ name: b.name, arguments: b.input }));
+  return { responseFull, toolCalls, stopReason: message?.stop_reason || null };
+}
+
+// ── Full request/response capture — OpenAI chat completions ──────────────────
+function extractOpenAIRequestDetails(params) {
+  const messages = params.messages || [];
+  const promptFull = truncate(JSON.stringify(messages), 20000);
+  const systemMsg = messages.find(m => m.role === 'system');
+  const systemPrompt = systemMsg
+    ? truncate(typeof systemMsg.content === 'string' ? systemMsg.content : JSON.stringify(systemMsg.content), 4000)
+    : null;
+  const requestParams = {
+    temperature: params.temperature,
+    max_tokens:  params.max_tokens,
+    top_p:       params.top_p,
+    stream:      !!params.stream,
+  };
+  return { promptFull, systemPrompt, requestParams };
+}
+
+function extractOpenAIResponseDetails(response) {
+  const message = response?.choices?.[0]?.message;
+  const responseFull = truncate(message?.content || '', 20000);
+  const toolCalls = (message?.tool_calls || []).map(tc => ({
+    name: tc.function?.name,
+    arguments: safeJsonParse(tc.function?.arguments),
+  }));
+  return { responseFull, toolCalls, stopReason: response?.choices?.[0]?.finish_reason || null };
+}
+
 function calculateCost(model, inputTokens, outputTokens) {
   const pricing = ANTHROPIC_PRICING[model];
   if (!pricing) {
@@ -139,6 +204,7 @@ class MonitoredAnthropic {
           ? params.messages[0].content.substring(0, 200)
           : JSON.stringify(params.messages?.[0]?.content || '').substring(0, 200);
         const tools = params.tools?.map(t => t.name) || [];
+        const { promptFull, systemPrompt, requestParams } = extractAnthropicRequestDetails(params);
 
         // Streaming path — capture usage from finalMessage() after caller consumes stream
         if (params.stream) {
@@ -151,7 +217,9 @@ class MonitoredAnthropic {
               cost_usd: 0, latency_ms: Date.now() - startTime, status_code: err.status || 500,
               cache_read_tokens: 0, cache_write_tokens: 0, error_message: err.message || null,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
-              api_key_hint: self.apiKeyHint, ...classifyError(err),
+              api_key_hint: self.apiKeyHint, prompt_full: promptFull,
+              system_prompt: systemPrompt, request_params: requestParams,
+              ...classifyError(err),
             }).catch(() => {});
             throw err;
           }
@@ -161,6 +229,7 @@ class MonitoredAnthropic {
             const outputTokens = finalMsg.usage?.output_tokens || 0;
             const cacheReadTokens  = finalMsg.usage?.cache_read_input_tokens    || 0;
             const cacheWriteTokens = finalMsg.usage?.cache_creation_input_tokens || 0;
+            const { responseFull, toolCalls, stopReason } = extractAnthropicResponseDetails(finalMsg);
             self._sendMetric({
               model: params.model,
               input_tokens: inputTokens, output_tokens: outputTokens,
@@ -169,7 +238,9 @@ class MonitoredAnthropic {
               latency_ms: Date.now() - startTime, status_code: 200,
               cache_read_tokens: cacheReadTokens, cache_write_tokens: cacheWriteTokens,
               tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
-              api_key_hint: self.apiKeyHint,
+              api_key_hint: self.apiKeyHint, prompt_full: promptFull,
+              system_prompt: systemPrompt, request_params: requestParams,
+              response_full: responseFull, tool_calls: toolCalls, stop_reason: stopReason,
             }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
           }).catch(err => console.warn('[LLM Observatory] Streaming metric capture failed:', err.message));
 
@@ -192,6 +263,9 @@ class MonitoredAnthropic {
         const outputTokens     = response?.usage?.output_tokens              || 0;
         const cacheReadTokens  = response?.usage?.cache_read_input_tokens    || 0;
         const cacheWriteTokens = response?.usage?.cache_creation_input_tokens || 0;
+        const { responseFull, toolCalls, stopReason } = response
+          ? extractAnthropicResponseDetails(response)
+          : { responseFull: null, toolCalls: [], stopReason: null };
 
         self._sendMetric({
           model: params.model,
@@ -202,7 +276,10 @@ class MonitoredAnthropic {
           cache_read_tokens: cacheReadTokens, cache_write_tokens: cacheWriteTokens,
           error_message: error ? (error.message || null) : null,
           tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
-          api_key_hint: self.apiKeyHint, ...(error ? classifyError(error) : {}),
+          api_key_hint: self.apiKeyHint, prompt_full: promptFull,
+          system_prompt: systemPrompt, request_params: requestParams,
+          response_full: responseFull, tool_calls: toolCalls, stop_reason: stopReason,
+          ...(error ? classifyError(error) : {}),
         }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
         if (error) throw error;
@@ -241,6 +318,7 @@ class MonitoredOpenAI {
       ? firstMsg.content.substring(0, 200)
       : JSON.stringify(firstMsg?.content || '').substring(0, 200);
     const tools = params.tools?.map(t => t.function?.name || t.name) || [];
+    const { promptFull, systemPrompt, requestParams } = extractOpenAIRequestDetails(params);
 
     // Streaming path — wrap the async iterable to capture the final usage chunk
     if (params.stream) {
@@ -254,12 +332,14 @@ class MonitoredOpenAI {
           provider: 'openai', model: params.model, input_tokens: 0, output_tokens: 0,
           total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
           status_code: err.status || 500, tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
-          api_key_hint: this.apiKeyHint, ...classifyError(err),
+          api_key_hint: this.apiKeyHint, prompt_full: promptFull,
+          system_prompt: systemPrompt, request_params: requestParams,
+          ...classifyError(err),
         }).catch(() => {});
         throw err;
       }
 
-      return this._wrapOpenAIStream(stream, startTime, params, tools, promptPreview);
+      return this._wrapOpenAIStream(stream, startTime, params, tools, promptPreview, { promptFull, systemPrompt, requestParams });
     }
 
     // Non-streaming path
@@ -277,6 +357,9 @@ class MonitoredOpenAI {
     const inputTokens      = response?.usage?.prompt_tokens                          || 0;
     const outputTokens     = response?.usage?.completion_tokens                      || 0;
     const cacheReadTokens  = response?.usage?.prompt_tokens_details?.cached_tokens   || 0;
+    const { responseFull, toolCalls, stopReason } = response
+      ? extractOpenAIResponseDetails(response)
+      : { responseFull: null, toolCalls: [], stopReason: null };
 
     this._sendMetric({
       provider: 'openai', model: params.model,
@@ -287,15 +370,21 @@ class MonitoredOpenAI {
       cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
       error_message: error ? (error.message || null) : null,
       tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
-      api_key_hint: this.apiKeyHint, ...(error ? classifyError(error) : {}),
+      api_key_hint: this.apiKeyHint, prompt_full: promptFull,
+      system_prompt: systemPrompt, request_params: requestParams,
+      response_full: responseFull, tool_calls: toolCalls, stop_reason: stopReason,
+      ...(error ? classifyError(error) : {}),
     }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
 
     if (error) throw error;
     return response;
   }
 
-  async* _wrapOpenAIStream(stream, startTime, params, tools, promptPreview) {
+  async* _wrapOpenAIStream(stream, startTime, params, tools, promptPreview, requestDetails) {
     let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0;
+    let responseText = '';
+    let stopReason = null;
+    const toolCallsMap = new Map(); // index -> { name, arguments: '' } — OpenAI streams tool_calls as fragments
     try {
       for await (const chunk of stream) {
         if (chunk.usage) {
@@ -303,9 +392,24 @@ class MonitoredOpenAI {
           outputTokens    = chunk.usage.completion_tokens                    || 0;
           cacheReadTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0;
         }
+        const choice = chunk.choices?.[0];
+        if (choice?.delta?.content) responseText += choice.delta.content;
+        if (choice?.delta?.tool_calls) {
+          for (const tc of choice.delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            const entry = toolCallsMap.get(idx) || { name: '', arguments: '' };
+            if (tc.function?.name) entry.name = tc.function.name;
+            if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+            toolCallsMap.set(idx, entry);
+          }
+        }
+        if (choice?.finish_reason) stopReason = choice.finish_reason;
         yield chunk;
       }
     } finally {
+      const toolCalls = Array.from(toolCallsMap.values()).map(tc => ({
+        name: tc.name, arguments: safeJsonParse(tc.arguments),
+      }));
       this._sendMetric({
         provider: 'openai', model: params.model,
         input_tokens: inputTokens, output_tokens: outputTokens,
@@ -314,7 +418,9 @@ class MonitoredOpenAI {
         latency_ms: Date.now() - startTime, status_code: 200,
         cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
         tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
-        api_key_hint: this.apiKeyHint,
+        api_key_hint: this.apiKeyHint, prompt_full: requestDetails.promptFull,
+        system_prompt: requestDetails.systemPrompt, request_params: requestDetails.requestParams,
+        response_full: truncate(responseText, 20000), tool_calls: toolCalls, stop_reason: stopReason,
       }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
     }
   }

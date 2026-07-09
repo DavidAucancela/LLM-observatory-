@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from typing import Any, AsyncIterator, Iterator
@@ -5,11 +6,56 @@ from typing import Any, AsyncIterator, Iterator
 from ._pricing import calculate_openai_cost
 from ._utils import (
     classify_error,
+    extract_full_prompt,
+    extract_openai_response_details,
     extract_prompt_preview,
+    extract_request_params,
+    extract_system_prompt_openai,
     mask_key,
     send_metric_background,
     send_metric_background_async,
+    truncate,
 )
+
+
+def _accumulate_stream_delta(chunk: Any, text_parts: list[str], tool_calls_map: dict[int, dict[str, str]]) -> str | None:
+    """Feed one streaming chunk into the accumulators; returns finish_reason if present.
+    OpenAI streams tool_calls as fragments (index + partial `arguments` string) across
+    multiple chunks — must be concatenated per-index and JSON-parsed only at the end."""
+    choices = getattr(chunk, "choices", None)
+    choice = choices[0] if isinstance(choices, list) and choices else None
+    if not choice:
+        return None
+    delta = getattr(choice, "delta", None)
+    if delta is not None:
+        content = getattr(delta, "content", None)
+        if isinstance(content, str):
+            text_parts.append(content)
+        raw_tool_calls = getattr(delta, "tool_calls", None)
+        for tc in (raw_tool_calls if isinstance(raw_tool_calls, list) else []):
+            idx = getattr(tc, "index", 0)
+            entry = tool_calls_map.setdefault(idx, {"name": "", "arguments": ""})
+            fn = getattr(tc, "function", None)
+            if fn is not None:
+                name = getattr(fn, "name", None)
+                if isinstance(name, str):
+                    entry["name"] = name
+                args_fragment = getattr(fn, "arguments", None)
+                if isinstance(args_fragment, str):
+                    entry["arguments"] += args_fragment
+    finish_reason = getattr(choice, "finish_reason", None)
+    return finish_reason if isinstance(finish_reason, str) else None
+
+
+def _finalize_stream_response(text_parts: list[str], tool_calls_map: dict[int, dict[str, str]]) -> dict[str, Any]:
+    tool_calls = []
+    for entry in tool_calls_map.values():
+        try:
+            args = json.loads(entry["arguments"]) if entry["arguments"] else None
+        except (TypeError, ValueError):
+            args = entry["arguments"]
+        tool_calls.append({"name": entry["name"], "arguments": args})
+    return {"response_full": truncate("".join(text_parts), 20000), "tool_calls": tool_calls}
 
 
 # ---------------------------------------------------------------------------
@@ -27,9 +73,14 @@ class _CompletionsProxy:
             t.get("function", {}).get("name") or t.get("name", "")
             for t in params.get("tools", [])
         ]
+        request_details = {
+            "prompt_full":    extract_full_prompt(params.get("messages", [])),
+            "system_prompt":  extract_system_prompt_openai(params.get("messages", [])),
+            "request_params": extract_request_params(params),
+        }
 
         if params.get("stream"):
-            return self._create_stream(params, start, prompt_preview, tools)
+            return self._create_stream(params, start, prompt_preview, tools, request_details)
 
         response = None
         status_code = 200
@@ -44,6 +95,9 @@ class _CompletionsProxy:
         usage = getattr(response, "usage", None) if response else None
         input_t  = getattr(usage, "prompt_tokens",     0) if usage else 0
         output_t = getattr(usage, "completion_tokens", 0) if usage else 0
+        response_details = extract_openai_response_details(response) if response else {
+            "response_full": None, "tool_calls": [], "stop_reason": None,
+        }
 
         metric = {
             "provider":       "openai",
@@ -58,6 +112,8 @@ class _CompletionsProxy:
             "prompt_preview": prompt_preview,
             "tags":           self._w._tags,
             "api_key_hint":   self._w._api_key_hint,
+            **request_details,
+            **response_details,
         }
         if error:
             metric.update(classify_error(error))
@@ -74,6 +130,7 @@ class _CompletionsProxy:
         start: float,
         prompt_preview: str,
         tools: list[str],
+        request_details: dict[str, Any],
     ) -> Iterator[Any]:
         # include_usage ensures the final chunk carries token counts
         stream_params = {
@@ -91,12 +148,13 @@ class _CompletionsProxy:
                 "status_code": getattr(err, "status_code", 500) or 500,
                 "tools_used": tools, "prompt_preview": prompt_preview,
                 "tags": self._w._tags, "api_key_hint": self._w._api_key_hint,
+                **request_details,
                 **classify_error(err),
             }
             send_metric_background(self._w._observatory_url, metric, token=self._w._observatory_token)
             raise
 
-        return self._stream_generator(raw_stream, params, start, prompt_preview, tools)
+        return self._stream_generator(raw_stream, params, start, prompt_preview, tools, request_details)
 
     def _stream_generator(
         self,
@@ -105,16 +163,23 @@ class _CompletionsProxy:
         start: float,
         prompt_preview: str,
         tools: list[str],
+        request_details: dict[str, Any],
     ) -> Iterator[Any]:
         input_t = output_t = 0
+        text_parts: list[str] = []
+        tool_calls_map: dict[int, dict[str, str]] = {}
+        stop_reason = None
         try:
             for chunk in raw_stream:
                 usage = getattr(chunk, "usage", None)
                 if usage:
                     input_t  = getattr(usage, "prompt_tokens",     input_t)
                     output_t = getattr(usage, "completion_tokens", output_t)
+                finish_reason = _accumulate_stream_delta(chunk, text_parts, tool_calls_map)
+                stop_reason = finish_reason or stop_reason
                 yield chunk
         finally:
+            response_details = {**_finalize_stream_response(text_parts, tool_calls_map), "stop_reason": stop_reason}
             send_metric_background(self._w._observatory_url, {
                 "provider":       "openai",
                 "model":          params["model"],
@@ -128,6 +193,8 @@ class _CompletionsProxy:
                 "prompt_preview": prompt_preview,
                 "tags":           self._w._tags,
                 "api_key_hint":   self._w._api_key_hint,
+                **request_details,
+                **response_details,
             }, token=self._w._observatory_token)
 
 
@@ -180,9 +247,14 @@ class _AsyncCompletionsProxy:
             t.get("function", {}).get("name") or t.get("name", "")
             for t in params.get("tools", [])
         ]
+        request_details = {
+            "prompt_full":    extract_full_prompt(params.get("messages", [])),
+            "system_prompt":  extract_system_prompt_openai(params.get("messages", [])),
+            "request_params": extract_request_params(params),
+        }
 
         if params.get("stream"):
-            return self._create_stream(params, start, prompt_preview, tools)
+            return self._create_stream(params, start, prompt_preview, tools, request_details)
 
         response = None
         status_code = 200
@@ -197,6 +269,9 @@ class _AsyncCompletionsProxy:
         usage = getattr(response, "usage", None) if response else None
         input_t  = getattr(usage, "prompt_tokens",     0) if usage else 0
         output_t = getattr(usage, "completion_tokens", 0) if usage else 0
+        response_details = extract_openai_response_details(response) if response else {
+            "response_full": None, "tool_calls": [], "stop_reason": None,
+        }
 
         metric = {
             "provider":       "openai",
@@ -211,6 +286,8 @@ class _AsyncCompletionsProxy:
             "prompt_preview": prompt_preview,
             "tags":           self._w._tags,
             "api_key_hint":   self._w._api_key_hint,
+            **request_details,
+            **response_details,
         }
         if error:
             metric.update(classify_error(error))
@@ -227,6 +304,7 @@ class _AsyncCompletionsProxy:
         start: float,
         prompt_preview: str,
         tools: list[str],
+        request_details: dict[str, Any],
     ) -> AsyncIterator[Any]:
         stream_params = {
             **params,
@@ -243,12 +321,13 @@ class _AsyncCompletionsProxy:
                 "status_code": getattr(err, "status_code", 500) or 500,
                 "tools_used": tools, "prompt_preview": prompt_preview,
                 "tags": self._w._tags, "api_key_hint": self._w._api_key_hint,
+                **request_details,
                 **classify_error(err),
             }
             await send_metric_background_async(self._w._observatory_url, metric, token=self._w._observatory_token)
             raise
 
-        return self._stream_generator(raw_stream, params, start, prompt_preview, tools)
+        return self._stream_generator(raw_stream, params, start, prompt_preview, tools, request_details)
 
     async def _stream_generator(
         self,
@@ -257,16 +336,23 @@ class _AsyncCompletionsProxy:
         start: float,
         prompt_preview: str,
         tools: list[str],
+        request_details: dict[str, Any],
     ) -> AsyncIterator[Any]:
         input_t = output_t = 0
+        text_parts: list[str] = []
+        tool_calls_map: dict[int, dict[str, str]] = {}
+        stop_reason = None
         try:
             async for chunk in raw_stream:
                 usage = getattr(chunk, "usage", None)
                 if usage:
                     input_t  = getattr(usage, "prompt_tokens",     input_t)
                     output_t = getattr(usage, "completion_tokens", output_t)
+                finish_reason = _accumulate_stream_delta(chunk, text_parts, tool_calls_map)
+                stop_reason = finish_reason or stop_reason
                 yield chunk
         finally:
+            response_details = {**_finalize_stream_response(text_parts, tool_calls_map), "stop_reason": stop_reason}
             await send_metric_background_async(self._w._observatory_url, {
                 "provider":       "openai",
                 "model":          params["model"],
@@ -280,6 +366,8 @@ class _AsyncCompletionsProxy:
                 "prompt_preview": prompt_preview,
                 "tags":           self._w._tags,
                 "api_key_hint":   self._w._api_key_hint,
+                **request_details,
+                **response_details,
             }, token=self._w._observatory_token)
 
 

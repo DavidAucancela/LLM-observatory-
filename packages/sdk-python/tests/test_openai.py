@@ -22,6 +22,7 @@ def openai_client(mock_send):
 
     instance = object.__new__(MonitoredOpenAI)
     instance._observatory_url = "http://obs:3001"
+    instance._observatory_token = "obs_sk_test"
     instance._tags = {}
     instance._api_key_hint = "sk-proj-…5678"
     instance._client = MagicMock()
@@ -100,6 +101,7 @@ class TestMonitoredOpenAINonStreaming:
 
         instance = object.__new__(MonitoredOpenAI)
         instance._observatory_url = "http://obs:3001"
+        instance._observatory_token = "obs_sk_test"
         instance._tags = {"env": "staging", "team": "ml"}
         instance._api_key_hint = "sk-proj-…5678"
         instance._client = MagicMock()
