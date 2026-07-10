@@ -334,7 +334,7 @@ export default function Dashboard() {
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -376,11 +376,17 @@ export default function Dashboard() {
   const timeSeries = Object.values(hourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
 
   const useDate = ['30d', '90d'].includes(range);
+  const useDateAndHour = range === '7d';
+  const axisLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
   const xLabels = timeSeries.map(r => {
     const d = new Date(r.hour);
-    return useDate
-      ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : `${String(d.getHours()).padStart(2, '0')}:00`;
+    const hourLabel = `${String(d.getHours()).padStart(2, '0')}:00`;
+    if (useDate) return d.toLocaleDateString(axisLocale, { month: 'short', day: 'numeric' });
+    if (useDateAndHour) {
+      const dateLabel = d.toLocaleDateString(axisLocale, { day: 'numeric', month: 'short' });
+      return `${dateLabel} ${hourLabel}`;
+    }
+    return hourLabel;
   });
 
   const anthData  = timeSeries.map(r => r.anthropic);

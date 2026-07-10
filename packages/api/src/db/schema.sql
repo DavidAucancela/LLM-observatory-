@@ -269,3 +269,11 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
   exp  TIMESTAMPTZ  NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(exp);
+
+-- ── Full request/response capture (prompt_full already existed but was never
+--    populated by the SDK; the rest are new) ──────────────────────────────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS response_full  TEXT;
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS system_prompt  TEXT;
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS request_params JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_calls     JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS stop_reason    VARCHAR(50);

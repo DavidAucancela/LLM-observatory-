@@ -176,7 +176,19 @@
     "totalTokens": "Total tokens",
     "copy": "Copy",
     "copied": "Copied",
-    "close": "Close"
+    "close": "Close",
+    "requestParams": "Request parameters",
+    "temperature": "Temperature",
+    "maxTokens": "Max tokens",
+    "topP": "Top P",
+    "streaming": "Streaming",
+    "systemPrompt": "System prompt",
+    "noSystemPrompt": "(no system prompt)",
+    "responseText": "Response",
+    "noResponse": "(no response available)",
+    "toolCallsInvoked": "Tool calls",
+    "showMore": "Show more",
+    "showLess": "Show less"
   },
   "dashboard": {
     "title": "Overview",

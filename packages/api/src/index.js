@@ -49,7 +49,10 @@ app.use(helmet());
 
 // CORS
 app.use(cors({ origin: corsOrigin }));
-app.use(express.json());
+// Default 100kb is too small once metrics include full prompt/response text
+// (prompt_full + response_full + tool_calls can approach ~50kb combined, more
+// once JSON-escaped) — see POST /api/metrics in routes/metrics.js.
+app.use(express.json({ limit: '1mb' }));
 app.set('io', io);
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────

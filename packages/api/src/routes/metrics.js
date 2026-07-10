@@ -22,6 +22,20 @@ const MetricSchema = z.object({
   cache_write_tokens: z.number().int().min(0).default(0),
   error_type:         z.string().max(100).optional(),
   error_message:      z.string().max(500).nullable().optional(),
+  prompt_full:        z.string().max(20000).optional(),
+  response_full:      z.string().max(20000).optional(),
+  system_prompt:      z.string().max(4000).optional(),
+  request_params:     z.object({
+    temperature: z.number().optional(),
+    max_tokens:  z.number().int().optional(),
+    top_p:       z.number().optional(),
+    stream:      z.boolean().optional(),
+  }).optional().default({}),
+  tool_calls:         z.array(z.object({
+    name:      z.string(),
+    arguments: z.unknown(),
+  })).max(50).optional().default([]),
+  stop_reason:        z.string().max(50).nullable().optional(),
 });
 
 // ── POST / — SDK ingest (requires observatory token or JWT) ───────────────────
@@ -33,8 +47,9 @@ router.post('/', async (req, res) => {
       `INSERT INTO api_calls
          (org_id, provider, model, input_tokens, output_tokens, total_tokens,
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
-          cache_read_tokens, cache_write_tokens, error_type, error_message)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+          cache_read_tokens, cache_write_tokens, error_type, error_message,
+          prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
       [
         orgId,
         data.provider, data.model,
@@ -48,6 +63,12 @@ router.post('/', async (req, res) => {
         data.cache_write_tokens || 0,
         data.error_type || null,
         data.error_message || null,
+        data.prompt_full || null,
+        data.response_full || null,
+        data.system_prompt || null,
+        JSON.stringify(data.request_params || {}),
+        JSON.stringify(data.tool_calls || []),
+        data.stop_reason || null,
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
@@ -107,10 +128,17 @@ router.get('/', async (req, res) => {
       where += ` AND tags ? $${params.length}`;
     }
 
+    // Excludes prompt_full/response_full/system_prompt/request_params/tool_calls —
+    // those are only needed on the single-record detail view (GET /:id), not the
+    // paginated list, to keep list payloads light.
+    const listColumns = `id, timestamp, provider, model, input_tokens, output_tokens, total_tokens,
+      cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
+      cache_read_tokens, cache_write_tokens, error_type, error_message, stop_reason`;
+
     const [countResult, dataResult] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM api_calls ${where}`, params),
       pool.query(
-        `SELECT * FROM api_calls ${where} ORDER BY ${sortBy} ${sortDir}
+        `SELECT ${listColumns} FROM api_calls ${where} ORDER BY ${sortBy} ${sortDir}
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset]
       ),
