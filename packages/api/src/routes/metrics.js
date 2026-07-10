@@ -169,16 +169,31 @@ router.get('/summary', async (req, res) => {
     const dblInterval = doubleMap[range] || '14 days';
     const startDate = req.query.start;
     const endDate   = req.query.end;
-    const useDays   = ['30d','60d','90d'].includes(range) || (startDate && endDate);
+    // Daily buckets for ranges ≥ 7d so the chart differentiates days (not just hours);
+    // hourly buckets only for 24h.
+    const useDays   = ['7d','30d','60d','90d'].includes(range) || (startDate && endDate);
     const timeBucket= useDays ? `DATE_TRUNC('day', timestamp)` : `DATE_TRUNC('hour', timestamp)`;
 
-    const currParams = [orgId];
-    let dateFilter;
+    // Optional model filter — models to EXCLUDE (comma-separated). Empty → all models.
+    const excludeModels = (req.query.exclude_models || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    // Base (org + time window) — shared, WITHOUT the model filter so the model
+    // picker can always list every model present in the range.
+    const baseParams = [orgId];
+    let baseWhere;
     if (startDate && endDate) {
-      currParams.push(startDate, endDate);
-      dateFilter = `org_id = $1 AND timestamp >= $2 AND timestamp <= $3`;
+      baseParams.push(startDate, endDate);
+      baseWhere = `org_id = $1 AND timestamp >= $2 AND timestamp <= $3`;
     } else {
-      dateFilter = `org_id = $1 AND timestamp > NOW() - INTERVAL '${interval}'`;
+      baseWhere = `org_id = $1 AND timestamp > NOW() - INTERVAL '${interval}'`;
+    }
+
+    // Current filter = base (+ optional model exclusion)
+    const currParams = [...baseParams];
+    let dateFilter = baseWhere;
+    if (excludeModels.length) {
+      currParams.push(excludeModels);
+      dateFilter += ` AND model <> ALL($${currParams.length})`;
     }
 
     const prevParams = [orgId];
@@ -192,8 +207,12 @@ router.get('/summary', async (req, res) => {
     } else {
       prevFilter = `org_id = $1 AND timestamp > NOW() - INTERVAL '${dblInterval}' AND timestamp <= NOW() - INTERVAL '${interval}'`;
     }
+    if (excludeModels.length) {
+      prevParams.push(excludeModels);
+      prevFilter += ` AND model <> ALL($${prevParams.length})`;
+    }
 
-    const [summary, byModel, byProvider, timeSeries, prevSummary, errorBreakdown] = await Promise.all([
+    const [summary, byModel, byProvider, timeSeries, prevSummary, errorBreakdown, allModels] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) as total_requests,
                 COALESCE(SUM(total_tokens),0)       as total_tokens,
@@ -254,6 +273,12 @@ router.get('/summary', async (req, res) => {
          GROUP BY error_type ORDER BY count DESC`,
         currParams
       ),
+      pool.query(
+        `SELECT model, MIN(provider) as provider, COUNT(*) as requests
+         FROM api_calls WHERE ${baseWhere}
+         GROUP BY model ORDER BY requests DESC`,
+        baseParams
+      ),
     ]);
 
     res.json({
@@ -263,6 +288,7 @@ router.get('/summary', async (req, res) => {
       by_provider:     byProvider.rows,
       time_series:     timeSeries.rows,
       error_breakdown: errorBreakdown.rows,
+      all_models:      allModels.rows,
     });
   } catch (err) {
     console.error('GET /api/metrics/summary error:', err);

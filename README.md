@@ -67,6 +67,24 @@ Password: Demo1234!
 
 ---
 
+## Supported Models & Pricing (Anthropic)
+
+Cost per request is calculated from token usage using this table (USD per million tokens, keep in sync with `packages/sdk/src/index.js` and `packages/sdk-python/llm_observatory/_pricing.py`):
+
+| Model | Input ($/MTok) | Output ($/MTok) |
+|---|---:|---:|
+| `claude-opus-4-6` | 15.00 | 75.00 |
+| `claude-sonnet-4-6` | 3.00 | 15.00 |
+| `claude-haiku-4-5` / `claude-haiku-4-5-20251001` | 0.80 | 4.00 |
+| `claude-3-5-sonnet-20241022` | 3.00 | 15.00 |
+| `claude-3-5-haiku-20241022` | 0.80 | 4.00 |
+| `claude-3-opus-20240229` | 15.00 | 75.00 |
+| `claude-3-haiku-20240307` | 0.25 | 1.25 |
+
+An unrecognized model logs a warning and records cost as `$0` — add new models to the pricing tables in both SDKs when Anthropic releases them.
+
+---
+
 ## vs. Helicone / Langfuse
 
 | Feature | **LLM Observatory** | Helicone | Langfuse |

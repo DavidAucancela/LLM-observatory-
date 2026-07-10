@@ -216,7 +216,12 @@
     "serverError": "Error del servidor",
     "networkError": "Error de red",
     "timeout": "Tiempo de espera agotado",
-    "unknownError": "Desconocido"
+    "unknownError": "Desconocido",
+    "thisMonth": "Mes actual · no depende del rango",
+    "models": "Modelos",
+    "allModels": "Todos",
+    "noneModels": "Ninguno",
+    "modelsSelected": "{{count}} de {{total}}"
   },
   "activity": {
     "title": "Actividad",
