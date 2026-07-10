@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
@@ -263,7 +263,10 @@ function MonthlyProjection({ projection, configuredProviders }) {
 
   return (
     <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
-      <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.monthlyProjection')}</div>
+      <div className="dash-card-head" style={{ marginBottom: 14 }}>
+        <div className="obs-section-label">{t('dashboard.monthlyProjection')}</div>
+        <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{t('dashboard.thisMonth')}</div>
+      </div>
       <div className="dash-scroll" style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${items.length}, 1fr)`,
@@ -320,6 +323,66 @@ function MonthlyProjection({ projection, configuredProviders }) {
   );
 }
 
+// ── Model picker (multi-select popover) ───────────────────────────────────────
+
+function ModelPicker({ allModels, disabledModels, onToggle, onSetAll, onSetNone }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  if (!allModels.length) return null;
+
+  const total    = allModels.length;
+  const selected = allModels.filter(m => !disabledModels.has(m.model)).length;
+  const allOn    = selected === total;
+
+  return (
+    <div className="obs-modelpicker" ref={ref}>
+      <button
+        className={`obs-btn${allOn ? '' : ' obs-btn-active'}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        {t('dashboard.models')}
+        <span className="obs-modelpicker-count">
+          {allOn ? t('dashboard.allModels') : t('dashboard.modelsSelected', { count: selected, total })}
+        </span>
+      </button>
+      {open && (
+        <div className="obs-modelpicker-panel">
+          <div className="obs-modelpicker-actions">
+            <button className="obs-btn obs-btn-sm" onClick={onSetAll}>{t('dashboard.allModels')}</button>
+            <button className="obs-btn obs-btn-sm" onClick={onSetNone}>{t('dashboard.noneModels')}</button>
+          </div>
+          <div className="obs-modelpicker-list">
+            {allModels.map(m => {
+              const on = !disabledModels.has(m.model);
+              const color = m.provider === 'anthropic' ? 'var(--anthropic)' : m.provider === 'openai' ? 'var(--openai)' : 'var(--accent)';
+              return (
+                <label key={m.model} className="obs-modelpicker-item">
+                  <input type="checkbox" checked={on} onChange={() => onToggle(m.model)} />
+                  <span className="dot" style={{ background: color, width: 7, height: 7, borderRadius: 2, flexShrink: 0 }} />
+                  <span className="obs-modelpicker-name">{m.model}</span>
+                  <span className="obs-modelpicker-reqs">{parseInt(m.requests || 0).toLocaleString()}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const RANGES = ['24h', '7d', '30d', '90d'];
@@ -332,6 +395,8 @@ export default function Dashboard() {
   const [syncing, setSyncing]     = useState(false);
   const [hasCredentials, setHasCredentials] = useState(true);
   const [configuredProviders, setConfiguredProviders] = useState([]);
+  const [disabledModels, setDisabledModels] = useState(() => new Set());
+  const [allModels, setAllModels] = useState([]);
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
@@ -339,12 +404,21 @@ export default function Dashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      // Send the models the user has toggled off so the whole dashboard reflects
+      // the selection. Derived only from `disabledModels` (not `allModels`) to
+      // avoid a refetch loop, since the response also refreshes `allModels`.
+      const excluded = [...disabledModels];
+      const excludeParam = excluded.length
+        ? `&exclude_models=${encodeURIComponent(excluded.join(','))}`
+        : '';
       const [sumRes, projRes, credRes] = await Promise.all([
-        apiFetch(`/api/metrics/summary?range=${range}`),
+        apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
         apiFetch(`/api/metrics/projection`),
         apiFetch(`/api/credentials`),
       ]);
-      setSummary(await sumRes.json());
+      const sum = await sumRes.json();
+      setSummary(sum);
+      setAllModels(sum.all_models || []);
       setProjection(await projRes.json());
       const creds = (await credRes.json());
       const credList = creds.credentials || creds.data || [];
@@ -352,7 +426,7 @@ export default function Dashboard() {
       setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [range]);
+  }, [range, disabledModels]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -375,18 +449,13 @@ export default function Dashboard() {
   }
   const timeSeries = Object.values(hourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
 
-  const useDate = ['30d', '90d'].includes(range);
-  const useDateAndHour = range === '7d';
+  // 24h uses hourly buckets → show hours; all other ranges use daily buckets → show dates.
+  const useDate = range !== '24h';
   const axisLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
   const xLabels = timeSeries.map(r => {
     const d = new Date(r.hour);
-    const hourLabel = `${String(d.getHours()).padStart(2, '0')}:00`;
     if (useDate) return d.toLocaleDateString(axisLocale, { month: 'short', day: 'numeric' });
-    if (useDateAndHour) {
-      const dateLabel = d.toLocaleDateString(axisLocale, { day: 'numeric', month: 'short' });
-      return `${dateLabel} ${hourLabel}`;
-    }
-    return hourLabel;
+    return `${String(d.getHours()).padStart(2, '0')}:00`;
   });
 
   const anthData  = timeSeries.map(r => r.anthropic);
@@ -448,6 +517,17 @@ export default function Dashboard() {
             >{r}</button>
           ))}
         </div>
+        <ModelPicker
+          allModels={allModels}
+          disabledModels={disabledModels}
+          onToggle={(model) => setDisabledModels(prev => {
+            const next = new Set(prev);
+            next.has(model) ? next.delete(model) : next.add(model);
+            return next;
+          })}
+          onSetAll={() => setDisabledModels(new Set())}
+          onSetNone={() => setDisabledModels(new Set(allModels.map(m => m.model)))}
+        />
         <div className="obs-header-right">
           <div className="obs-live">
             <span className="dot dot-pulse" style={{ background: connected ? 'var(--success)' : 'var(--faint)' }} />

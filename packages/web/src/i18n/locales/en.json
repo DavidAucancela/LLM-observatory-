@@ -216,7 +216,12 @@
     "serverError": "Server error",
     "networkError": "Network error",
     "timeout": "Timeout",
-    "unknownError": "Unknown"
+    "unknownError": "Unknown",
+    "thisMonth": "Current month · independent of range",
+    "models": "Models",
+    "allModels": "All",
+    "noneModels": "None",
+    "modelsSelected": "{{count}} of {{total}}"
   },
   "activity": {
     "title": "Activity",
