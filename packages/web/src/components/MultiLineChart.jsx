@@ -19,25 +19,33 @@ export default function MultiLineChart({ series = [], height = 180, labelFormat 
   }
 
   const n = series[0].data.length;
-  const allPoints = series.flatMap(s => s.data);
-  const dataMax = Math.max(...allPoints) || 1;
+  const hasRightAxis = series.some(s => s.yAxis === 'right') && series.some(s => s.yAxis !== 'right');
+  const leftPoints  = series.filter(s => s.yAxis !== 'right').flatMap(s => s.data);
+  const rightPoints = series.filter(s => s.yAxis === 'right').flatMap(s => s.data);
+  const dataMax      = Math.max(...leftPoints) || 1;
+  // Independent scale for the right-axis series so a low-volume series (e.g. a
+  // provider with far fewer tokens) isn't flattened to invisibility by a
+  // dominant series sharing the same linear scale.
+  const dataMaxRight = hasRightAxis ? (Math.max(...rightPoints) || 1) : dataMax;
   const fmt = labelFormat || fmtV;
 
   // SVG coordinate space
   const VW = 600;
   const padL = 44;
-  const padR = 8;
+  const padR = hasRightAxis ? 44 : 8;
   const padT = 6;
   const padB = 22;
   const innerW = VW - padL - padR;
   const innerH = height - padT - padB;
 
   const toX = (i) => padL + (i / Math.max(n - 1, 1)) * innerW;
-  const toY = (v) => padT + (1 - v / dataMax) * innerH;
+  const toY = (v, axis) => padT + (1 - v / (axis === 'right' ? dataMaxRight : dataMax)) * innerH;
 
-  // Y gridlines — 4 ticks
+  // Y gridlines — 4 ticks (left axis drives gridline positions; right axis gets its own labels at the same heights)
   const ticks = 4;
   const tickVals = Array.from({ length: ticks + 1 }, (_, i) => dataMax * (1 - i / ticks));
+  const tickValsRight = Array.from({ length: ticks + 1 }, (_, i) => dataMaxRight * (1 - i / ticks));
+  const rightSeriesColor = series.find(s => s.yAxis === 'right')?.color;
 
   // X-axis — up to 5 evenly spaced labels
   const xCount = Math.min(5, n);
@@ -78,9 +86,9 @@ export default function MultiLineChart({ series = [], height = 180, labelFormat 
           ))}
         </defs>
 
-        {/* Y-axis gridlines + labels */}
+        {/* Y-axis gridlines + labels (left axis) */}
         {tickVals.map((v, i) => {
-          const y = toY(v);
+          const y = toY(v, 'left');
           return (
             <g key={i}>
               <line x1={padL} x2={VW - padR} y1={y} y2={y}
@@ -93,17 +101,25 @@ export default function MultiLineChart({ series = [], height = 180, labelFormat 
           );
         })}
 
+        {/* Right-axis labels — independent scale for a low-volume series so it isn't flattened by the dominant series' scale */}
+        {hasRightAxis && tickValsRight.map((v, i) => (
+          <text key={`r${i}`} x={VW - padR + 4} y={toY(v, 'right') + 3} fontSize="9" fill={rightSeriesColor}
+            fontFamily="var(--font-mono)" textAnchor="start">
+            {fmt(v)}
+          </text>
+        ))}
+
         {/* Area fills */}
         {n >= 2 && series.map((s, si) => {
-          const bottom = toY(0);
-          const pts = s.data.map((v, i) => `${toX(i)},${toY(v)}`);
+          const bottom = toY(0, s.yAxis);
+          const pts = s.data.map((v, i) => `${toX(i)},${toY(v, s.yAxis)}`);
           const d = `M ${toX(0)},${bottom} L ${pts.join(' L ')} L ${toX(n - 1)},${bottom} Z`;
           return <path key={si} d={d} fill={`url(#mlc-g${si})`} />;
         })}
 
         {/* Lines */}
         {n >= 2 && series.map((s, si) => {
-          const d = `M ${s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' L ')}`;
+          const d = `M ${s.data.map((v, i) => `${toX(i)},${toY(v, s.yAxis)}`).join(' L ')}`;
           return (
             <path key={si} d={d} stroke={s.color} strokeWidth={s.strokeWidth || 1.5}
               fill="none" strokeLinejoin="round" strokeLinecap="round" />
@@ -116,7 +132,7 @@ export default function MultiLineChart({ series = [], height = 180, labelFormat 
             <line x1={crossX} y1={padT} x2={crossX} y2={padT + innerH}
               stroke="var(--border)" strokeWidth="1" strokeDasharray="3,2" />
             {series.map((s, si) => (
-              <circle key={si} cx={crossX} cy={toY(s.data[hover])} r="3.5"
+              <circle key={si} cx={crossX} cy={toY(s.data[hover], s.yAxis)} r="3.5"
                 fill={s.color} stroke="var(--surface)" strokeWidth="2" />
             ))}
           </g>

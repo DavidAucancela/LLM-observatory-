@@ -624,8 +624,8 @@ export default function Dashboard() {
                         ? (anthTotal < oaiTotal ? 'anthropic' : 'openai')
                         : null;
                       return [
-                        ...(configuredProviders.includes('anthropic') ? [{ name: 'Anthropic', color: 'var(--anthropic)', data: anthData, xLabels, strokeWidth: lowVolume === 'anthropic' ? 2.5 : 1.5 }] : []),
-                        ...(configuredProviders.includes('openai')    ? [{ name: 'OpenAI',    color: 'var(--openai)',    data: oaiData,  xLabels, strokeWidth: lowVolume === 'openai' ? 2.5 : 1.5 }] : []),
+                        ...(configuredProviders.includes('anthropic') ? [{ name: 'Anthropic', color: 'var(--anthropic)', data: anthData, xLabels, strokeWidth: lowVolume === 'anthropic' ? 2.5 : 1.5, yAxis: lowVolume === 'anthropic' ? 'right' : 'left' }] : []),
+                        ...(configuredProviders.includes('openai')    ? [{ name: 'OpenAI',    color: 'var(--openai)',    data: oaiData,  xLabels, strokeWidth: lowVolume === 'openai' ? 2.5 : 1.5, yAxis: lowVolume === 'openai' ? 'right' : 'left' }] : []),
                       ];
                     })()}
                     height={160}
