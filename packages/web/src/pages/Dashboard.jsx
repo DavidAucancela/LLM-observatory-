@@ -254,18 +254,26 @@ function TagBreakdown({ range }) {
 
 // ── Monthly projection with progress bar ──────────────────────────────────────
 
+const PROJECTION_PERIOD_LABEL_KEY = {
+  day: 'dashboard.projectionPeriodDay',
+  week: 'dashboard.projectionPeriodWeek',
+  month: 'dashboard.projectionPeriodMonth',
+  quarter: 'dashboard.projectionPeriodQuarter',
+};
+
 function MonthlyProjection({ projection, configuredProviders }) {
   const { t } = useTranslation();
   const items = (projection?.projection || []).filter(p => configuredProviders.includes(p.provider));
   if (!items.length) return null;
 
-  const daysInMonth = projection?.days_in_month || 30;
+  const daysInPeriod = projection?.days_in_period || 30;
+  const periodLabelKey = PROJECTION_PERIOD_LABEL_KEY[projection?.unit] || PROJECTION_PERIOD_LABEL_KEY.month;
 
   return (
     <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
       <div className="dash-card-head" style={{ marginBottom: 14 }}>
         <div className="obs-section-label">{t('dashboard.monthlyProjection')}</div>
-        <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{t('dashboard.thisMonth')}</div>
+        <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{t(periodLabelKey)}</div>
       </div>
       <div className="dash-scroll" style={{
         display: 'grid',
@@ -273,10 +281,10 @@ function MonthlyProjection({ projection, configuredProviders }) {
         gap: 0,
       }}>
         {items.map((p, i) => {
-          const daysPassed = daysInMonth - (p.days_remaining || 0);
-          const monthPct   = Math.min(100, (daysPassed / daysInMonth) * 100);
-          const spentSoFar = parseFloat(p.spent_this_month || 0);
-          const projected  = parseFloat(p.projected_month_total || 0);
+          const daysPassed = daysInPeriod - (p.days_remaining || 0);
+          const periodPct  = Math.min(100, (daysPassed / daysInPeriod) * 100);
+          const spentSoFar = parseFloat(p.spent_this_period || 0);
+          const projected  = parseFloat(p.projected_period_total || 0);
           const color      = PROVIDER_COLORS[p.provider] || 'var(--accent)';
 
           return (
@@ -297,18 +305,18 @@ function MonthlyProjection({ projection, configuredProviders }) {
                   {t('dashboard.spent')}{' '}
                   <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(spentSoFar)}</span>
                 </span>
-                <span>{p.days_remaining > 0 ? `${p.days_remaining}d left` : 'Month end'}</span>
+                <span>{p.days_remaining > 0 ? `${p.days_remaining}d left` : t('dashboard.periodEnd')}</span>
               </div>
 
               <div className="iprog-bar" style={{ height: 4, borderRadius: 2 }}>
                 <div style={{
-                  height: '100%', borderRadius: 2, width: `${monthPct}%`,
+                  height: '100%', borderRadius: 2, width: `${periodPct}%`,
                   background: color, transition: 'width 0.6s var(--ease-out)',
                 }} />
               </div>
               <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 4, display: 'flex', justifyContent: 'space-between', fontVariantNumeric: 'tabular-nums' }}>
                 <span>Day 1</span>
-                <span>Day {daysInMonth}</span>
+                <span>Day {daysInPeriod}</span>
               </div>
 
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
@@ -413,7 +421,7 @@ export default function Dashboard() {
         : '';
       const [sumRes, projRes, credRes] = await Promise.all([
         apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
-        apiFetch(`/api/metrics/projection`),
+        apiFetch(`/api/metrics/projection?range=${range}`),
         apiFetch(`/api/credentials`),
       ]);
       const sum = await sumRes.json();

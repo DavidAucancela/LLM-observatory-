@@ -325,20 +325,48 @@ router.get('/summary', async (req, res) => {
 });
 
 // ── GET /projection ───────────────────────────────────────────────────────────
+// Maps the dashboard's existing range picker onto a calendar-aligned projection
+// period, so "projected total" always means "projected total for the period
+// containing today" rather than a rolling trailing window (which has no fixed
+// end date to project toward).
+function projectionPeriodFor(range, now) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const date = now.getDate();
+
+  if (range === '24h') {
+    return { unit: 'day', start: new Date(year, month, date), daysInPeriod: 1 };
+  }
+  if (range === '7d') {
+    const mondayOffset = (now.getDay() + 6) % 7; // 0=Monday
+    return { unit: 'week', start: new Date(year, month, date - mondayOffset), daysInPeriod: 7 };
+  }
+  if (range === '90d') {
+    const quarterStartMonth = Math.floor(month / 3) * 3;
+    const start = new Date(year, quarterStartMonth, 1);
+    const end   = new Date(year, quarterStartMonth + 3, 1);
+    return { unit: 'quarter', start, daysInPeriod: Math.round((end - start) / 86400000) };
+  }
+  // '30d' and any other value default to the calendar month, matching prior behavior.
+  const start = new Date(year, month, 1);
+  const daysInPeriod = new Date(year, month + 1, 0).getDate();
+  return { unit: 'month', start, daysInPeriod };
+}
+
 router.get('/projection', async (req, res) => {
   try {
     const { orgId } = req.user;
+    const range = req.query.range || '30d';
     const now = new Date();
-    const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
-    const daysInMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const dayOfMonth    = now.getDate();
-    const daysRemaining = daysInMonth - dayOfMonth;
+    const { unit, start: startOfPeriod, daysInPeriod } = projectionPeriodFor(range, now);
+    const daysElapsed   = Math.min(daysInPeriod, (now - startOfPeriod) / 86400000);
+    const daysRemaining = Math.max(0, daysInPeriod - daysElapsed);
 
-    const [monthSpend, weekAvg, credProviders] = await Promise.all([
+    const [periodSpend, weekAvg, credProviders] = await Promise.all([
       pool.query(
         `SELECT provider, COALESCE(SUM(cost_usd), 0) as spent
          FROM api_calls WHERE org_id = $1 AND timestamp >= $2 GROUP BY provider`,
-        [orgId, startOfMonth.toISOString()]
+        [orgId, startOfPeriod.toISOString()]
       ),
       pool.query(
         `SELECT provider, COALESCE(SUM(cost_usd), 0) / 7.0 as avg_daily
@@ -353,15 +381,19 @@ router.get('/projection', async (req, res) => {
 
     const providers = credProviders.rows.map(r => r.provider);
     const projection = providers.map(p => {
-      const spent    = parseFloat(monthSpend.rows.find(r => r.provider === p)?.spent || 0);
+      const spent    = parseFloat(periodSpend.rows.find(r => r.provider === p)?.spent || 0);
       const avgDaily = parseFloat(weekAvg.rows.find(r => r.provider === p)?.avg_daily || 0);
       return {
-        provider: p, spent_this_month: spent, avg_daily: avgDaily,
-        days_remaining: daysRemaining, projected_month_total: spent + avgDaily * daysRemaining,
+        provider: p, spent_this_period: spent, avg_daily: avgDaily,
+        days_remaining: Math.ceil(daysRemaining), projected_period_total: spent + avgDaily * daysRemaining,
       };
     });
 
-    res.json({ projection, days_in_month: daysInMonth, day_of_month: dayOfMonth });
+    res.json({
+      projection, unit,
+      days_in_period: daysInPeriod,
+      day_of_period: Math.min(daysInPeriod, Math.floor(daysElapsed) + 1),
+    });
   } catch (err) {
     console.error('GET /api/metrics/projection error:', err);
     res.status(500).json({ error: 'Internal server error' });
