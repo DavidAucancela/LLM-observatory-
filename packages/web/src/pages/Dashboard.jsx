@@ -615,7 +615,7 @@ export default function Dashboard() {
               <div className="dash-chart-body">
                 {loading ? (
                   <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />
-                ) : timeSeries.length > 1 ? (
+                ) : totalReqs > 0 && timeSeries.length > 1 ? (
                   <MultiLineChart
                     series={(() => {
                       const anthTotal = anthData.reduce((a, b) => a + b, 0);
