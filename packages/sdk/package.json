@@ -1,10 +1,10 @@
 {
   "name": "@llm-observatory/sdk",
   "version": "1.0.0",
-  "description": "Drop-in Node.js wrapper for Anthropic and OpenAI SDKs with zero-latency observability",
+  "description": "Drop-in Node.js wrapper for Anthropic, OpenAI, and Gemini SDKs with zero-latency observability",
   "main": "src/index.js",
   "license": "MIT",
-  "keywords": ["llm", "observability", "anthropic", "openai", "monitoring", "claude", "sdk"],
+  "keywords": ["llm", "observability", "anthropic", "openai", "gemini", "monitoring", "claude", "sdk"],
   "author": "LLM Observatory",
   "repository": {
     "type": "git",
@@ -26,15 +26,20 @@
     "@anthropic-ai/sdk": "^0.36.3"
   },
   "peerDependencies": {
-    "openai": ">=4.0.0"
+    "openai": ">=4.0.0",
+    "@google/genai": ">=1.0.0"
   },
   "peerDependenciesMeta": {
     "openai": {
+      "optional": true
+    },
+    "@google/genai": {
       "optional": true
     }
   },
   "devDependencies": {
     "openai": "^6.42.0",
+    "@google/genai": "^2.11.0",
     "sinon": "^17.0.1"
   }
 }

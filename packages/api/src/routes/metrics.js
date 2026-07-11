@@ -6,7 +6,7 @@ const { deliverWebhooks } = require('../services/webhooks');
 const router = express.Router();
 
 const MetricSchema = z.object({
-  provider:           z.enum(['anthropic', 'openai']).default('anthropic'),
+  provider:           z.enum(['anthropic', 'openai', 'gemini']).default('anthropic'),
   model:              z.string().min(1),
   input_tokens:       z.number().int().min(0),
   output_tokens:      z.number().int().min(0),
@@ -324,7 +324,7 @@ router.get('/summary', async (req, res) => {
                 COALESCE(SUM(ac.cost_usd),0)      as cost_usd,
                 COUNT(ac.id) as requests
          FROM generate_series(${tsSeriesStart}, ${tsSeriesEnd}, INTERVAL '1 ${bucketUnit}') AS bs(bucket)
-         CROSS JOIN (VALUES ('anthropic'), ('openai')) AS p(provider)
+         CROSS JOIN (VALUES ('anthropic'), ('openai'), ('gemini')) AS p(provider)
          LEFT JOIN api_calls ac
                 ON date_trunc('${bucketUnit}', ac.timestamp) = bs.bucket
                AND ac.provider = p.provider

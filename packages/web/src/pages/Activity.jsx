@@ -25,7 +25,8 @@ function fmt(n) {
   return Math.round(n).toString();
 }
 
-const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669' };
+const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669', gemini: '#4285F4' };
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' };
 
 // ── Requests tab ──────────────────────────────────────────────
 function RequestsTab({ range, onRangeChange, configuredProviders }) {
@@ -133,7 +134,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
         >
           <option value="">{t('activity.allProviders')}</option>
           {(configuredProviders.length ? configuredProviders : ['anthropic', 'openai']).map(p => (
-            <option key={p} value={p}>{p === 'anthropic' ? 'Anthropic' : p === 'openai' ? 'OpenAI' : p}</option>
+            <option key={p} value={p}>{PROVIDER_LABELS[p] ?? p}</option>
           ))}
         </select>
 
