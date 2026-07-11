@@ -63,7 +63,31 @@ function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(-
 
 const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)' };
 
-function ProviderBreakdown({ byProvider, loading }) {
+function ReconciliationBadge({ run }) {
+  const { t } = useTranslation();
+  if (!run) return null;
+  if (run.status === 'error') return null; // job couldn't reach the provider — don't claim anything
+  const deviation = parseFloat(run.deviation_pct || 0);
+  const verified  = run.status !== 'alert';
+  const color     = verified ? 'var(--success)' : 'var(--warning)';
+  const label     = verified ? t('dashboard.reconciled') : t('dashboard.reconciliationDeviation', { pct: deviation.toFixed(1) });
+  const hintKey   = run.source === 'token_estimate_fallback' ? 'dashboard.reconciliationHintFallback' : 'dashboard.reconciliationHint';
+  const hint      = t(hintKey, {
+    client: formatCost(parseFloat(run.client_reported_usd || 0)),
+    provider: formatCost(parseFloat(run.provider_computed_usd || 0)),
+  });
+  return (
+    <span title={hint} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600,
+      letterSpacing: '.03em', textTransform: 'uppercase', color, cursor: 'help',
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: color, display: 'inline-block' }} />
+      {label}
+    </span>
+  );
+}
+
+function ProviderBreakdown({ byProvider, loading, reconciliation }) {
   if (loading) return <div className="obs-skeleton" style={{ height: 90, borderRadius: 6 }} />;
   if (!byProvider.length) return (
     <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>—</div>
@@ -78,10 +102,14 @@ function ProviderBreakdown({ byProvider, loading }) {
         const reqs = parseInt(p.requests || 0);
         const pct  = totalCost > 0 ? (cost / totalCost) * 100 : 0;
         const color = PROVIDER_COLORS[p.provider] || 'var(--accent)';
+        const run   = (reconciliation || []).find(r => r.provider === p.provider);
         return (
           <div key={p.provider}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <ProviderBadge provider={p.provider} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ProviderBadge provider={p.provider} />
+                <ReconciliationBadge run={run} />
+              </div>
               <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                 <span style={{ color: 'var(--text)', fontWeight: 500, width: 46, textAlign: 'right', display: 'inline-block' }}>{formatCost(cost)}</span>
                 <span style={{ width: 32, textAlign: 'right', display: 'inline-block' }}>{pct.toFixed(0)}%</span>
@@ -405,6 +433,7 @@ export default function Dashboard() {
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const [disabledModels, setDisabledModels] = useState(() => new Set());
   const [allModels, setAllModels] = useState([]);
+  const [reconciliation, setReconciliation] = useState([]);
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
@@ -419,10 +448,11 @@ export default function Dashboard() {
       const excludeParam = excluded.length
         ? `&exclude_models=${encodeURIComponent(excluded.join(','))}`
         : '';
-      const [sumRes, projRes, credRes] = await Promise.all([
+      const [sumRes, projRes, credRes, reconRes] = await Promise.all([
         apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
         apiFetch(`/api/metrics/projection?range=${range}`),
         apiFetch(`/api/credentials`),
+        apiFetch(`/api/reconciliation/latest`),
       ]);
       const sum = await sumRes.json();
       setSummary(sum);
@@ -432,6 +462,7 @@ export default function Dashboard() {
       const credList = creds.credentials || creds.data || [];
       setHasCredentials(credList.length > 0);
       setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
+      setReconciliation((await reconRes.json()).latest || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [range, disabledModels]);
@@ -678,7 +709,7 @@ export default function Dashboard() {
             <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
               <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
               <div className="dash-scroll">
-                <ProviderBreakdown byProvider={byProvider} loading={loading} />
+                <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
               </div>
             </div>
 

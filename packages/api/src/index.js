@@ -31,7 +31,9 @@ const syncRouter        = require('./routes/sync');
 const tokensRouter      = require('./routes/tokens');
 const teamRouter        = require('./routes/team');
 const webhooksRouter    = require('./routes/webhooks');
+const reconciliationRouter = require('./routes/reconciliation');
 const { checkAlerts }   = require('./jobs/alertChecker');
+const { runReconciliation } = require('./jobs/reconciliation');
 
 const app = express();
 const server = http.createServer(app);
@@ -93,6 +95,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api/tokens', tokensRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/webhooks', webhooksRouter);
+app.use('/api/reconciliation', reconciliationRouter);
 
 // ── 404 handler — must be after all routes ────────────────────────────────────
 app.use((req, res) => {
@@ -195,6 +198,12 @@ async function startServer() {
   cron.schedule('0 * * * *', () => {
     logger.info('Running scheduled alert check...');
     checkAlerts();
+  });
+
+  // Cron: reconcile client-reported cost against provider token-usage APIs at 03:30 daily
+  cron.schedule('30 3 * * *', () => {
+    logger.info('Running scheduled cost reconciliation...');
+    runReconciliation();
   });
 
   // Cron: data retention — delete records older than DATA_RETENTION_DAYS (default 90) at 02:00 daily

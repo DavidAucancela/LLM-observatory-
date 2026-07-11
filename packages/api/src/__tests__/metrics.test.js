@@ -67,6 +67,102 @@ describe('POST /api/metrics', () => {
     const res = await pool.query(`SELECT last_used_at FROM observatory_tokens LIMIT 1`);
     expect(res.rows[0].last_used_at).not.toBeNull();
   });
+
+  it('defaults cost_confidence to known on a successful call', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 1');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send(VALID_METRIC);
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
+
+  it('overrides cost_confidence to unknown for a $0 error when the client did not assert it', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 2');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0, status_code: 504, error_type: 'timeout' });
+    expect(res.body.data.cost_confidence).toBe('unknown');
+  });
+
+  it('respects an explicit cost_confidence:known even for a $0 error', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 3');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0, status_code: 400, error_type: 'invalid_request', cost_confidence: 'known' });
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
+
+  it('does not override cost_confidence when cost_usd is genuinely non-zero on an error', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 4');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0.002, status_code: 500, error_type: 'server_error' });
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
+});
+
+describe('POST /api/metrics — likely-retry detection', () => {
+  it('flags a second call with the same model+prompt_preview within the window', async () => {
+    const { obsToken } = await createOrg('Retry Org 1');
+    const first = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'transcribe this audio' });
+    expect(first.body.data.likely_retry_of).toBeNull();
+
+    const second = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'transcribe this audio' });
+    expect(second.body.data.likely_retry_of).toBe(first.body.data.id);
+  });
+
+  it('does not flag calls with different prompt_preview', async () => {
+    const { obsToken } = await createOrg('Retry Org 2');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'prompt A' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'prompt B' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
+
+  it('does not treat sync-imported rows as retries of each other', async () => {
+    const { obsToken } = await createOrg('Retry Org 3');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'sync:anthropic' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'sync:anthropic' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
+
+  it('does not cross-match across different orgs', async () => {
+    const orgA = await createOrg('Retry Org A');
+    const orgB = await createOrg('Retry Org B');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${orgA.obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'shared prompt text' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${orgB.obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'shared prompt text' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
 });
 
 describe('GET /api/metrics — org scoping', () => {

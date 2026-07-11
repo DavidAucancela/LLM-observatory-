@@ -36,20 +36,64 @@ const MetricSchema = z.object({
     arguments: z.unknown(),
   })).max(50).optional().default([]),
   stop_reason:        z.string().max(50).nullable().optional(),
+  // Client's own assertion about cost_usd's reliability. Left optional so existing
+  // SDKs that never send this field keep working — the server-side override below
+  // (not this default) is what actually closes the "silent zero" gap.
+  cost_confidence:    z.enum(['known', 'unknown']).optional().default('known'),
 });
+
+// Window to look back for a same-shape call when detecting likely SDK retries
+// (e.g. an audio transcription that timed out and got retried by the client's
+// own provider SDK, re-billing the same request — see the WhisperX incident
+// that motivated this). Long-running calls (large audio, big context) can
+// legitimately take minutes per attempt, so this is generous on purpose;
+// exact prompt_preview match keeps false positives low despite the width.
+const RETRY_WINDOW = '5 minutes';
+// Batch-imported rows (sync.js) and SDK connectivity pings share fixed
+// prompt_preview tags across many unrelated calls — never treat those as
+// retries of each other.
+const NON_RETRY_PREVIEW_PREFIX = /^(sync:|test:)/;
 
 // ── POST / — SDK ingest (requires observatory token or JWT) ───────────────────
 router.post('/', async (req, res) => {
   try {
     const { orgId } = req.user;
     const data = MetricSchema.parse(req.body);
+    // Never silently trust an unlabeled $0 on a failed call — a client that
+    // didn't explicitly assert cost_confidence:'known' almost certainly never
+    // computed a real cost for this call (e.g. a timeout after retries), not
+    // that the call genuinely cost nothing. Only override the client's default;
+    // an explicit 'known' from the client (a real $0, e.g. a 400 rejected
+    // before any provider call) is always respected.
+    if (data.status_code >= 400 && data.cost_usd === 0 && req.body.cost_confidence === undefined) {
+      data.cost_confidence = 'unknown';
+    }
+
+    // Heuristic likely-retry detection: same (provider, model, prompt_preview,
+    // api_key_hint) seen very recently almost always means the client's own
+    // SDK retried the same request (possibly re-billing it), not a genuine
+    // second use — surfaced in the UI, never used to auto-adjust cost figures.
+    let likelyRetryOf = null;
+    if (data.prompt_preview && !NON_RETRY_PREVIEW_PREFIX.test(data.prompt_preview)) {
+      const dupRes = await pool.query(
+        `SELECT id FROM api_calls
+         WHERE org_id = $1 AND provider = $2 AND model = $3 AND prompt_preview = $4
+           AND api_key_hint IS NOT DISTINCT FROM $5
+           AND timestamp > NOW() - INTERVAL '${RETRY_WINDOW}'
+         ORDER BY timestamp DESC LIMIT 1`,
+        [orgId, data.provider, data.model, data.prompt_preview, data.api_key_hint || null]
+      );
+      if (dupRes.rows.length) likelyRetryOf = dupRes.rows[0].id;
+    }
+
     const result = await pool.query(
       `INSERT INTO api_calls
          (org_id, provider, model, input_tokens, output_tokens, total_tokens,
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
           cache_read_tokens, cache_write_tokens, error_type, error_message,
-          prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
+          prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason,
+          cost_confidence, likely_retry_of)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
       [
         orgId,
         data.provider, data.model,
@@ -69,6 +113,8 @@ router.post('/', async (req, res) => {
         JSON.stringify(data.request_params || {}),
         JSON.stringify(data.tool_calls || []),
         data.stop_reason || null,
+        data.cost_confidence,
+        likelyRetryOf,
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
@@ -132,8 +178,8 @@ router.get('/', async (req, res) => {
     // those are only needed on the single-record detail view (GET /:id), not the
     // paginated list, to keep list payloads light.
     const listColumns = `id, timestamp, provider, model, input_tokens, output_tokens, total_tokens,
-      cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
-      cache_read_tokens, cache_write_tokens, error_type, error_message, stop_reason`;
+      cost_usd, cost_confidence, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
+      cache_read_tokens, cache_write_tokens, error_type, error_message, stop_reason, likely_retry_of`;
 
     const [countResult, dataResult] = await Promise.all([
       pool.query(`SELECT COUNT(*) FROM api_calls ${where}`, params),
@@ -440,16 +486,16 @@ router.get('/export', async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, timestamp, provider, model, input_tokens, output_tokens,
-              total_tokens, cost_usd, latency_ms, status_code,
+              total_tokens, cost_usd, cost_confidence, latency_ms, status_code,
               cache_read_tokens, cache_write_tokens, error_message,
-              prompt_preview, tags
+              prompt_preview, tags, likely_retry_of
        FROM api_calls ${where} ORDER BY timestamp DESC`,
       params
     );
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="llm-metrics-${range}.csv"`);
-    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','latency_ms','status_code','cache_read_tokens','cache_write_tokens','error_message','prompt_preview','tags'];
+    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','cost_confidence','latency_ms','status_code','cache_read_tokens','cache_write_tokens','error_message','prompt_preview','tags','likely_retry_of'];
     res.write(headers.join(',') + '\n');
     for (const row of result.rows) {
       const line = headers.map(h => {
