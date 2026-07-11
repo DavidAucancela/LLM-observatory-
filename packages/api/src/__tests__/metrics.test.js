@@ -55,6 +55,25 @@ describe('POST /api/metrics', () => {
     expect(res.status).toBe(400);
   });
 
+  it('accepts provider: gemini', async () => {
+    const { obsToken } = await createOrg('Gemini Org');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'gemini', model: 'gemini-2.5-flash' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.provider).toBe('gemini');
+  });
+
+  it('rejects an unsupported provider', async () => {
+    const { obsToken } = await createOrg('BadProvider Org');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'mistral' });
+    expect(res.status).toBe(400);
+  });
+
   it('updates last_used_at on the observatory token', async () => {
     const { obsToken } = await createOrg('LastUsed Org');
     await request(app)
@@ -216,5 +235,22 @@ describe('GET /api/metrics/summary — org scoping', () => {
       .set('Authorization', `Bearer ${orgA.jwt}`);
     expect(res.status).toBe(200);
     expect(parseFloat(res.body.summary.total_cost_usd)).toBe(0);
+  });
+
+  it('time_series is zero-filled for gemini too, not just anthropic/openai', async () => {
+    const { obsToken, jwt } = await createOrg('Gemini TimeSeries Org');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'gemini', model: 'gemini-2.5-flash' });
+
+    const res = await request(app)
+      .get('/api/metrics/summary?range=24h')
+      .set('Authorization', `Bearer ${jwt}`);
+    expect(res.status).toBe(200);
+    const providers = new Set(res.body.time_series.map(r => r.provider));
+    expect(providers.has('gemini')).toBe(true);
+    expect(providers.has('anthropic')).toBe(true);
+    expect(providers.has('openai')).toBe(true);
   });
 });

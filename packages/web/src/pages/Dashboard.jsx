@@ -61,7 +61,8 @@ function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(-
 
 // ── Provider breakdown with bars ──────────────────────────────────────────────
 
-const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)' };
+const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)', gemini: 'var(--gemini)' };
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' };
 
 function ReconciliationBadge({ run }) {
   const { t } = useTranslation();
@@ -145,7 +146,7 @@ function TopModels({ byModel, loading }) {
       {top.map(m => {
         const cost = parseFloat(m.total_cost || 0);
         const pct  = maxCost > 0 ? (cost / maxCost) * 100 : 0;
-        const color = m.provider === 'anthropic' ? 'var(--anthropic)' : m.provider === 'openai' ? 'var(--openai)' : 'var(--accent)';
+        const color = PROVIDER_COLORS[m.provider] || 'var(--accent)';
         return (
           <div key={`${m.provider}-${m.model}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
@@ -402,7 +403,7 @@ function ModelPicker({ allModels, disabledModels, onToggle, onSetAll, onSetNone 
           <div className="obs-modelpicker-list">
             {allModels.map(m => {
               const on = !disabledModels.has(m.model);
-              const color = m.provider === 'anthropic' ? 'var(--anthropic)' : m.provider === 'openai' ? 'var(--openai)' : 'var(--accent)';
+              const color = PROVIDER_COLORS[m.provider] || 'var(--accent)';
               return (
                 <label key={m.model} className="obs-modelpicker-item">
                   <input type="checkbox" checked={on} onChange={() => onToggle(m.model)} />
@@ -480,9 +481,9 @@ export default function Dashboard() {
   const timeSeriesRaw = summary?.time_series || [];
   const hourMap = {};
   for (const row of timeSeriesRaw) {
-    if (!hourMap[row.hour]) hourMap[row.hour] = { hour: row.hour, anthropic: 0, openai: 0, requests: 0, cost: 0 };
-    if (row.provider === 'anthropic') hourMap[row.hour].anthropic += parseInt(row.total_tokens || 0);
-    else                              hourMap[row.hour].openai    += parseInt(row.total_tokens || 0);
+    if (!hourMap[row.hour]) hourMap[row.hour] = { hour: row.hour, byProvider: {}, requests: 0, cost: 0 };
+    const tokens = parseInt(row.total_tokens || 0);
+    hourMap[row.hour].byProvider[row.provider] = (hourMap[row.hour].byProvider[row.provider] || 0) + tokens;
     hourMap[row.hour].requests += parseInt(row.requests || 0);
     hourMap[row.hour].cost     += parseFloat(row.cost_usd || 0);
   }
@@ -497,15 +498,24 @@ export default function Dashboard() {
     return `${String(d.getHours()).padStart(2, '0')}:00`;
   });
 
-  const anthData  = timeSeries.map(r => r.anthropic);
-  const oaiData   = timeSeries.map(r => r.openai);
-  const tokenSpark = timeSeries.map(r => r.anthropic + r.openai);
-  const reqSpark   = timeSeries.map(r => r.requests);
-  const costSpark  = timeSeries.map(r => r.cost);
-
   const byProvider     = summary?.by_provider     || [];
   const byModel        = summary?.by_model        || [];
   const errorBreakdown = summary?.error_breakdown || [];
+
+  // Providers to actually render in the chart: configured ones (so a
+  // zero-usage configured provider still shows an empty line) plus any
+  // provider with real data in this window — covers a provider used only via
+  // the SDK, with no stored credential yet (e.g. Gemini today).
+  const chartProviders = [...new Set([
+    ...configuredProviders,
+    ...byProvider.map(p => p.provider),
+  ])];
+  const providerData = Object.fromEntries(
+    chartProviders.map(p => [p, timeSeries.map(r => r.byProvider[p] || 0)])
+  );
+  const tokenSpark = timeSeries.map(r => Object.values(r.byProvider).reduce((a, b) => a + b, 0));
+  const reqSpark    = timeSeries.map(r => r.requests);
+  const costSpark   = timeSeries.map(r => r.cost);
 
   const errorCount = parseInt(s?.error_count || 0);
   const totalReqs  = parseInt(s?.total_requests || 0);
@@ -637,18 +647,12 @@ export default function Dashboard() {
               <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div className="obs-section-label">{t('dashboard.tokensOverTime')}</div>
                 <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
-                  {configuredProviders.includes('anthropic') && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ width: 10, height: 2, background: 'var(--anthropic)', display: 'inline-block', borderRadius: 1 }} />
-                      Anthropic
+                  {chartProviders.map(p => (
+                    <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ width: 10, height: 2, background: PROVIDER_COLORS[p] || 'var(--accent)', display: 'inline-block', borderRadius: 1 }} />
+                      {PROVIDER_LABELS[p] || p}
                     </span>
-                  )}
-                  {configuredProviders.includes('openai') && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ width: 10, height: 2, background: 'var(--openai)', display: 'inline-block', borderRadius: 1 }} />
-                      OpenAI
-                    </span>
-                  )}
+                  ))}
                 </div>
               </div>
               <div className="dash-chart-body">
@@ -657,15 +661,21 @@ export default function Dashboard() {
                 ) : totalReqs > 0 && timeSeries.length > 1 ? (
                   <MultiLineChart
                     series={(() => {
-                      const anthTotal = anthData.reduce((a, b) => a + b, 0);
-                      const oaiTotal  = oaiData.reduce((a, b) => a + b, 0);
-                      const lowVolume = anthTotal > 0 && oaiTotal > 0
-                        ? (anthTotal < oaiTotal ? 'anthropic' : 'openai')
+                      const totals = chartProviders.map(p => ({ p, total: providerData[p].reduce((a, b) => a + b, 0) }));
+                      const nonZero = totals.filter(t => t.total > 0);
+                      // Only one series gets the secondary axis — MultiLineChart's dual-axis
+                      // support is designed for exactly one low-volume outlier, not N-way.
+                      const lowVolume = nonZero.length > 1
+                        ? nonZero.reduce((min, t) => (t.total < min.total ? t : min)).p
                         : null;
-                      return [
-                        ...(configuredProviders.includes('anthropic') ? [{ name: 'Anthropic', color: 'var(--anthropic)', data: anthData, xLabels, strokeWidth: lowVolume === 'anthropic' ? 2.5 : 1.5, yAxis: lowVolume === 'anthropic' ? 'right' : 'left' }] : []),
-                        ...(configuredProviders.includes('openai')    ? [{ name: 'OpenAI',    color: 'var(--openai)',    data: oaiData,  xLabels, strokeWidth: lowVolume === 'openai' ? 2.5 : 1.5, yAxis: lowVolume === 'openai' ? 'right' : 'left' }] : []),
-                      ];
+                      return chartProviders.map(p => ({
+                        name: PROVIDER_LABELS[p] || p,
+                        color: PROVIDER_COLORS[p] || 'var(--accent)',
+                        data: providerData[p],
+                        xLabels,
+                        strokeWidth: lowVolume === p ? 2.5 : 1.5,
+                        yAxis: lowVolume === p ? 'right' : 'left',
+                      }));
                     })()}
                     height={160}
                   />

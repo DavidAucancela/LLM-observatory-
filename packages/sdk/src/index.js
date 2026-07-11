@@ -44,6 +44,17 @@ const OPENAI_TTS_PRICING = {
   'gpt-4o-mini-tts': 15.00,
 };
 
+// Cost per million tokens (USD) — July 2026. Standard (<=200k context) tier only;
+// gemini-*-pro models roughly double past 200k context, not modeled here.
+const GEMINI_PRICING = {
+  'gemini-3.1-pro-preview': { input: 2.00, output: 12.00 },
+  'gemini-3.5-flash':       { input: 1.50, output:  9.00 },
+  'gemini-3-flash-preview': { input: 0.50, output:  3.00 },
+  'gemini-3.1-flash-lite':  { input: 0.25, output:  1.50 },
+  'gemini-2.5-pro':         { input: 1.25, output: 10.00 },
+  'gemini-2.5-flash':       { input: 0.30, output:  2.50 },
+};
+
 async function _postMetric(url, data, token) {
   const body    = JSON.stringify(data);
   const headers = { 'Content-Type': 'application/json' };
@@ -144,6 +155,43 @@ function extractOpenAIResponseDetails(response) {
   return { responseFull, toolCalls, stopReason: response?.choices?.[0]?.finish_reason || null };
 }
 
+// ── Full request/response capture — Gemini ────────────────────────────────────
+function geminiPromptPreview(contents) {
+  if (typeof contents === 'string') return contents.substring(0, 200);
+  const first = Array.isArray(contents) ? contents[0] : contents;
+  const text = first?.parts?.map(p => p.text).filter(Boolean).join(' ') ?? JSON.stringify(first ?? '');
+  return String(text).substring(0, 200);
+}
+
+function extractGeminiRequestDetails(params) {
+  const promptFull = truncate(
+    typeof params.contents === 'string' ? params.contents : JSON.stringify(params.contents || ''),
+    20000
+  );
+  const systemInstruction = params.config?.systemInstruction;
+  const systemPrompt = systemInstruction
+    ? truncate(typeof systemInstruction === 'string' ? systemInstruction : JSON.stringify(systemInstruction), 4000)
+    : null;
+  const requestParams = {
+    temperature: params.config?.temperature,
+    max_tokens:  params.config?.maxOutputTokens,
+    top_p:       params.config?.topP,
+  };
+  return { promptFull, systemPrompt, requestParams };
+}
+
+function extractGeminiToolNames(params) {
+  const tools = params.config?.tools || [];
+  return tools.flatMap(t => (t.functionDeclarations || []).map(fd => fd.name)).filter(Boolean);
+}
+
+function extractGeminiResponseDetails(response) {
+  const responseFull = truncate(response?.text || '', 20000);
+  const toolCalls = (response?.functionCalls || []).map(fc => ({ name: fc.name, arguments: fc.args }));
+  const stopReason = response?.candidates?.[0]?.finishReason || null;
+  return { responseFull, toolCalls, stopReason };
+}
+
 function calculateCost(model, inputTokens, outputTokens) {
   const pricing = ANTHROPIC_PRICING[model];
   if (!pricing) {
@@ -182,6 +230,15 @@ function calculateTTSCost(model, characterCount) {
     return 0;
   }
   return (characterCount / 1_000_000) * price;
+}
+
+function calculateGeminiCost(model, inputTokens, outputTokens) {
+  const pricing = GEMINI_PRICING[model];
+  if (!pricing) {
+    console.warn(`[LLM Observatory] Unknown Gemini model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 }
 
 class MonitoredAnthropic {
@@ -594,9 +651,129 @@ class MonitoredOpenAI {
   }
 }
 
+class MonitoredGemini {
+  constructor(options = {}) {
+    const { observatoryUrl = 'http://localhost:3001', observatoryToken, apiKey, tags = {}, ...geminiOptions } = options;
+    this.observatoryUrl   = observatoryUrl;
+    this.observatoryToken = observatoryToken;
+    this.tags       = tags;
+    this.apiKeyHint = maskKey(apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+    const { GoogleGenAI } = require('@google/genai');
+    this.client = new GoogleGenAI({ apiKey, ...geminiOptions });
+    this.models = {
+      generateContent:       this._generateContent.bind(this),
+      generateContentStream: this._generateContentStream.bind(this),
+    };
+  }
+
+  async _generateContent(params) {
+    const startTime = Date.now();
+    const promptPreview = geminiPromptPreview(params.contents);
+    const tools = extractGeminiToolNames(params);
+    const { promptFull, systemPrompt, requestParams } = extractGeminiRequestDetails(params);
+
+    let response, statusCode = 200, error = null;
+    try {
+      response = await this.client.models.generateContent(params);
+    } catch (err) {
+      statusCode = err.status || err.code || 500;
+      error = err;
+    }
+
+    const usage = response?.usageMetadata || {};
+    const inputTokens     = usage.promptTokenCount        || 0;
+    const outputTokens    = usage.candidatesTokenCount    || 0;
+    const cacheReadTokens = usage.cachedContentTokenCount || 0;
+    const { responseFull, toolCalls, stopReason } = response
+      ? extractGeminiResponseDetails(response)
+      : { responseFull: null, toolCalls: [], stopReason: null };
+
+    this._sendMetric({
+      provider: 'gemini', model: params.model,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+      cost_usd: calculateGeminiCost(params.model, inputTokens, outputTokens),
+      latency_ms: Date.now() - startTime, status_code: statusCode,
+      cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
+      error_message: error ? (error.message || null) : null,
+      tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+      api_key_hint: this.apiKeyHint, prompt_full: promptFull,
+      system_prompt: systemPrompt, request_params: { ...requestParams, stream: false },
+      response_full: responseFull, tool_calls: toolCalls, stop_reason: stopReason,
+      ...(error ? classifyError(error) : {}),
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+    if (error) throw error;
+    return response;
+  }
+
+  async* _generateContentStream(params) {
+    const startTime = Date.now();
+    const promptPreview = geminiPromptPreview(params.contents);
+    const tools = extractGeminiToolNames(params);
+    const { promptFull, systemPrompt, requestParams } = extractGeminiRequestDetails(params);
+
+    let stream;
+    try {
+      stream = await this.client.models.generateContentStream(params);
+    } catch (err) {
+      this._sendMetric({
+        provider: 'gemini', model: params.model, input_tokens: 0, output_tokens: 0,
+        total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
+        status_code: err.status || err.code || 500, tools_used: tools, prompt_preview: promptPreview,
+        tags: this.tags, api_key_hint: this.apiKeyHint, prompt_full: promptFull,
+        system_prompt: systemPrompt, request_params: { ...requestParams, stream: true },
+        ...classifyError(err),
+      }).catch(() => {});
+      throw err;
+    }
+
+    // usageMetadata is cumulative per chunk (per Gemini's documented behavior) —
+    // the last chunk that carries it holds the final totals, so just keep
+    // overwriting rather than summing.
+    let usage = {};
+    let responseText = '';
+    let stopReason = null;
+    const toolCallsAcc = [];
+    try {
+      for await (const chunk of stream) {
+        if (chunk.usageMetadata) usage = chunk.usageMetadata;
+        if (chunk.text) responseText += chunk.text;
+        if (chunk.functionCalls?.length) {
+          toolCallsAcc.push(...chunk.functionCalls.map(fc => ({ name: fc.name, arguments: fc.args })));
+        }
+        const finishReason = chunk.candidates?.[0]?.finishReason;
+        if (finishReason) stopReason = finishReason;
+        yield chunk;
+      }
+    } finally {
+      const inputTokens     = usage.promptTokenCount        || 0;
+      const outputTokens    = usage.candidatesTokenCount    || 0;
+      const cacheReadTokens = usage.cachedContentTokenCount || 0;
+      this._sendMetric({
+        provider: 'gemini', model: params.model,
+        input_tokens: inputTokens, output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cost_usd: calculateGeminiCost(params.model, inputTokens, outputTokens),
+        latency_ms: Date.now() - startTime, status_code: 200,
+        cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
+        tools_used: tools, prompt_preview: promptPreview, tags: this.tags,
+        api_key_hint: this.apiKeyHint, prompt_full: promptFull,
+        system_prompt: systemPrompt, request_params: { ...requestParams, stream: true },
+        response_full: truncate(responseText, 20000), tool_calls: toolCallsAcc, stop_reason: stopReason,
+      }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+    }
+  }
+
+  async _sendMetric(data) {
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data, this.observatoryToken);
+  }
+}
+
 module.exports = {
   MonitoredAnthropic,
   MonitoredOpenAI,
+  MonitoredGemini,
   maskKey,
   classifyError,
   calculateCost,
@@ -604,9 +781,11 @@ module.exports = {
   calculateOpenAIEmbeddingCost,
   calculateWhisperCost,
   calculateTTSCost,
+  calculateGeminiCost,
   ANTHROPIC_PRICING,
   OPENAI_PRICING,
   OPENAI_EMBEDDINGS_PRICING,
   OPENAI_WHISPER_PRICE_PER_MINUTE,
   OPENAI_TTS_PRICING,
+  GEMINI_PRICING,
 };
