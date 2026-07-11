@@ -58,11 +58,11 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 401/403 for inactive user', async () => {
-    // Register but don't activate
-    await request(app).post('/api/auth/register').send({ email: 'inactive@x.com', password: 'password123' });
-    const res = await request(app).post('/api/auth/login').send({ email: 'inactive@x.com', password: 'password123' });
-    expect(res.status).toBeGreaterThanOrEqual(401);
+  it('logs in immediately after registering (accounts auto-activate)', async () => {
+    await request(app).post('/api/auth/register').send({ email: 'fresh@x.com', password: 'password123' });
+    const res = await request(app).post('/api/auth/login').send({ email: 'fresh@x.com', password: 'password123' });
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeDefined();
   });
 });
 
