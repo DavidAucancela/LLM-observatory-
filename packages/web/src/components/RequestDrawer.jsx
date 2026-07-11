@@ -186,7 +186,21 @@ export default function RequestDrawer({ requestId, onClose }) {
                   <dt>{t('drawer.totalTokens')}</dt>
                   <dd>{totalTokens.toLocaleString()}</dd>
                   <dt>{t('drawer.totalCost')}</dt>
-                  <dd>{formatCost(data.cost_usd, { small: true })}</dd>
+                  <dd>
+                    {formatCost(data.cost_usd, { small: true })}
+                    {data.cost_confidence === 'unknown' && (
+                      <span
+                        title={t('drawer.costUnknownHint')}
+                        style={{
+                          marginLeft: 7, fontSize: 9, fontWeight: 600, letterSpacing: '.03em',
+                          textTransform: 'uppercase', color: 'var(--warning)',
+                          border: '1px solid var(--warning)', borderRadius: 3, padding: '1px 5px',
+                        }}
+                      >
+                        {t('drawer.costUnknown')}
+                      </span>
+                    )}
+                  </dd>
                 </dl>
               </div>
 

@@ -36,6 +36,10 @@ const MetricSchema = z.object({
     arguments: z.unknown(),
   })).max(50).optional().default([]),
   stop_reason:        z.string().max(50).nullable().optional(),
+  // Client's own assertion about cost_usd's reliability. Left optional so existing
+  // SDKs that never send this field keep working — the server-side override below
+  // (not this default) is what actually closes the "silent zero" gap.
+  cost_confidence:    z.enum(['known', 'unknown']).optional().default('known'),
 });
 
 // ── POST / — SDK ingest (requires observatory token or JWT) ───────────────────
@@ -43,13 +47,23 @@ router.post('/', async (req, res) => {
   try {
     const { orgId } = req.user;
     const data = MetricSchema.parse(req.body);
+    // Never silently trust an unlabeled $0 on a failed call — a client that
+    // didn't explicitly assert cost_confidence:'known' almost certainly never
+    // computed a real cost for this call (e.g. a timeout after retries), not
+    // that the call genuinely cost nothing. Only override the client's default;
+    // an explicit 'known' from the client (a real $0, e.g. a 400 rejected
+    // before any provider call) is always respected.
+    if (data.status_code >= 400 && data.cost_usd === 0 && req.body.cost_confidence === undefined) {
+      data.cost_confidence = 'unknown';
+    }
     const result = await pool.query(
       `INSERT INTO api_calls
          (org_id, provider, model, input_tokens, output_tokens, total_tokens,
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
           cache_read_tokens, cache_write_tokens, error_type, error_message,
-          prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
+          prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason,
+          cost_confidence)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *`,
       [
         orgId,
         data.provider, data.model,
@@ -69,6 +83,7 @@ router.post('/', async (req, res) => {
         JSON.stringify(data.request_params || {}),
         JSON.stringify(data.tool_calls || []),
         data.stop_reason || null,
+        data.cost_confidence,
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
@@ -132,7 +147,7 @@ router.get('/', async (req, res) => {
     // those are only needed on the single-record detail view (GET /:id), not the
     // paginated list, to keep list payloads light.
     const listColumns = `id, timestamp, provider, model, input_tokens, output_tokens, total_tokens,
-      cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
+      cost_usd, cost_confidence, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
       cache_read_tokens, cache_write_tokens, error_type, error_message, stop_reason`;
 
     const [countResult, dataResult] = await Promise.all([
@@ -440,7 +455,7 @@ router.get('/export', async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, timestamp, provider, model, input_tokens, output_tokens,
-              total_tokens, cost_usd, latency_ms, status_code,
+              total_tokens, cost_usd, cost_confidence, latency_ms, status_code,
               cache_read_tokens, cache_write_tokens, error_message,
               prompt_preview, tags
        FROM api_calls ${where} ORDER BY timestamp DESC`,
@@ -449,7 +464,7 @@ router.get('/export', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="llm-metrics-${range}.csv"`);
-    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','latency_ms','status_code','cache_read_tokens','cache_write_tokens','error_message','prompt_preview','tags'];
+    const headers = ['id','timestamp','provider','model','input_tokens','output_tokens','total_tokens','cost_usd','cost_confidence','latency_ms','status_code','cache_read_tokens','cache_write_tokens','error_message','prompt_preview','tags'];
     res.write(headers.join(',') + '\n');
     for (const row of result.rows) {
       const line = headers.map(h => {

@@ -67,6 +67,42 @@ describe('POST /api/metrics', () => {
     const res = await pool.query(`SELECT last_used_at FROM observatory_tokens LIMIT 1`);
     expect(res.rows[0].last_used_at).not.toBeNull();
   });
+
+  it('defaults cost_confidence to known on a successful call', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 1');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send(VALID_METRIC);
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
+
+  it('overrides cost_confidence to unknown for a $0 error when the client did not assert it', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 2');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0, status_code: 504, error_type: 'timeout' });
+    expect(res.body.data.cost_confidence).toBe('unknown');
+  });
+
+  it('respects an explicit cost_confidence:known even for a $0 error', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 3');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0, status_code: 400, error_type: 'invalid_request', cost_confidence: 'known' });
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
+
+  it('does not override cost_confidence when cost_usd is genuinely non-zero on an error', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 4');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0.002, status_code: 500, error_type: 'server_error' });
+    expect(res.body.data.cost_confidence).toBe('known');
+  });
 });
 
 describe('GET /api/metrics — org scoping', () => {

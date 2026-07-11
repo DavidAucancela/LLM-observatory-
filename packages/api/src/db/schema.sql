@@ -277,3 +277,38 @@ ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS system_prompt  TEXT;
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS request_params JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_calls     JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS stop_reason    VARCHAR(50);
+
+-- ── Cost confidence — distinguishes a genuinely-known $0 (e.g. a 400 rejected
+--    before any provider call) from a client that simply doesn't know the real
+--    cost (e.g. a timed-out call after retries). Ingest defaults this to
+--    'known', then the server overrides it to 'unknown' when status_code >= 400
+--    and cost_usd = 0 and the client didn't explicitly assert 'known' — see
+--    POST /api/metrics. Never silently trust an unlabeled zero on an error. ───
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS cost_confidence VARCHAR(10) NOT NULL DEFAULT 'known';
+CREATE INDEX IF NOT EXISTS idx_api_calls_cost_confidence ON api_calls(cost_confidence) WHERE cost_confidence = 'unknown';
+
+-- ── Reconciliation — daily comparison of client-reported cost_usd against a
+--    server-recomputed total from the provider's token-usage API + the same
+--    pricing table sync.js uses. Catches SDK-side cost bugs (bad retry
+--    accounting, missed error-cost tracking); does NOT verify against actual
+--    provider billing — deliberate scope tradeoff, see
+--    packages/api/src/jobs/reconciliation.js. ───────────────────────────────
+CREATE TABLE IF NOT EXISTS reconciliation_runs (
+  id                     SERIAL PRIMARY KEY,
+  org_id                 INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  provider               VARCHAR(50) NOT NULL,
+  period_start           TIMESTAMPTZ NOT NULL,
+  period_end             TIMESTAMPTZ NOT NULL,
+  provider_computed_usd  DECIMAL(10, 6) NOT NULL,
+  client_reported_usd    DECIMAL(10, 6) NOT NULL,
+  deviation_pct          DECIMAL(6, 2) NOT NULL,
+  status                 VARCHAR(10) NOT NULL DEFAULT 'ok', -- 'ok' | 'alert' | 'error'
+  error_message          TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_org ON reconciliation_runs(org_id, created_at DESC);
+
+-- ── Reconciliation alert threshold — reuses alert_rules' Discord delivery +
+--    debounce machinery via metric = 'reconciliation_deviation'. threshold_usd
+--    is repurposed as a percentage for this metric (e.g. 10.00 = 10%). ────────
+ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS threshold_pct DECIMAL(6, 2);

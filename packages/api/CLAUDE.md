@@ -42,7 +42,7 @@ Multi-tenancy tables (new):
 - `observatory_tokens` — SDK auth tokens (hash stored, never plaintext). Columns: `org_id`, `name`, `token_hash`, `token_prefix`, `created_by`, `last_used_at`, `revoked_at`
 
 Tenant-scoped tables (existing, all have `org_id`):
-- `api_calls` — All metric records. Key columns: `org_id`, `api_key_hint` (links to credential), `prompt_preview` (`sync:provider` for sync imports, `test:sdk_integration` for ping tests)
+- `api_calls` — All metric records. Key columns: `org_id`, `api_key_hint` (links to credential), `prompt_preview` (`sync:provider` for sync imports, `test:sdk_integration` for ping tests), `cost_confidence` (`known`|`unknown` — ingest overrides a client-omitted `known` default to `unknown` when `status_code >= 400 && cost_usd === 0`, so a failed call is never silently treated as a genuine $0; see `POST /` in `routes/metrics.js`)
 - `budgets` — Spending limits (daily/weekly/monthly), `org_id`
 - `provider_balances` — Balance recharge tracking, `org_id`
 - `provider_credentials` — Encrypted API keys (`key_type`: `sdk` | `admin`), `org_id`
@@ -50,6 +50,7 @@ Tenant-scoped tables (existing, all have `org_id`):
 - `alert_history` — Alert audit log, `org_id`
 - `sync_logs` — Data sync history, `org_id`
 - `webhook_endpoints` — Outbound webhook URLs with HMAC secret. Columns: `org_id`, `name`, `url`, `secret` (plaintext, not hashed), `events` (TEXT[] default `{metric.created}`), `is_active`. Secret shown once on creation, never again. Partial index on `(org_id) WHERE is_active = true`.
+- `reconciliation_runs` — Daily comparison of client-reported `cost_usd` against a server-recomputed total from the provider's token-usage API + the local `PRICING` table in `services/providerUsage.js` (**not** a real dollar billing endpoint — neither provider integration here calls one, see that file's header comment). Columns: `org_id`, `provider`, `period_start/end`, `provider_computed_usd`, `client_reported_usd`, `deviation_pct`, `status` (`ok`|`alert`|`error`). Populated by the `runReconciliation()` cron (`jobs/reconciliation.js`, daily at 03:30) for every `(org, provider)` with an admin credential configured. Read via `GET /api/reconciliation` and `GET /api/reconciliation/latest`.
 
 Auth tables:
 - `users` — Accounts with bcrypt passwords. Columns: `email`, `password_hash`, `is_active`, `activation_token`, `reset_token`, `reset_token_expires`

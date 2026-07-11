@@ -233,7 +233,12 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
                 <td><ProviderBadge provider={row.provider} /></td>
                 <td className="col-mono">{row.model}</td>
                 <td className="col-num">{parseInt(row.input_tokens || 0).toLocaleString()} / {parseInt(row.output_tokens || 0).toLocaleString()}</td>
-                <td className="col-num">{formatCost(row.cost_usd, { small: true })}</td>
+                <td className="col-num">
+                  {formatCost(row.cost_usd, { small: true })}
+                  {row.cost_confidence === 'unknown' && (
+                    <span title={t('drawer.costUnknownHint')} style={{ color: 'var(--warning)', marginLeft: 4, fontSize: 10, cursor: 'help' }}>●</span>
+                  )}
+                </td>
                 <td className="col-num col-muted">{fmtLatency(row.latency_ms)}</td>
                 <td>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
