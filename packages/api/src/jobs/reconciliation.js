@@ -1,31 +1,53 @@
 const pool = require('../db/pool');
 const { decrypt } = require('../db/crypto');
-const { fetchAnthropicUsage, fetchOpenAIUsage, summarizeBuckets } = require('../services/providerUsage');
+const {
+  fetchAnthropicUsage, fetchOpenAIUsage, summarizeBuckets,
+  fetchAnthropicRealCost, fetchOpenAIRealCost,
+} = require('../services/providerUsage');
 
 // Fallback deviation threshold (%) used when an org has reconciliation alerting
 // enabled (alert_rules.metric = 'reconciliation_deviation') but didn't set an
 // explicit threshold_pct.
 const DEFAULT_DEVIATION_THRESHOLD_PCT = 10;
 
-// Scope note: this recomputes cost from the provider's token-USAGE API (same
-// endpoints sync.js already uses) + the same local PRICING table the client
-// SDKs use — it is NOT a call to a real dollar-denominated billing/costs
-// endpoint (neither provider integration in this codebase calls one; see
-// services/providerUsage.js). This catches SDK-side cost bugs (bad retry
-// accounting, missed error-cost tracking, stale local pricing) — it does NOT
-// verify against actual provider billing (promotional credits, cache-discount
-// rules, etc. can still diverge). Upgrading to a true billing-API source is a
-// separate, larger change (per-provider Costs API integration).
-async function sendReconciliationAlert(webhookUrl, provider, providerComputedUsd, clientReportedUsd, deviationPct) {
+// Primary source: the provider's real billed-dollar Costs API (OpenAI
+// /v1/organization/costs, Anthropic /v1/organizations/cost_report) — genuine
+// ground truth, verifies against actual provider billing. If that call fails
+// (key lacks the required scope, endpoint outage, etc.), falls back to
+// recomputing from the token-usage API + the same local PRICING table client
+// SDKs use (services/providerUsage.js summarizeBuckets) — weaker (catches
+// SDK-side bugs like WhisperX's retry over-billing, but not real billing
+// discrepancies), but keeps reconciliation running instead of going dark.
+// `source` on reconciliation_runs records which one actually produced the row.
+async function fetchProviderTotal(provider, apiKey, periodStart, periodEnd) {
+  try {
+    const total = provider === 'anthropic'
+      ? await fetchAnthropicRealCost(apiKey, periodStart, periodEnd)
+      : await fetchOpenAIRealCost(apiKey, periodStart, periodEnd);
+    return { total, source: 'provider_costs_api' };
+  } catch (err) {
+    console.warn(`[reconciliation] ${provider} real Costs API failed, falling back to token estimate:`, err.message);
+    const buckets = provider === 'anthropic'
+      ? await fetchAnthropicUsage(apiKey, periodStart, periodEnd)
+      : await fetchOpenAIUsage(apiKey, periodStart, periodEnd);
+    const { costUsd } = summarizeBuckets(buckets, provider);
+    return { total: costUsd, source: 'token_estimate_fallback' };
+  }
+}
+
+async function sendReconciliationAlert(webhookUrl, provider, providerComputedUsd, clientReportedUsd, deviationPct, source) {
   const providerLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
+  const providerFieldLabel = source === 'provider_costs_api' ? 'Facturado por el proveedor' : 'Estimado (fallback por tokens)';
   const payload = {
     embeds: [{
       title: `🔍 Desviación de costo detectada — ${providerLabel}`,
-      description: 'El costo reportado por los clientes se desvía del recalculado por Observatory a partir del uso reportado por el proveedor.',
+      description: source === 'provider_costs_api'
+        ? 'El costo reportado por los clientes se desvía del billing real del proveedor.'
+        : 'El costo reportado por los clientes se desvía del estimado por Observatory (la API de costos real del proveedor no estuvo disponible — ver logs).',
       color: 16744272,
       fields: [
-        { name: 'Reportado por clientes',        value: `$${clientReportedUsd.toFixed(4)}`, inline: true },
-        { name: 'Recalculado (Observatory)',      value: `$${providerComputedUsd.toFixed(4)}`, inline: true },
+        { name: 'Reportado por clientes',   value: `$${clientReportedUsd.toFixed(4)}`, inline: true },
+        { name: providerFieldLabel,         value: `$${providerComputedUsd.toFixed(4)}`, inline: true },
         { name: 'Desviación',                     value: `${deviationPct.toFixed(1)}%`, inline: true },
       ],
       footer:    { text: 'LLM Observatory — Reconciliación diaria' },
@@ -46,11 +68,7 @@ async function sendReconciliationAlert(webhookUrl, provider, providerComputedUsd
 }
 
 async function reconcileOrgProvider(orgId, provider, apiKey, periodStart, periodEnd) {
-  const buckets = provider === 'anthropic'
-    ? await fetchAnthropicUsage(apiKey, periodStart, periodEnd)
-    : await fetchOpenAIUsage(apiKey, periodStart, periodEnd);
-
-  const { costUsd: providerComputedUsd } = summarizeBuckets(buckets, provider);
+  const { total: providerComputedUsd, source } = await fetchProviderTotal(provider, apiKey, periodStart, periodEnd);
 
   const clientRes = await pool.query(
     `SELECT COALESCE(SUM(cost_usd), 0) as total FROM api_calls
@@ -64,7 +82,7 @@ async function reconcileOrgProvider(orgId, provider, apiKey, periodStart, period
   const base = Math.max(providerComputedUsd, 0.01);
   const deviationPct = Math.abs(providerComputedUsd - clientReportedUsd) / base * 100;
 
-  return { providerComputedUsd, clientReportedUsd, deviationPct };
+  return { providerComputedUsd, clientReportedUsd, deviationPct, source };
 }
 
 // Runs daily. Reconciles the trailing 24h for every (org, provider) pair that
@@ -86,7 +104,7 @@ async function runReconciliation() {
 
     for (const cred of creds.rows) {
       const { org_id: orgId, provider } = cred;
-      let result = { providerComputedUsd: 0, clientReportedUsd: 0, deviationPct: 0 };
+      let result = { providerComputedUsd: 0, clientReportedUsd: 0, deviationPct: 0, source: null };
       let status = 'ok', errorMessage = null;
 
       try {
@@ -117,7 +135,7 @@ async function runReconciliation() {
             if (debounceOk) {
               const success = await sendReconciliationAlert(
                 rule.discord_webhook_url, provider,
-                result.providerComputedUsd, result.clientReportedUsd, result.deviationPct
+                result.providerComputedUsd, result.clientReportedUsd, result.deviationPct, result.source
               );
               await pool.query(
                 `INSERT INTO alert_history (org_id, rule_id, provider, current_value, threshold_usd, success)
@@ -132,13 +150,14 @@ async function runReconciliation() {
 
       await pool.query(
         `INSERT INTO reconciliation_runs
-           (org_id, provider, period_start, period_end, provider_computed_usd, client_reported_usd, deviation_pct, status, error_message)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+           (org_id, provider, period_start, period_end, provider_computed_usd, client_reported_usd, deviation_pct, status, error_message, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [orgId, provider, periodStart.toISOString(), periodEnd.toISOString(),
-         result.providerComputedUsd, result.clientReportedUsd, result.deviationPct, status, errorMessage]
+         result.providerComputedUsd, result.clientReportedUsd, result.deviationPct, status, errorMessage,
+         result.source || 'provider_costs_api']
       );
 
-      console.log(`[reconciliation] org ${orgId} ${provider}: client=$${result.clientReportedUsd.toFixed(4)} provider=$${result.providerComputedUsd.toFixed(4)} deviation=${result.deviationPct.toFixed(1)}% status=${status}`);
+      console.log(`[reconciliation] org ${orgId} ${provider}: client=$${result.clientReportedUsd.toFixed(4)} provider=$${result.providerComputedUsd.toFixed(4)} (${result.source}) deviation=${result.deviationPct.toFixed(1)}% status=${status}`);
     }
   } catch (err) {
     console.error('[reconciliation] job error:', err.message);

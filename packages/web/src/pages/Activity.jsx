@@ -231,7 +231,12 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
               <tr key={row.id} onClick={() => setSelectedId(row.id)}>
                 <td className="col-muted col-mono">{fmtDateTime(row.timestamp)}</td>
                 <td><ProviderBadge provider={row.provider} /></td>
-                <td className="col-mono">{row.model}</td>
+                <td className="col-mono">
+                  {row.model}
+                  {row.likely_retry_of && (
+                    <span title={t('activity.likelyRetryHint', { id: row.likely_retry_of })} style={{ color: 'var(--warning)', marginLeft: 5, fontSize: 11, cursor: 'help' }}>↻</span>
+                  )}
+                </td>
                 <td className="col-num">{parseInt(row.input_tokens || 0).toLocaleString()} / {parseInt(row.output_tokens || 0).toLocaleString()}</td>
                 <td className="col-num">
                   {formatCost(row.cost_usd, { small: true })}

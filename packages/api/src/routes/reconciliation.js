@@ -10,7 +10,7 @@ router.get('/', async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 30));
     const result = await pool.query(
       `SELECT provider, period_start, period_end, provider_computed_usd, client_reported_usd,
-              deviation_pct, status, error_message, created_at
+              deviation_pct, status, error_message, source, created_at
        FROM reconciliation_runs WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2`,
       [orgId, limit]
     );
@@ -25,7 +25,7 @@ router.get('/latest', async (req, res, next) => {
     const { orgId } = req.user;
     const result = await pool.query(
       `SELECT DISTINCT ON (provider) provider, period_start, period_end, provider_computed_usd,
-              client_reported_usd, deviation_pct, status, error_message, created_at
+              client_reported_usd, deviation_pct, status, error_message, source, created_at
        FROM reconciliation_runs WHERE org_id = $1 ORDER BY provider, created_at DESC`,
       [orgId]
     );

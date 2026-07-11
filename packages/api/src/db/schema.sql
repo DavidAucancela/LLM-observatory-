@@ -287,12 +287,13 @@ ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS stop_reason    VARCHAR(50);
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS cost_confidence VARCHAR(10) NOT NULL DEFAULT 'known';
 CREATE INDEX IF NOT EXISTS idx_api_calls_cost_confidence ON api_calls(cost_confidence) WHERE cost_confidence = 'unknown';
 
--- ── Reconciliation — daily comparison of client-reported cost_usd against a
---    server-recomputed total from the provider's token-usage API + the same
---    pricing table sync.js uses. Catches SDK-side cost bugs (bad retry
---    accounting, missed error-cost tracking); does NOT verify against actual
---    provider billing — deliberate scope tradeoff, see
---    packages/api/src/jobs/reconciliation.js. ───────────────────────────────
+-- ── Reconciliation — daily comparison of client-reported cost_usd against the
+--    provider's real billed-dollar Costs API (source='provider_costs_api';
+--    genuine ground truth) or, if that call fails, a recomputed estimate from
+--    the token-usage API + the local PRICING table sync.js uses
+--    (source='token_estimate_fallback' — weaker, catches SDK-side cost bugs
+--    like a retry re-billing the same request, but not real billing
+--    discrepancies). See packages/api/src/jobs/reconciliation.js. ────────────
 CREATE TABLE IF NOT EXISTS reconciliation_runs (
   id                     SERIAL PRIMARY KEY,
   org_id                 INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -304,6 +305,7 @@ CREATE TABLE IF NOT EXISTS reconciliation_runs (
   deviation_pct          DECIMAL(6, 2) NOT NULL,
   status                 VARCHAR(10) NOT NULL DEFAULT 'ok', -- 'ok' | 'alert' | 'error'
   error_message          TEXT,
+  source                 VARCHAR(30) NOT NULL DEFAULT 'provider_costs_api', -- 'provider_costs_api' | 'token_estimate_fallback'
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_reconciliation_org ON reconciliation_runs(org_id, created_at DESC);
@@ -312,3 +314,14 @@ CREATE INDEX IF NOT EXISTS idx_reconciliation_org ON reconciliation_runs(org_id,
 --    debounce machinery via metric = 'reconciliation_deviation'. threshold_usd
 --    is repurposed as a percentage for this metric (e.g. 10.00 = 10%). ────────
 ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS threshold_pct DECIMAL(6, 2);
+
+-- ── Likely-retry detection — set at ingest (POST /api/metrics) when a call
+--    with the same (org, provider, model, prompt_preview, api_key_hint)
+--    landed within the retry-detection window (see RETRY_WINDOW in
+--    routes/metrics.js). Points at the earlier call; NULL means no match
+--    found (not necessarily "not a retry" — detection is heuristic, exact
+--    prompt_preview match only). Never used to silently adjust cost figures —
+--    surfaced in the UI only, so a human decides what it means. ─────────────
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS likely_retry_of INTEGER REFERENCES api_calls(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_api_calls_retry_lookup ON api_calls(org_id, provider, model, prompt_preview, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_api_calls_likely_retry ON api_calls(likely_retry_of) WHERE likely_retry_of IS NOT NULL;

@@ -171,6 +171,9 @@ export default function RequestDrawer({ requestId, onClose }) {
                   {data.error_message && (
                     <><dt>{t('drawer.errorMessage')}</dt><dd style={{ color: 'var(--error)', fontFamily: 'var(--font-mono)', fontSize: 11, wordBreak: 'break-word' }}>{data.error_message}</dd></>
                   )}
+                  {data.likely_retry_of && (
+                    <><dt>{t('drawer.likelyRetry')}</dt><dd style={{ color: 'var(--warning)' }}>{t('drawer.likelyRetryOf', { id: data.likely_retry_of })}</dd></>
+                  )}
                 </dl>
               </div>
 

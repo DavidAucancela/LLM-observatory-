@@ -105,6 +105,66 @@ describe('POST /api/metrics', () => {
   });
 });
 
+describe('POST /api/metrics — likely-retry detection', () => {
+  it('flags a second call with the same model+prompt_preview within the window', async () => {
+    const { obsToken } = await createOrg('Retry Org 1');
+    const first = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'transcribe this audio' });
+    expect(first.body.data.likely_retry_of).toBeNull();
+
+    const second = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'transcribe this audio' });
+    expect(second.body.data.likely_retry_of).toBe(first.body.data.id);
+  });
+
+  it('does not flag calls with different prompt_preview', async () => {
+    const { obsToken } = await createOrg('Retry Org 2');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'prompt A' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'prompt B' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
+
+  it('does not treat sync-imported rows as retries of each other', async () => {
+    const { obsToken } = await createOrg('Retry Org 3');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'sync:anthropic' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'sync:anthropic' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
+
+  it('does not cross-match across different orgs', async () => {
+    const orgA = await createOrg('Retry Org A');
+    const orgB = await createOrg('Retry Org B');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${orgA.obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'shared prompt text' });
+
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${orgB.obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'shared prompt text' });
+    expect(res.body.data.likely_retry_of).toBeNull();
+  });
+});
+
 describe('GET /api/metrics — org scoping', () => {
   it('org A cannot see metrics inserted by org B', async () => {
     const orgA = await createOrg('Org A');

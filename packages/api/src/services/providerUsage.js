@@ -1,9 +1,15 @@
-// Shared provider token-usage fetching + local cost recomputation, used by both
-// the historical sync route (routes/sync.js) and the reconciliation job
-// (jobs/reconciliation.js). Neither provider integration here calls a real
-// dollar-denominated billing endpoint — both pull token-usage buckets and
-// recompute cost_usd locally via PRICING below. See jobs/reconciliation.js for
-// why that's a deliberate scope tradeoff for reconciliation specifically.
+// Shared provider usage/cost fetching, used by both the historical sync route
+// (routes/sync.js) and the reconciliation job (jobs/reconciliation.js).
+//
+// Two kinds of provider integration live here:
+//  - fetch{Anthropic,OpenAI}Usage + summarizeBuckets: TOKEN usage, recomputed
+//    to a dollar estimate locally via PRICING below. Used by sync.js (bulk
+//    historical import) and as reconciliation's fallback when a real Costs
+//    API call fails.
+//  - fetch{Anthropic,OpenAI}RealCost: the actual provider-billed dollar total
+//    (OpenAI's /v1/organization/costs, Anthropic's
+//    /v1/organizations/cost_report) — genuine ground truth, not a local
+//    recomputation. This is reconciliation's primary source.
 
 function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController();
@@ -124,7 +130,75 @@ function summarizeBuckets(buckets, provider) {
   return { inputTokens, outputTokens, costUsd };
 }
 
+// Real provider-billed cost (USD) for the window — NOT a local recomputation.
+// Anthropic's cost_report `amount` is a decimal string in the "lowest currency
+// unit" (cents for USD) per their docs' own example ("123.45" -> $1.23), so it
+// must be divided by 100. OpenAI's costs `amount.value` is already a plain
+// USD float (confirmed via their cookbook example output) — no conversion.
+async function fetchAnthropicRealCost(adminKey, startDate, endDate) {
+  const startStr = startDate.toISOString().split('.')[0] + 'Z';
+  const endStr   = endDate.toISOString().split('.')[0] + 'Z';
+
+  let total = 0, nextPage = null, hasMore = true;
+
+  while (hasMore) {
+    const url = new URL('https://api.anthropic.com/v1/organizations/cost_report');
+    url.searchParams.set('starting_at', startStr);
+    url.searchParams.set('ending_at', endStr);
+    url.searchParams.set('bucket_width', '1d');
+    url.searchParams.set('limit', '31');
+    if (nextPage) url.searchParams.set('page', nextPage);
+
+    const res = await fetchWithTimeout(url.toString(), {
+      headers: { 'x-api-key': adminKey, 'anthropic-version': '2023-06-01' }
+    });
+    if (!res.ok) throw new Error(`Anthropic cost_report API ${res.status}: ${await res.text()}`);
+
+    const data = await res.json();
+    for (const bucket of (data.data || [])) {
+      for (const result of (bucket.results || [])) {
+        total += parseFloat(result.amount || '0') / 100;
+      }
+    }
+    hasMore  = data.has_more || false;
+    nextPage = data.next_page || null;
+  }
+  return total;
+}
+
+async function fetchOpenAIRealCost(apiKey, startDate, endDate) {
+  const startTs = Math.floor(startDate.getTime() / 1000);
+  const endTs   = Math.floor(endDate.getTime() / 1000);
+
+  let total = 0, page = null, hasMore = true;
+
+  while (hasMore) {
+    const url = new URL('https://api.openai.com/v1/organization/costs');
+    url.searchParams.set('start_time', String(startTs));
+    url.searchParams.set('end_time', String(endTs));
+    url.searchParams.set('bucket_width', '1d');
+    url.searchParams.set('limit', '180');
+    if (page) url.searchParams.set('page', page);
+
+    const res = await fetchWithTimeout(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) throw new Error(`OpenAI costs API ${res.status}: ${await res.text()}`);
+
+    const data = await res.json();
+    for (const bucket of (data.data || [])) {
+      for (const result of (bucket.results || [])) {
+        total += parseFloat(result.amount?.value || 0);
+      }
+    }
+    hasMore = data.has_more || false;
+    page    = data.next_page || null;
+  }
+  return total;
+}
+
 module.exports = {
   fetchWithTimeout, PRICING, calcCost,
   fetchAnthropicUsage, fetchOpenAIUsage, summarizeBuckets,
+  fetchAnthropicRealCost, fetchOpenAIRealCost,
 };

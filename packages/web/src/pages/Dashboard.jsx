@@ -71,7 +71,8 @@ function ReconciliationBadge({ run }) {
   const verified  = run.status !== 'alert';
   const color     = verified ? 'var(--success)' : 'var(--warning)';
   const label     = verified ? t('dashboard.reconciled') : t('dashboard.reconciliationDeviation', { pct: deviation.toFixed(1) });
-  const hint      = t('dashboard.reconciliationHint', {
+  const hintKey   = run.source === 'token_estimate_fallback' ? 'dashboard.reconciliationHintFallback' : 'dashboard.reconciliationHint';
+  const hint      = t(hintKey, {
     client: formatCost(parseFloat(run.client_reported_usd || 0)),
     provider: formatCost(parseFloat(run.provider_computed_usd || 0)),
   });
