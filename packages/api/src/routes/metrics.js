@@ -212,6 +212,29 @@ router.get('/summary', async (req, res) => {
       prevFilter += ` AND model <> ALL($${prevParams.length})`;
     }
 
+    // Time series buckets are zero-filled across the whole requested window (not just
+    // hours/days that had activity) — otherwise a burst of requests landing inside a
+    // single bucket collapses time_series to one row and the chart falsely reports
+    // "not enough data" even though total_requests is well above zero.
+    const bucketUnit = useDays ? 'day' : 'hour';
+    const tsParams = [orgId];
+    let tsSeriesStart, tsSeriesEnd;
+    let tsJoinFilter = `ac.org_id = $1`;
+    if (startDate && endDate) {
+      tsParams.push(startDate, endDate);
+      tsSeriesStart = `date_trunc('${bucketUnit}', $2::timestamptz)`;
+      tsSeriesEnd   = `date_trunc('${bucketUnit}', $3::timestamptz)`;
+      tsJoinFilter += ` AND ac.timestamp >= $2 AND ac.timestamp <= $3`;
+    } else {
+      tsSeriesStart = `date_trunc('${bucketUnit}', NOW() - INTERVAL '${interval}')`;
+      tsSeriesEnd   = `date_trunc('${bucketUnit}', NOW())`;
+      tsJoinFilter += ` AND ac.timestamp > NOW() - INTERVAL '${interval}'`;
+    }
+    if (excludeModels.length) {
+      tsParams.push(excludeModels);
+      tsJoinFilter += ` AND ac.model <> ALL($${tsParams.length})`;
+    }
+
     const [summary, byModel, byProvider, timeSeries, prevSummary, errorBreakdown, allModels] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) as total_requests,
@@ -248,15 +271,20 @@ router.get('/summary', async (req, res) => {
         currParams
       ),
       pool.query(
-        `SELECT ${timeBucket} as hour, provider,
-                COALESCE(SUM(input_tokens),0)  as input_tokens,
-                COALESCE(SUM(output_tokens),0) as output_tokens,
-                COALESCE(SUM(total_tokens),0)  as total_tokens,
-                COALESCE(SUM(cost_usd),0)      as cost_usd,
-                COUNT(*) as requests
-         FROM api_calls WHERE ${dateFilter}
-         GROUP BY ${timeBucket}, provider ORDER BY hour ASC`,
-        currParams
+        `SELECT bs.bucket as hour, p.provider,
+                COALESCE(SUM(ac.input_tokens),0)  as input_tokens,
+                COALESCE(SUM(ac.output_tokens),0) as output_tokens,
+                COALESCE(SUM(ac.total_tokens),0)  as total_tokens,
+                COALESCE(SUM(ac.cost_usd),0)      as cost_usd,
+                COUNT(ac.id) as requests
+         FROM generate_series(${tsSeriesStart}, ${tsSeriesEnd}, INTERVAL '1 ${bucketUnit}') AS bs(bucket)
+         CROSS JOIN (VALUES ('anthropic'), ('openai')) AS p(provider)
+         LEFT JOIN api_calls ac
+                ON date_trunc('${bucketUnit}', ac.timestamp) = bs.bucket
+               AND ac.provider = p.provider
+               AND ${tsJoinFilter}
+         GROUP BY bs.bucket, p.provider ORDER BY hour ASC`,
+        tsParams
       ),
       pool.query(
         `SELECT COUNT(*) as total_requests,
