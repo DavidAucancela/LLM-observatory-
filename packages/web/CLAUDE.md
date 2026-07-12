@@ -4,7 +4,7 @@
 
 **Pages (react-router-dom v6):**
 - `/` → `LandingPage.jsx` (público, con su propio `LandingPage.css`); si hay sesión activa redirige a `/dashboard`
-- `/dashboard` → `Dashboard.jsx` — KPI strip con sparklines, MultiLineChart tokens over time, provider breakdown, proyección mensual
+- `/dashboard` → `Dashboard.jsx` — KPI strip con sparklines (cada card clickeable, dirige `activeMetric`), chart card con toggle 3D/2D (`MetricSurface3D` / `ModelTrendChart2D`, ver abajo), provider breakdown, proyección mensual
 - `/activity` → `Activity.jsx` — Tab **Requests** (tabla paginada, filtros, drawer, CSV export) + Tab **Models** (HBar chart, tabla comparativa)
 - `/finance` → `Finance.jsx` — Tab **Balances** (saldo por provider, historial recargas) + Tab **Budgets** (límites de gasto con progress bars)
 - `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord) + Tab **Webhooks** (outbound endpoints) + Tab **Team** (members + invitations + Observatory tokens)
@@ -28,8 +28,14 @@ Las páginas de auth (Login/Register/ForgotPassword/ResetPassword) usan el tema 
 - `ProviderBadge.jsx` — dot cuadrado amber/green. Props: `provider` (lowercase), `size` (`sm`|`lg`)
 - `RequestDrawer.jsx` — Panel derecho con metadata, token breakdown, prompt preview
 - `Sparkline.jsx` — SVG sparkline inline (sin Recharts)
-- `MultiLineChart.jsx` — SVG multi-línea con gridlines y tick labels
 - `HBar.jsx` — Barra horizontal: label | barra | valor
+- `MetricSurface3D.jsx` / `ModelTrendChart2D.jsx` — vista dual del chart principal del Dashboard, toggle guardado en `localStorage('obs-chart-view')`, default `3d`. Ambos reciben las mismas props (`modelTimeSeries`, `metric`, `xLabels`, `loading`) y ambos se lazy-load (`React.lazy`) — three.js/@react-three/fiber (3D, ~975KB) y recharts (2D, ~380KB) solo se descargan si el usuario efectivamente usa esa vista. `MetricSurface3D.jsx` exporta `buildGrid`/`extractMetric`/`formatMetricValue` — únicas funciones compartidas por el 2D, para que ambas vistas nunca difieran en cómo agregan un bucket o formatean un valor. El orden y color por modelo (`colorForModelIndex` en `utils/chartColors.js`) es el mismo en las dos vistas.
+  - **3D light-mode/legibility fix:** el piso/grid y la `ContactShadows` usan `palette.gridLine`/`palette.shadow` (`utils/chartColors.js`) en vez de `palette.border` — ese token es casi invisible en modo claro (`#E4E7EC` sobre `#FFFFFF`), por eso el 3D necesita colores de grid propios, fijos por tema, no derivados de las CSS vars de las cards.
+  - **Densidad (30d/90d):** por encima de `DENSE_THRESHOLD` (14 buckets) las barras se adelgazan y la cámara se aplana (`cameraYRatio`) para reducir oclusión entre filas — ver constantes al inicio de `MetricSurface3D.jsx`.
+  - **Etiquetas de eje X:** `pickLabelIndices()` limita a ~7 fechas visibles (primero, último, pasos intermedios), renderizadas con `<Billboard><Text>` de drei para que siempre miren a la cámara sin importar la rotación.
+  - **Navegación (pan) + reset de vista:** `OrbitControls` tiene `enablePan` habilitado (clic derecho/dos dedos) para poder desplazarse entre fechas en 30d/90d. El botón `.ms3d-reset-btn` NO usa `OrbitControls.reset()` — ese método solo restaura la posición que tenía la cámara al construirse los controles, y como el `Canvas` persiste entre cambios de rango (no hay `key` que fuerce remount), quedaría desincronizado si el usuario cambió de rango después de montar. En vez de eso, recalcula la posición/target ideal a partir de `cameraDistance`/`cameraYRatio` actuales y los aplica directo sobre `controls.object.position`/`controls.target`.
+  - **Límite de zoom:** `minDistance` se capea en `MIN_CAMERA_DISTANCE` (8 unidades) en vez de escalar como `cameraDistance * 0.4` sin límite — con muchos buckets (90d) esa fórmula vieja dejaba el zoom mínimo a ~47 unidades, demasiado lejos para distinguir barras individuales sin importar cuánto scroll hicieras.
+  - **Tarjeta de controles:** `.ms3d-controls-card` (esquina inferior izquierda) reemplaza el texto plano de ayuda — tres filas con icono + texto (`dashboard.controlRotate/Zoom/Pan`) explicando drag/scroll/clic-derecho.
 - `hooks/useSocket.js` — Socket.io connection and event listeners (una sola conexión — no crear sockets adicionales por componente)
 - `hooks/useApi.js` — `useApi()` devuelve `apiFetch` (referencia estable, segura en deps de useEffect): inyecta el header Authorization y en 401 hace logout + redirect a /login. Usar siempre este hook para llamadas a la API, no `fetch` directo.
 - `utils/fmt.js` — `formatCost(usd, { small })`, `fmtDate()`, `fmtDateTime()`. Usar `formatCost` para todo costo mostrado en UI (consistencia de decimales).

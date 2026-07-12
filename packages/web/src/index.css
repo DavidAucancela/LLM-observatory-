@@ -762,14 +762,46 @@ body {
   flex-shrink: 0;
 }
 
-.ms3d-hint {
+.ms3d-controls-card {
   position: absolute;
-  bottom: 6px;
+  bottom: 8px;
   left: 8px;
-  font-size: 10px;
-  color: var(--faint);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
   pointer-events: none;
 }
+.ms3d-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ms3d-controls-row svg { flex-shrink: 0; opacity: 0.85; }
+
+.ms3d-reset-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.ms3d-reset-btn:hover { color: var(--text); background: var(--hover); }
 
 .ms3d-tooltip {
   background: var(--surface-raised, var(--surface));
@@ -794,6 +826,40 @@ body {
   color: var(--accent);
   font-weight: 600;
   margin-top: 2px;
+}
+
+.chart2d-tooltip {
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 8px 12px;
+  font-size: 11px;
+}
+.chart2d-tooltip-label {
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+.chart2d-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.chart2d-tooltip-row + .chart2d-tooltip-row { margin-top: 3px; }
+.chart2d-tooltip-dot {
+  width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0;
+}
+.chart2d-tooltip-name {
+  color: var(--text);
+  flex: 1;
+}
+.chart2d-tooltip-value {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-left: 10px;
 }
 
 .kpi-card-clickable {

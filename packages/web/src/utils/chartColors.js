@@ -11,14 +11,26 @@ export function readCssVar(name, fallback) {
   return value || fallback;
 }
 
-// Only surface/border are actually consumed by MetricSurface3D today — bars
-// are colored per-model (colorForModelIndex below), not per-metric, since the
-// Z axis is model. Keep this to what's used; add a metric-accent field back
-// only if something in the scene starts reading it.
+function isDarkTheme() {
+  return typeof document !== 'undefined' && !!document.querySelector('.theme-dark');
+}
+
+// surface/border are consumed by MetricSurface3D's canvas background/grid;
+// text/muted are consumed by ModelTrendChart2D's axis ticks and tooltip.
+// Bars/lines are colored per-model (colorForModelIndex below), not per-metric,
+// since the Z axis (3D) / series (2D) is model — keep this to what's used.
 export function readChartPalette() {
   return {
     surface: readCssVar('--surface-raised', '#1E2535'),
     border:  readCssVar('--border', '#2A3346'),
+    text:    readCssVar('--text', '#E7ECF5'),
+    muted:   readCssVar('--muted', '#8B96AC'),
+    // Fixed (not read from the app's --border token): the 3D floor grid and
+    // its contact shadow need real contrast against `surface` in both
+    // themes. --border is tuned for subtle card outlines and in light mode
+    // (#E4E7EC on #FFFFFF) is nearly invisible as a 3D floor.
+    gridLine: isDarkTheme() ? '#3A4560' : '#CBD2DC',
+    shadow:   isDarkTheme() ? '#000000' : '#94A3B8',
   };
 }
 
