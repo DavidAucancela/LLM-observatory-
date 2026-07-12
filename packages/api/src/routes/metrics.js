@@ -338,7 +338,7 @@ router.get('/summary', async (req, res) => {
       // above), so the candidate set is a dynamic top-5 subquery, not a literal
       // list. Feeds the 3D "token landscape" chart's Z axis.
       pool.query(
-        `WITH top_models AS (
+        `WITH top_models AS MATERIALIZED (
            SELECT model FROM api_calls ac WHERE ${tsJoinFilter}
            GROUP BY model ORDER BY COUNT(*) DESC LIMIT 5
          )

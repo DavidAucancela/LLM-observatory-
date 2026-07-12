@@ -11,17 +11,14 @@ export function readCssVar(name, fallback) {
   return value || fallback;
 }
 
+// Only surface/border are actually consumed by MetricSurface3D today — bars
+// are colored per-model (colorForModelIndex below), not per-metric, since the
+// Z axis is model. Keep this to what's used; add a metric-accent field back
+// only if something in the scene starts reading it.
 export function readChartPalette() {
   return {
-    surface:       readCssVar('--surface-raised', '#1E2535'),
-    border:        readCssVar('--border', '#2A3346'),
-    text:          readCssVar('--text', '#E5E9F0'),
-    muted:         readCssVar('--muted', '#8B95A8'),
-    requests:      readCssVar('--text', '#E5E9F0'),
-    tokens:        readCssVar('--tokens-color', '#06B6D4'),
-    cost:          readCssVar('--cost-color', '#7C3AED'),
-    latency:       readCssVar('--latency-color', '#F59E0B'),
-    errorRate:     readCssVar('--error', '#DC2626'),
+    surface: readCssVar('--surface-raised', '#1E2535'),
+    border:  readCssVar('--border', '#2A3346'),
   };
 }
 

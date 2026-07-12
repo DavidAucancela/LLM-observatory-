@@ -84,6 +84,10 @@ function Bar({ targetHeight, color, position, onHover, onUnhover }) {
   );
 }
 
+// xLabels is indexed by the same position as grid.hours — safe because both
+// come from queries sharing the exact same tsSeriesStart/tsSeriesEnd/bucketUnit
+// zero-fill (metrics.js summary route), so they always produce the same bucket
+// count in the same order. `?? ''` below is just a guard, not the real defense.
 function Scene({ grid, metric, xLabels, palette }) {
   const { hours, models, values, max } = grid;
   const [hovered, setHovered] = useState(null);
