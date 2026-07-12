@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
-import MultiLineChart from '../components/MultiLineChart';
 import HBar from '../components/HBar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 import { formatCost, fmtLatency } from '../utils/fmt';
+
+// three.js + @react-three/fiber/drei add ~800KB minified — lazy-load so the
+// bundle for every other route stays light; only the Dashboard route pays for it.
+const MetricSurface3D = lazy(() => import('../components/MetricSurface3D'));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,14 +39,19 @@ function Delta({ value, inverse }) {
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(--border)', highlight }) {
+function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(--border)', highlight, active, onClick }) {
+  const emphasized = highlight || active;
   return (
     <div
-      className="kpi-card"
+      className={`kpi-card${onClick ? ' kpi-card-clickable' : ''}`}
       style={{
         '--kpi-accent': accentColor,
-        ...(highlight ? { borderColor: accentColor, background: 'color-mix(in srgb, var(--error) 8%, transparent)' } : {}),
+        ...(emphasized ? { borderColor: accentColor, background: `color-mix(in srgb, ${accentColor} 8%, transparent)` } : {}),
       }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
       <div className="kpi-label">{label}</div>
       <div className="kpi-row">
@@ -58,6 +66,17 @@ function KpiCard({ label, value, delta, inverse, sparkData, accentColor = 'var(-
     </div>
   );
 }
+
+// Chart header label per KPI drill-down metric — kept alongside KpiCard since
+// the two must stay in sync (adding a KPI card without an entry here just
+// falls back to the generic tokensOverTime label).
+const METRIC_HEADER_KEYS = {
+  requests:  'dashboard.requestsOverTime',
+  tokens:    'dashboard.tokensOverTime',
+  cost:      'dashboard.costOverTime',
+  latency:   'dashboard.latencyOverTime',
+  errorRate: 'dashboard.errorRateOverTime',
+};
 
 // ── Provider breakdown with bars ──────────────────────────────────────────────
 
@@ -435,6 +454,7 @@ export default function Dashboard() {
   const [disabledModels, setDisabledModels] = useState(() => new Set());
   const [allModels, setAllModels] = useState([]);
   const [reconciliation, setReconciliation] = useState([]);
+  const [activeMetric, setActiveMetric] = useState('tokens');
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
@@ -502,17 +522,6 @@ export default function Dashboard() {
   const byModel        = summary?.by_model        || [];
   const errorBreakdown = summary?.error_breakdown || [];
 
-  // Providers to actually render in the chart: configured ones (so a
-  // zero-usage configured provider still shows an empty line) plus any
-  // provider with real data in this window — covers a provider used only via
-  // the SDK, with no stored credential yet (e.g. Gemini today).
-  const chartProviders = [...new Set([
-    ...configuredProviders,
-    ...byProvider.map(p => p.provider),
-  ])];
-  const providerData = Object.fromEntries(
-    chartProviders.map(p => [p, timeSeries.map(r => r.byProvider[p] || 0)])
-  );
   const tokenSpark = timeSeries.map(r => Object.values(r.byProvider).reduce((a, b) => a + b, 0));
   const reqSpark    = timeSeries.map(r => r.requests);
   const costSpark   = timeSeries.map(r => r.cost);
@@ -606,6 +615,8 @@ export default function Dashboard() {
             delta={calcDelta(s?.total_requests, prev?.total_requests)}
             sparkData={reqSpark}
             accentColor="var(--text)"
+            active={activeMetric === 'requests'}
+            onClick={() => setActiveMetric('requests')}
           />
           <KpiCard
             label={t('activity.tokensCol')}
@@ -613,6 +624,8 @@ export default function Dashboard() {
             delta={calcDelta(s?.total_tokens, prev?.total_tokens)}
             sparkData={tokenSpark}
             accentColor="var(--tokens-color)"
+            active={activeMetric === 'tokens'}
+            onClick={() => setActiveMetric('tokens')}
           />
           <KpiCard
             label={t('dashboard.cost')}
@@ -621,6 +634,8 @@ export default function Dashboard() {
             inverse
             sparkData={costSpark}
             accentColor="var(--cost-color)"
+            active={activeMetric === 'cost'}
+            onClick={() => setActiveMetric('cost')}
           />
           <KpiCard
             label={t('activity.avgLatencyCol')}
@@ -628,14 +643,18 @@ export default function Dashboard() {
             delta={calcDelta(s?.avg_latency_ms, prev?.avg_latency_ms)}
             inverse
             accentColor="var(--latency-color)"
+            active={activeMetric === 'latency'}
+            onClick={() => setActiveMetric('latency')}
           />
           <KpiCard
-            label="Error Rate"
+            label={t('dashboard.errorRate')}
             value={loading ? '—' : errorRate}
             delta={errorDelta}
             inverse
             accentColor="var(--error)"
             highlight={!loading && errorCount > 0}
+            active={activeMetric === 'errorRate'}
+            onClick={() => setActiveMetric('errorRate')}
           />
         </div>
 
@@ -645,45 +664,17 @@ export default function Dashboard() {
             {/* Tokens over time */}
             <div className="obs-card dash-chart-card" style={{ padding: '16px 20px' }}>
               <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div className="obs-section-label">{t('dashboard.tokensOverTime')}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--muted)' }}>
-                  {chartProviders.map(p => (
-                    <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <span style={{ width: 10, height: 2, background: PROVIDER_COLORS[p] || 'var(--accent)', display: 'inline-block', borderRadius: 1 }} />
-                      {PROVIDER_LABELS[p] || p}
-                    </span>
-                  ))}
-                </div>
+                <div className="obs-section-label">{t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}</div>
               </div>
               <div className="dash-chart-body">
-                {loading ? (
-                  <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />
-                ) : totalReqs > 0 && timeSeries.length > 1 ? (
-                  <MultiLineChart
-                    series={(() => {
-                      const totals = chartProviders.map(p => ({ p, total: providerData[p].reduce((a, b) => a + b, 0) }));
-                      const nonZero = totals.filter(t => t.total > 0);
-                      // Only one series gets the secondary axis — MultiLineChart's dual-axis
-                      // support is designed for exactly one low-volume outlier, not N-way.
-                      const lowVolume = nonZero.length > 1
-                        ? nonZero.reduce((min, t) => (t.total < min.total ? t : min)).p
-                        : null;
-                      return chartProviders.map(p => ({
-                        name: PROVIDER_LABELS[p] || p,
-                        color: PROVIDER_COLORS[p] || 'var(--accent)',
-                        data: providerData[p],
-                        xLabels,
-                        strokeWidth: lowVolume === p ? 2.5 : 1.5,
-                        yAxis: lowVolume === p ? 'right' : 'left',
-                      }));
-                    })()}
-                    height={160}
+                <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
+                  <MetricSurface3D
+                    modelTimeSeries={summary?.model_time_series || []}
+                    metric={activeMetric}
+                    xLabels={xLabels}
+                    loading={loading}
                   />
-                ) : (
-                  <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
-                  </div>
-                )}
+                </Suspense>
               </div>
             </div>
 

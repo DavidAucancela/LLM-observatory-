@@ -281,7 +281,7 @@ router.get('/summary', async (req, res) => {
       tsJoinFilter += ` AND ac.model <> ALL($${tsParams.length})`;
     }
 
-    const [summary, byModel, byProvider, timeSeries, prevSummary, errorBreakdown, allModels] = await Promise.all([
+    const [summary, byModel, byProvider, timeSeries, modelTimeSeries, prevSummary, errorBreakdown, allModels] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) as total_requests,
                 COALESCE(SUM(total_tokens),0)       as total_tokens,
@@ -332,6 +332,33 @@ router.get('/summary', async (req, res) => {
          GROUP BY bs.bucket, p.provider ORDER BY hour ASC`,
         tsParams
       ),
+      // Per-model time series (top 5 models by request count + "Other"), same
+      // zero-fill pattern as time_series above but bucketed by model instead of
+      // provider — models are an open set (unlike the 3-provider CROSS JOIN
+      // above), so the candidate set is a dynamic top-5 subquery, not a literal
+      // list. Feeds the 3D "token landscape" chart's Z axis.
+      pool.query(
+        `WITH top_models AS (
+           SELECT model FROM api_calls ac WHERE ${tsJoinFilter}
+           GROUP BY model ORDER BY COUNT(*) DESC LIMIT 5
+         )
+         SELECT bs.bucket AS hour,
+                series_model.model AS model,
+                COALESCE(SUM(ac.total_tokens), 0)  AS total_tokens,
+                COALESCE(SUM(ac.cost_usd), 0)       AS cost_usd,
+                COUNT(ac.id)                        AS requests,
+                COALESCE(AVG(ac.latency_ms) FILTER (WHERE ac.id IS NOT NULL), 0) AS avg_latency_ms,
+                COUNT(ac.id) FILTER (WHERE ac.status_code >= 400) AS error_count
+         FROM generate_series(${tsSeriesStart}, ${tsSeriesEnd}, INTERVAL '1 ${bucketUnit}') AS bs(bucket)
+         CROSS JOIN (SELECT model FROM top_models UNION ALL SELECT 'Other') AS series_model(model)
+         LEFT JOIN api_calls ac
+                ON date_trunc('${bucketUnit}', ac.timestamp) = bs.bucket
+               AND (ac.model = series_model.model
+                    OR (series_model.model = 'Other' AND ac.model NOT IN (SELECT model FROM top_models)))
+               AND ${tsJoinFilter}
+         GROUP BY bs.bucket, series_model.model ORDER BY hour ASC, series_model.model ASC`,
+        tsParams
+      ),
       pool.query(
         `SELECT COUNT(*) as total_requests,
                 COALESCE(SUM(total_tokens),0) as total_tokens,
@@ -356,13 +383,14 @@ router.get('/summary', async (req, res) => {
     ]);
 
     res.json({
-      summary:         summary.rows[0],
-      prev_summary:    prevSummary.rows[0],
-      by_model:        byModel.rows,
-      by_provider:     byProvider.rows,
-      time_series:     timeSeries.rows,
-      error_breakdown: errorBreakdown.rows,
-      all_models:      allModels.rows,
+      summary:            summary.rows[0],
+      prev_summary:       prevSummary.rows[0],
+      by_model:           byModel.rows,
+      by_provider:        byProvider.rows,
+      time_series:        timeSeries.rows,
+      model_time_series:  modelTimeSeries.rows,
+      error_breakdown:    errorBreakdown.rows,
+      all_models:         allModels.rows,
     });
   } catch (err) {
     console.error('GET /api/metrics/summary error:', err);

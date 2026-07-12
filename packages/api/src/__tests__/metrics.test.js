@@ -253,4 +253,67 @@ describe('GET /api/metrics/summary — org scoping', () => {
     expect(providers.has('anthropic')).toBe(true);
     expect(providers.has('openai')).toBe(true);
   });
+
+  it('model_time_series is zero-filled across buckets and carries all 5 metrics', async () => {
+    const { obsToken, jwt } = await createOrg('ModelTimeSeries Org');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, model: 'claude-sonnet-4-6', cost_usd: 1.5, latency_ms: 400 });
+
+    const res = await request(app)
+      .get('/api/metrics/summary?range=24h')
+      .set('Authorization', `Bearer ${jwt}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.model_time_series)).toBe(true);
+
+    // At least 2 hourly buckets total (zero-filled), not collapsed to a single row.
+    expect(res.body.model_time_series.length).toBeGreaterThan(1);
+
+    const row = res.body.model_time_series.find(r => r.model === 'claude-sonnet-4-6' && parseInt(r.requests) > 0);
+    expect(row).toBeDefined();
+    expect(parseFloat(row.total_tokens)).toBe(150);
+    expect(parseFloat(row.cost_usd)).toBeCloseTo(1.5);
+    expect(parseInt(row.requests)).toBe(1);
+    expect(parseFloat(row.avg_latency_ms)).toBe(400);
+    expect(parseInt(row.error_count)).toBe(0);
+
+    // A bucket with no activity for this model still yields a zero-filled row.
+    const zeroRow = res.body.model_time_series.find(r => r.model === 'claude-sonnet-4-6' && parseInt(r.requests) === 0);
+    expect(zeroRow).toBeDefined();
+    expect(parseFloat(zeroRow.total_tokens)).toBe(0);
+  });
+
+  it('model_time_series collapses models beyond the top 5 into "Other"', async () => {
+    const { obsToken, jwt } = await createOrg('ManyModels Org');
+    const models = ['model-a', 'model-b', 'model-c', 'model-d', 'model-e', 'model-f', 'model-g'];
+    // Give earlier models more requests so they rank in the top 5 deterministically.
+    for (let i = 0; i < models.length; i++) {
+      const requestCount = models.length - i; // model-a:7 ... model-g:1
+      for (let j = 0; j < requestCount; j++) {
+        await request(app)
+          .post('/api/metrics')
+          .set('Authorization', `Bearer ${obsToken}`)
+          .send({ ...VALID_METRIC, model: models[i] });
+      }
+    }
+
+    const res = await request(app)
+      .get('/api/metrics/summary?range=24h')
+      .set('Authorization', `Bearer ${jwt}`);
+    expect(res.status).toBe(200);
+
+    const distinctModels = new Set(res.body.model_time_series.map(r => r.model));
+    // Top 5 (model-a..model-e) + 'Other' for model-f/model-g = 6 distinct series.
+    expect(distinctModels.size).toBe(6);
+    expect(distinctModels.has('model-a')).toBe(true);
+    expect(distinctModels.has('model-e')).toBe(true);
+    expect(distinctModels.has('model-f')).toBe(false);
+    expect(distinctModels.has('Other')).toBe(true);
+
+    const otherTotalRequests = res.body.model_time_series
+      .filter(r => r.model === 'Other')
+      .reduce((sum, r) => sum + parseInt(r.requests), 0);
+    expect(otherTotalRequests).toBe(3); // model-f (2) + model-g (1)
+  });
 });
