@@ -727,6 +727,83 @@ body {
 }
 .dash-chart-body > * { width: 100%; }
 
+.ms3d-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.ms3d-wrap canvas { cursor: grab; }
+.ms3d-wrap canvas:active { cursor: grabbing; }
+
+.ms3d-legend {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+.ms3d-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 80%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.ms3d-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.ms3d-hint {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  font-size: 10px;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.ms3d-tooltip {
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  text-align: center;
+}
+.ms3d-tooltip-model {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.ms3d-tooltip-bucket {
+  color: var(--muted);
+  font-size: 10px;
+}
+.ms3d-tooltip-value {
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.kpi-card-clickable {
+  cursor: pointer;
+}
+.kpi-card-clickable:focus-visible {
+  outline: 2px solid var(--kpi-accent, var(--accent));
+  outline-offset: 2px;
+}
+
 .dash-split-row {
   flex: 1;
   min-height: 0;
