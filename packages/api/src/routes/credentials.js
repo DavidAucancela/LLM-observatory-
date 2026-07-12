@@ -14,7 +14,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 const CredentialSchema = z.object({
-  provider: z.enum(['anthropic', 'openai']),
+  provider: z.enum(['anthropic', 'openai', 'gemini']),
   key_type: z.enum(['sdk', 'admin']),
   label:    z.string().min(1).max(100),
   value:    z.string().min(10),
@@ -69,7 +69,7 @@ router.post('/:id/ping', requireAdmin, async (req, res, next) => {
     if (!row.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
 
     const { provider, key_hint } = row.rows[0];
-    const model = provider === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gpt-4o-mini';
+    const model = provider === 'anthropic' ? 'claude-haiku-4-5-20251001' : provider === 'gemini' ? 'gemini-3.5-flash' : 'gpt-4o-mini';
 
     await pool.query(
       `DELETE FROM api_calls WHERE org_id = $1 AND provider = $2 AND prompt_preview = 'test:sdk_integration' AND api_key_hint = $3`,
@@ -139,6 +139,12 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
         valid = response.status === 200;
         if (!valid) errorMsg = `OpenAI API respondió con ${response.status}`;
       }
+    } else if (provider === 'gemini') {
+      const response = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      );
+      valid = response.status === 200;
+      if (!valid) errorMsg = `Gemini API respondió con ${response.status}`;
     }
 
     await pool.query(

@@ -110,7 +110,9 @@ function AddKeyForm({ onSaved, onCancel }) {
     } catch { setError('Connection error'); } finally { setSaving(false); }
   };
 
-  const phLabel = form.provider === 'anthropic' ? (form.key_type === 'admin' ? 'sk-ant-admin-…' : 'sk-ant-api03-…') : (form.key_type === 'admin' ? 'sk-admin-…' : 'sk-proj-…');
+  const phLabel = form.provider === 'anthropic' ? (form.key_type === 'admin' ? 'sk-ant-admin-…' : 'sk-ant-api03-…')
+    : form.provider === 'gemini' ? 'AIza…'
+    : (form.key_type === 'admin' ? 'sk-admin-…' : 'sk-proj-…');
 
   return (
     <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
@@ -122,13 +124,17 @@ function AddKeyForm({ onSaved, onCancel }) {
         <div className="obs-field">
           <label>{t('settings.keys.providerTypeField')}</label>
           <div style={{ display: 'flex', gap: 6 }}>
-            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.provider} onChange={e => set('provider', e.target.value)}>
+            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.provider} onChange={e => {
+              const provider = e.target.value;
+              setForm(f => ({ ...f, provider, key_type: provider === 'gemini' ? 'sdk' : f.key_type }));
+            }}>
               <option value="anthropic">Anthropic</option>
               <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
             </select>
-            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.key_type} onChange={e => set('key_type', e.target.value)}>
+            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.key_type} disabled={form.provider === 'gemini'} onChange={e => set('key_type', e.target.value)}>
               <option value="sdk">{t('settings.keys.sdkType')}</option>
-              <option value="admin">{t('settings.keys.adminType')}</option>
+              {form.provider !== 'gemini' && <option value="admin">{t('settings.keys.adminType')}</option>}
             </select>
           </div>
         </div>
