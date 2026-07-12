@@ -11,7 +11,7 @@ src/
 │   ├── schema.sql      Table definitions + indexes + multi-tenancy backfill
 │   ├── migrate.js      Runs schema.sql (also runs automatically on Docker container start)
 │   ├── seed.js         600 demo records (org-scoped)
-│   ├── seed-demo.js    Public showcase org + demo user + fake credentials (npm run seed:demo)
+│   ├── seed-demo.js    Public showcase org + demo user + fake credentials (npm run seed:demo); exports seedDemo() — re-run weekly by cron in index.js (Mondays 05:00, only if org slug 'demo' exists)
 │   └── crypto.js       AES-256-GCM encrypt/decrypt for API keys (v2: format); CBC legacy fallback for old values
 ├── middleware/
 │   └── auth.js         JWT + Observatory token resolution; requireAdmin guard

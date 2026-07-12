@@ -34,6 +34,7 @@ const webhooksRouter    = require('./routes/webhooks');
 const reconciliationRouter = require('./routes/reconciliation');
 const { checkAlerts }   = require('./jobs/alertChecker');
 const { runReconciliation } = require('./jobs/reconciliation');
+const { seedDemo }      = require('./db/seed-demo');
 
 const app = express();
 const server = http.createServer(app);
@@ -217,6 +218,19 @@ async function startServer() {
       if (result.rowCount > 0) logger.info(`Data retention: deleted ${result.rowCount} records older than ${days} days`);
     } catch (err) {
       logger.error('Data retention job failed:', err.message);
+    }
+  });
+
+  // Cron: refresh demo showcase data weekly (Mondays 05:00) — only if the demo org exists
+  cron.schedule('0 5 * * 1', async () => {
+    try {
+      const demo = await pool.query(`SELECT 1 FROM organizations WHERE slug = 'demo'`);
+      if (demo.rowCount === 0) return;
+      logger.info('Refreshing demo org data...');
+      await seedDemo();
+      logger.info('Demo org data refreshed');
+    } catch (err) {
+      logger.error('Demo refresh failed:', err.message);
     }
   });
 
