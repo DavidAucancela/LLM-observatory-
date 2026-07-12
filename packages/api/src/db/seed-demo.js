@@ -2,6 +2,7 @@
 // Creates a public demo account with 30 days of realistic data.
 // Run: node src/db/seed-demo.js
 //      (or from Railway Console: node src/db/seed-demo.js)
+// Also exported as seedDemo() — index.js re-runs it weekly to keep the showcase fresh.
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
@@ -135,14 +136,21 @@ async function seedDemo() {
   }
 
   // ── 5. Observatory token (one sample token, visible in Settings) ──────────
-  const rawToken   = 'obs_sk_demo_' + crypto.randomBytes(20).toString('hex');
-  const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const tokenPrefix= rawToken.slice(0, 20);
-  await pool.query(`
-    INSERT INTO observatory_tokens (org_id, name, token_hash, token_prefix, created_by)
-    VALUES ($1, 'Demo SDK Token', $2, $3, $4)
-    ON CONFLICT (token_hash) DO NOTHING
-  `, [orgId, tokenHash, tokenPrefix, userId]);
+  // Random hash each run — insert only if none exists yet, or re-runs would pile up tokens
+  const hasToken = await pool.query(
+    `SELECT 1 FROM observatory_tokens WHERE org_id = $1 AND name = 'Demo SDK Token' AND revoked_at IS NULL LIMIT 1`,
+    [orgId]
+  );
+  if (hasToken.rowCount === 0) {
+    const rawToken   = 'obs_sk_demo_' + crypto.randomBytes(20).toString('hex');
+    const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenPrefix= rawToken.slice(0, 20);
+    await pool.query(`
+      INSERT INTO observatory_tokens (org_id, name, token_hash, token_prefix, created_by)
+      VALUES ($1, 'Demo SDK Token', $2, $3, $4)
+      ON CONFLICT (token_hash) DO NOTHING
+    `, [orgId, tokenHash, tokenPrefix, userId]);
+  }
 
   // ── 6. api_calls — delete old demo data and re-insert fresh ──────────────
   await pool.query('DELETE FROM api_calls WHERE org_id = $1', [orgId]);
@@ -257,8 +265,12 @@ async function seedDemo() {
   console.log(`\n✅ Demo seed complete`);
   console.log(`   Email:    ${DEMO_EMAIL}`);
   console.log(`   Password: ${DEMO_PASSWORD}`);
-
-  await pool.end();
 }
 
-seedDemo().catch(err => { console.error(err); process.exit(1); });
+if (require.main === module) {
+  seedDemo()
+    .then(() => pool.end())
+    .catch(err => { console.error(err); process.exit(1); });
+}
+
+module.exports = { seedDemo };

@@ -10,6 +10,9 @@ import { formatCost, fmtLatency } from '../utils/fmt';
 // three.js + @react-three/fiber/drei add ~800KB minified — lazy-load so the
 // bundle for every other route stays light; only the Dashboard route pays for it.
 const MetricSurface3D = lazy(() => import('../components/MetricSurface3D'));
+// recharts is also lazy-loaded so a user who stays on the (default) 3D view
+// never pays for it — only fetched once they switch to the 2D view.
+const ModelTrendChart2D = lazy(() => import('../components/ModelTrendChart2D'));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -455,6 +458,7 @@ export default function Dashboard() {
   const [allModels, setAllModels] = useState([]);
   const [reconciliation, setReconciliation] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
+  const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '3d');
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
@@ -665,15 +669,36 @@ export default function Dashboard() {
             <div className="obs-card dash-chart-card" style={{ padding: '16px 20px' }}>
               <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div className="obs-section-label">{t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}</div>
+                <div className="obs-range-picker">
+                  <button
+                    className={`obs-range-btn${chartView === '3d' ? ' active' : ''}`}
+                    title={t('dashboard.view3D')}
+                    onClick={() => { setChartView('3d'); localStorage.setItem('obs-chart-view', '3d'); }}
+                  >3D</button>
+                  <button
+                    className={`obs-range-btn${chartView === '2d' ? ' active' : ''}`}
+                    title={t('dashboard.view2D')}
+                    onClick={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
+                  >2D</button>
+                </div>
               </div>
               <div className="dash-chart-body">
                 <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
-                  <MetricSurface3D
-                    modelTimeSeries={summary?.model_time_series || []}
-                    metric={activeMetric}
-                    xLabels={xLabels}
-                    loading={loading}
-                  />
+                  {chartView === '3d' ? (
+                    <MetricSurface3D
+                      modelTimeSeries={summary?.model_time_series || []}
+                      metric={activeMetric}
+                      xLabels={xLabels}
+                      loading={loading}
+                    />
+                  ) : (
+                    <ModelTrendChart2D
+                      modelTimeSeries={summary?.model_time_series || []}
+                      metric={activeMetric}
+                      xLabels={xLabels}
+                      loading={loading}
+                    />
+                  )}
                 </Suspense>
               </div>
             </div>
