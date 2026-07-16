@@ -25,6 +25,7 @@ export function readChartPalette() {
     border:  readCssVar('--border', '#2A3346'),
     text:    readCssVar('--text', '#E7ECF5'),
     muted:   readCssVar('--muted', '#8B96AC'),
+    accent:  readCssVar('--accent', '#06B6D4'),
     // Fixed (not read from the app's --border token): the 3D floor grid and
     // its contact shadow need real contrast against `surface` in both
     // themes. --border is tuned for subtle card outlines and in light mode

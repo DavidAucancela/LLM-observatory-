@@ -36,7 +36,13 @@ export function extractMetric(row, metric) {
 
 export function buildGrid(modelTimeSeries, metric) {
   const hours = [...new Set(modelTimeSeries.map(r => r.hour))].sort((a, b) => new Date(a) - new Date(b));
-  const models = [...new Set(modelTimeSeries.map(r => r.model))]
+  // Zero-fill (generate_series in metrics.js) emits one row per hour for
+  // every model regardless of activity — drop models with no requests in
+  // any bucket so the grid only shows models that actually have data.
+  const modelsWithActivity = new Set(
+    modelTimeSeries.filter(r => parseInt(r.requests || 0, 10) > 0).map(r => r.model)
+  );
+  const models = [...modelsWithActivity]
     .sort((a, b) => (a === 'Other' ? 1 : 0) - (b === 'Other' ? 1 : 0));
 
   const cellMap = new Map();
@@ -58,9 +64,10 @@ const BAR_SIZE = 0.62;
 const SPACING  = 0.9;
 const MAX_HEIGHT = 3.6;
 const DAMP_LAMBDA = 6;
-// Above this many time buckets (roughly the 30d/90d ranges), thin the bars
+// Above this many days of span (roughly the 30d/90d ranges), thin the bars
 // and flatten the camera angle so front-row bars stop occluding back rows —
-// see Scene's isDense derivation.
+// see Scene's isDense derivation (spanDays, not raw bucket count, since 24h
+// uses hourly buckets while 30d/90d use daily buckets).
 const DENSE_THRESHOLD = 14;
 const MAX_AXIS_LABELS = 7;
 // OrbitControls' old minDistance (cameraDistance * 0.4) grows right along
@@ -69,16 +76,43 @@ const MAX_AXIS_LABELS = 7;
 // scene-size-independent constant means you can always zoom in tight on a
 // handful of bars no matter how many buckets are in view.
 const MIN_CAMERA_DISTANCE = 8;
+// Idle time before the camera resumes auto-rotating after a drag/zoom/pan,
+// a bar hover, or a pinned tooltip — long enough to read a tooltip without
+// the scene drifting under it.
+const AUTO_ROTATE_IDLE_MS = 3000;
+const AUTO_ROTATE_SPEED = 0.55;
+// Diagonal "wave" stagger for the entrance animation: each bar's grow-in is
+// delayed proportionally to its (hour, model) grid position, so the surface
+// fills in sweeping from the front-left corner instead of popping in at once.
+const REVEAL_STEP_MS = 14;
+const HOVER_LIFT = 0.22;
+const DIMMED_OPACITY = 0.32;
 
-function Bar({ targetHeight, size, color, position, onHover, onUnhover }) {
+function Bar({ targetHeight, size, color, position, isActiveCell, dimmed, revealDelay, revealStart, onHover, onUnhover, onClick }) {
   const meshRef = useRef();
+  const materialRef = useRef();
   const currentHeight = useRef(0.01);
+  const currentLift = useRef(0);
+
+  // A fresh revealStart timestamp means the grid's shape just changed (range
+  // or metric switch) — snap back to zero so the stagger reveal is visible
+  // again instead of just re-damping from whatever height it already had.
+  useEffect(() => {
+    currentHeight.current = 0.01;
+  }, [revealStart]);
 
   useFrame((_, delta) => {
-    currentHeight.current = THREE.MathUtils.damp(currentHeight.current, Math.max(targetHeight, 0.01), DAMP_LAMBDA, delta);
+    const revealed = performance.now() - revealStart >= revealDelay;
+    const targetH = revealed ? Math.max(targetHeight, 0.01) : 0.01;
+    currentHeight.current = THREE.MathUtils.damp(currentHeight.current, targetH, DAMP_LAMBDA, delta);
+    currentLift.current = THREE.MathUtils.damp(currentLift.current, isActiveCell ? HOVER_LIFT : 0, DAMP_LAMBDA, delta);
     if (meshRef.current) {
       meshRef.current.scale.y = currentHeight.current;
-      meshRef.current.position.y = currentHeight.current / 2;
+      meshRef.current.position.y = currentHeight.current / 2 + currentLift.current;
+    }
+    if (materialRef.current) {
+      materialRef.current.opacity = THREE.MathUtils.damp(materialRef.current.opacity, dimmed ? DIMMED_OPACITY : 1, DAMP_LAMBDA, delta);
+      materialRef.current.emissiveIntensity = THREE.MathUtils.damp(materialRef.current.emissiveIntensity, isActiveCell ? 0.6 : 0, DAMP_LAMBDA, delta);
     }
   });
 
@@ -88,9 +122,37 @@ function Bar({ targetHeight, size, color, position, onHover, onUnhover }) {
       position={[position[0], 0, position[2]]}
       onPointerOver={(e) => { e.stopPropagation(); onHover(); }}
       onPointerOut={(e) => { e.stopPropagation(); onUnhover(); }}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
       <boxGeometry args={[size, 1, size]} />
-      <meshStandardMaterial color={color} />
+      <meshStandardMaterial
+        ref={materialRef}
+        color={color}
+        emissive={color}
+        emissiveIntensity={0}
+        roughness={0.32}
+        metalness={0.15}
+        transparent
+        opacity={1}
+      />
+    </mesh>
+  );
+}
+
+// Floor ring under the active (hovered or pinned) bar — a lightweight focus
+// indicator that pulses gently so it reads clearly against the grid even
+// when the camera is auto-rotating.
+function FocusRing({ x, z, color }) {
+  const ref = useRef();
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const pulse = 1 + Math.sin(clock.elapsedTime * 3) * 0.08;
+    ref.current.scale.set(pulse, pulse, 1);
+  });
+  return (
+    <mesh ref={ref} position={[x, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.4, 0.5, 32]} />
+      <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} />
     </mesh>
   );
 }
@@ -111,9 +173,41 @@ function pickLabelIndices(count) {
 // come from queries sharing the exact same tsSeriesStart/tsSeriesEnd/bucketUnit
 // zero-fill (metrics.js summary route), so they always produce the same bucket
 // count in the same order. `?? ''` below is just a guard, not the real defense.
-function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, barSize, controlsRef }) {
+function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, barSize, controlsRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle }) {
   const { hours, models, values, max } = grid;
-  const [hovered, setHovered] = useState(null);
+  const [autoRotate, setAutoRotate] = useState(true);
+  const idleTimerRef = useRef(null);
+
+  const pauseAutoRotate = () => {
+    clearTimeout(idleTimerRef.current);
+    setAutoRotate(false);
+  };
+  const scheduleAutoRotate = () => {
+    clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => setAutoRotate(true), AUTO_ROTATE_IDLE_MS);
+  };
+
+  useEffect(() => {
+    scheduleAutoRotate();
+    return () => clearTimeout(idleTimerRef.current);
+  }, []);
+
+  // Keep rotation paused for as long as a tooltip is pinned open, regardless
+  // of whether OrbitControls itself fired a start/end (a plain click may not).
+  useEffect(() => {
+    if (pinned) pauseAutoRotate(); else scheduleAutoRotate();
+  }, [pinned]);
+
+  // structureKey changes only when the set of buckets/models changes (range
+  // or filter switch) — NOT on every value update from a live socket refetch,
+  // which would otherwise replay the grow-in animation on every new metric.
+  const structureKey = `${hours.join(',')}|${models.join(',')}`;
+  const revealStartRef = useRef(performance.now());
+  const prevStructureKeyRef = useRef(structureKey);
+  if (structureKey !== prevStructureKeyRef.current) {
+    prevStructureKeyRef.current = structureKey;
+    revealStartRef.current = performance.now();
+  }
 
   const offsetX = -((hours.length - 1) * SPACING) / 2;
   const offsetZ = -((models.length - 1) * SPACING) / 2;
@@ -124,11 +218,17 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, barSi
   const labelZ = offsetZ + models.length * SPACING;
   const labelIndices = pickLabelIndices(hours.length);
 
+  // Hover always previews on top of a pin (the mouse is literally over it);
+  // otherwise fall back to whatever's pinned.
+  const active = hovered || pinned;
+
   return (
     <>
       <color attach="background" args={[palette.surface]} />
-      <ambientLight intensity={0.65} />
-      <directionalLight position={[6, 10, 6]} intensity={0.7} />
+      <hemisphereLight args={[palette.text, palette.surface, 0.3]} />
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[6, 10, 6]} intensity={0.75} />
+      <directionalLight position={[-7, 5, -6]} intensity={0.3} color={palette.accent} />
       <Grid
         args={[gridSpan + 2, gridSpan + 2]}
         position={[0, 0, 0]}
@@ -147,19 +247,33 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, barSi
       />
       {models.map((model, mi) => (
         values[mi].map((value, hi) => {
-          const height = (value / max) * MAX_HEIGHT;
+          const ratio = value / max;
+          const height = ratio * MAX_HEIGHT;
           const x = offsetX + hi * SPACING;
           const z = offsetZ + mi * SPACING;
           const key = `${mi}-${hi}`;
+          // Taller/higher-value bars stay fully saturated; low-value bars fade
+          // toward the scene surface color, so magnitude reads through color
+          // as well as height.
+          const barColor = new THREE.Color(colorForModelIndex(model === 'Other' ? -1 : mi))
+            .lerp(new THREE.Color(palette.surface), (1 - ratio) * 0.45);
+          const cellInfo = { key, model, hour: xLabels[hi] ?? '', value, x, z, color: barColor };
+          const isActiveCell = !!active && active.key === key;
+          const isActiveRow = !!active && active.model === model;
           return (
             <Bar
               key={key}
               targetHeight={height}
               size={barSize}
-              color={colorForModelIndex(model === 'Other' ? -1 : mi)}
+              color={barColor}
               position={[x, 0, z]}
-              onHover={() => setHovered({ key, model, hour: xLabels[hi] ?? '', value, x, z })}
-              onUnhover={() => setHovered(prev => (prev && prev.key === key ? null : prev))}
+              isActiveCell={isActiveCell}
+              dimmed={!!active && !isActiveRow}
+              revealDelay={(hi + mi) * REVEAL_STEP_MS}
+              revealStart={revealStartRef.current}
+              onHover={() => { onHoverChange(cellInfo); pauseAutoRotate(); }}
+              onUnhover={() => { onUnhoverChange(key); scheduleAutoRotate(); }}
+              onClick={() => onPinToggle(cellInfo)}
             />
           );
         })
@@ -171,18 +285,23 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, barSi
           </Text>
         </Billboard>
       ))}
-      {hovered && (
-        <Html position={[hovered.x, MAX_HEIGHT + 0.4, hovered.z]} center style={{ pointerEvents: 'none' }}>
-          <div className="ms3d-tooltip">
-            <div className="ms3d-tooltip-model">{hovered.model}</div>
-            <div className="ms3d-tooltip-bucket">{hovered.hour}</div>
-            <div className="ms3d-tooltip-value">{formatMetricValue(hovered.value, metric)}</div>
+      {active && <FocusRing x={active.x} z={active.z} color={active.color} />}
+      {active && (
+        <Html position={[active.x, MAX_HEIGHT + 0.4, active.z]} center style={{ pointerEvents: 'none' }}>
+          <div className={`ms3d-tooltip${pinned && pinned.key === active.key ? ' ms3d-tooltip--pinned' : ''}`}>
+            <div className="ms3d-tooltip-model">{active.model}</div>
+            <div className="ms3d-tooltip-bucket">{active.hour}</div>
+            <div className="ms3d-tooltip-value">{formatMetricValue(active.value, metric)}</div>
           </div>
         </Html>
       )}
       <OrbitControls
         ref={controlsRef}
         enablePan
+        autoRotate={autoRotate}
+        autoRotateSpeed={AUTO_ROTATE_SPEED}
+        onStart={pauseAutoRotate}
+        onEnd={scheduleAutoRotate}
         minDistance={Math.min(cameraDistance * 0.4, MIN_CAMERA_DISTANCE)}
         maxDistance={cameraDistance * 1.8}
         maxPolarAngle={Math.PI / 2.1}
@@ -215,6 +334,13 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   const palette = useThemePalette();
   const controlsRef = useRef();
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
+  const [hovered, setHovered] = useState(null);
+  const [pinned, setPinned] = useState(null);
+  const active = hovered || pinned;
+
+  const handlePinToggle = (cellInfo) => {
+    setPinned(prev => (prev && prev.key === cellInfo.key ? null : cellInfo));
+  };
 
   const totalActivity = grid.values.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0);
   const hasEnoughData = grid.hours.length > 1 && totalActivity > 0;
@@ -233,10 +359,15 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
 
   const gridSpan = Math.max(grid.hours.length, grid.models.length, 1) * SPACING;
   const cameraDistance = gridSpan * 1.4 + 5;
-  // 30d/90d cross DENSE_THRESHOLD buckets — thin the bars and flatten the
-  // camera to a more overhead angle so front-row bars stop occluding back
-  // rows (see Bar's `size` prop and the Canvas camera position below).
-  const isDense = grid.hours.length > DENSE_THRESHOLD;
+  // Density must key off the actual time span (days), not raw bucket count:
+  // 24h uses hourly buckets (25 buckets for ~1 day) while 30d/90d use daily
+  // buckets (30/90 buckets for 30/90 days) — comparing bucket counts directly
+  // against DENSE_THRESHOLD misclassified 24h (25 buckets) as dense, shrinking
+  // bars and flattening the camera even with a single real data point.
+  const spanDays = grid.hours.length > 1
+    ? (new Date(grid.hours[grid.hours.length - 1]) - new Date(grid.hours[0])) / 86_400_000
+    : 0;
+  const isDense = spanDays > DENSE_THRESHOLD;
   const barSize = isDense ? BAR_SIZE * 0.6 : BAR_SIZE;
   const cameraYRatio = isDense ? 0.85 : 0.55;
 
@@ -263,6 +394,7 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
         resize={{ scroll: false, debounce: 0 }}
         dpr={[1, 2]}
         camera={{ position: [cameraDistance * 0.7, cameraDistance * cameraYRatio, cameraDistance * 0.7], fov: 45 }}
+        onPointerMissed={() => setPinned(null)}
       >
         <Scene
           grid={grid}
@@ -273,12 +405,20 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
           cameraDistance={cameraDistance}
           barSize={barSize}
           controlsRef={controlsRef}
+          hovered={hovered}
+          pinned={pinned}
+          onHoverChange={setHovered}
+          onUnhoverChange={(key) => setHovered(prev => (prev && prev.key === key ? null : prev))}
+          onPinToggle={handlePinToggle}
         />
       </Canvas>
 
       <div className="ms3d-legend">
         {grid.models.map((model, mi) => (
-          <span key={model} className="ms3d-legend-item">
+          <span
+            key={model}
+            className={`ms3d-legend-item${active && active.model === model ? ' ms3d-legend-item--active' : ''}${active && active.model !== model ? ' ms3d-legend-item--dim' : ''}`}
+          >
             <span className="ms3d-legend-dot" style={{ background: colorForModelIndex(model === 'Other' ? -1 : mi) }} />
             {model === 'Other' ? t('dashboard.other') : model}
           </span>
@@ -320,6 +460,14 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
             <line x1="2" y1="12" x2="22" y2="12" /><line x1="12" y1="2" x2="12" y2="22" />
           </svg>
           {t('dashboard.controlPan')}
+        </div>
+        <div className="ms3d-controls-row">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 9V4.5a1.5 1.5 0 0 1 3 0V9" />
+            <path d="M12 9V3.5a1.5 1.5 0 0 1 3 0V9" />
+            <path d="M15 9.5V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-2c-2.5 0-3.5-1-5-3l-2.7-4a1.4 1.4 0 0 1 2-2L6 12" />
+          </svg>
+          {t('dashboard.controlClick')}
         </div>
       </div>
     </div>
