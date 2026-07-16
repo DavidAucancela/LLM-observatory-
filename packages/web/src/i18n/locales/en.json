@@ -208,6 +208,7 @@
     "controlRotate": "Drag to rotate",
     "controlZoom": "Scroll to zoom",
     "controlPan": "Right-click drag to pan",
+    "controlClick": "Click a bar to pin details",
     "view3D": "3D view",
     "view2D": "2D view",
     "resetView": "Reset view",

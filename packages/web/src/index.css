@@ -753,7 +753,13 @@ body {
   background: color-mix(in srgb, var(--surface-raised, var(--surface)) 80%, transparent);
   padding: 2px 6px;
   border-radius: 4px;
+  transition: opacity 0.15s, color 0.15s;
 }
+.ms3d-legend-item--active {
+  color: var(--text);
+  font-weight: 600;
+}
+.ms3d-legend-item--dim { opacity: 0.45; }
 .ms3d-legend-dot {
   width: 8px;
   height: 8px;
@@ -813,6 +819,7 @@ body {
   white-space: nowrap;
   text-align: center;
 }
+.ms3d-tooltip--pinned { border-color: var(--accent); }
 .ms3d-tooltip-model {
   color: var(--text);
   font-weight: 600;
