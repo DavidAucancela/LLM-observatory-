@@ -3,3 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+graphify-out/
+.claude/settings.local.json
+.claude/.claude/
+.claude/scheduled_tasks.lock
