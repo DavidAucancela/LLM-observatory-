@@ -1,4 +1,4 @@
-# LLM Observatory
+# LLM-Observatory
 
 > Multi-tenant SaaS observability platform for Claude API (and OpenAI) usage. Track tokens, cost & latency in real-time with a drop-in SDK wrapper that adds zero overhead to your requests.
 
@@ -12,7 +12,7 @@
 
 ## Live Demo
 
-Try it instantly — no registration required:
+Try it instantly; with email registration. Or not, uo to you. 
 
 🔗 **[https://llm-web-production.up.railway.app](https://llm-web-production.up.railway.app)**
 
