@@ -136,7 +136,7 @@ See the `deploy-railway` skill (`.claude/skills/deploy-railway/SKILL.md`) for th
 ## Important Patterns & Conventions
 
 - **Fire-and-forget metrics:** SDK never awaits metric POSTs. Always keep it that way to preserve zero-latency guarantee.
-- **Observatory token required:** `POST /api/metrics` requires `Authorization: Bearer obs_sk_xxx`. Without it the request is rejected. Create tokens in Settings → Team tab.
+- **Observatory token required:** `POST /api/metrics` requires `Authorization: Bearer obs_sk_xxx`. Without it the request is rejected. Create tokens in the sidebar's Claves (`/keys`) page.
 - **org_id first param:** In every route handler, `const orgId = req.user.orgId` is the first value pushed to the params array (`$1`). All other dynamic filters start at `$2`. Never skip this or data leaks across tenants.
 - **SQL parameterization:** All DB queries use `$1, $2, ...` params. Never interpolate user input into SQL strings.
 - **Zod validation:** All POST body inputs validated with Zod schemas in route files.

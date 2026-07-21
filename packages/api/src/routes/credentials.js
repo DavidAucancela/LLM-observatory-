@@ -69,7 +69,8 @@ router.post('/:id/ping', requireAdmin, async (req, res, next) => {
     if (!row.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
 
     const { provider, key_hint } = row.rows[0];
-    const model = provider === 'anthropic' ? 'claude-haiku-4-5-20251001' : provider === 'gemini' ? 'gemini-3.5-flash' : 'gpt-4o-mini';
+    const PING_MODEL = { anthropic: 'claude-haiku-4-5-20251001', gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini' };
+    const model = PING_MODEL[provider];
 
     await pool.query(
       `DELETE FROM api_calls WHERE org_id = $1 AND provider = $2 AND prompt_preview = 'test:sdk_integration' AND api_key_hint = $3`,
@@ -141,7 +142,8 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
       }
     } else if (provider === 'gemini') {
       const response = await fetchWithTimeout(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        { headers: { 'x-goog-api-key': apiKey } }
       );
       valid = response.status === 200;
       if (!valid) errorMsg = `Gemini API respondió con ${response.status}`;

@@ -5,8 +5,81 @@ import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
 import { fmtDateTime, formatCost } from '../utils/fmt';
 
+// ── Tab intro paragraph ───────────────────────────────────────
+function TabIntro({ text }) {
+  return (
+    <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--muted)', maxWidth: 720, margin: '0 0 14px' }}>
+      {text}
+    </p>
+  );
+}
+
+// ── Overview dashboard ────────────────────────────────────────
+function OverviewCard({ label, value, accentColor, active, onClick }) {
+  return (
+    <div
+      className="kpi-card kpi-card-clickable"
+      style={{
+        '--kpi-accent': accentColor,
+        ...(active ? { borderColor: accentColor, background: `color-mix(in srgb, ${accentColor} 8%, transparent)` } : {}),
+      }}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+    >
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-row">
+        <div className="kpi-value">{value ?? '—'}</div>
+      </div>
+    </div>
+  );
+}
+
+function FinanceOverview({ range, tab, onTabChange, configuredProviders, refreshTick }) {
+  const [balances, setBalances] = useState(null);
+  const [budgets, setBudgets]   = useState(null);
+  const { apiFetch } = useApi();
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiFetch(`/api/balances?range=${range}`).then(r => r.json()),
+      apiFetch(`/api/budgets`).then(r => r.json()),
+    ]).then(([bal, bud]) => {
+      if (cancelled) return;
+      setBalances(bal);
+      setBudgets(bud.data || []);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [range, refreshTick, apiFetch]);
+
+  const providers = (balances?.providers || []).filter(p => !configuredProviders.length || configuredProviders.includes(p.provider));
+  const totalRemaining = providers.reduce((s, p) => s + (p.remaining || 0), 0);
+  const totalSpent     = providers.reduce((s, p) => s + (p.total_spent || 0), 0);
+  const budgetList = budgets || [];
+  const atRisk = budgetList.filter(b =>
+    parseFloat(b.limit_usd) > 0 && (parseFloat(b.current_spend || 0) / parseFloat(b.limit_usd)) >= 0.75
+  ).length;
+  const loading = balances === null || budgets === null;
+
+  return (
+    <div className="kpi-strip" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: '16px 0 18px' }}>
+      <OverviewCard label={t('finance.kpiRemaining')} value={loading ? null : formatCost(totalRemaining)}
+        accentColor="var(--accent)" active={tab === 'balances'} onClick={() => onTabChange('balances')} />
+      <OverviewCard label={t('finance.kpiSpent', { range })} value={loading ? null : formatCost(totalSpent)}
+        accentColor="var(--cost-color)" active={tab === 'balances'} onClick={() => onTabChange('balances')} />
+      <OverviewCard label={t('finance.kpiBudgets')} value={loading ? null : String(budgetList.length)}
+        accentColor="var(--tokens-color)" active={tab === 'budgets'} onClick={() => onTabChange('budgets')} />
+      <OverviewCard label={t('finance.kpiAtRisk')} value={loading ? null : String(atRisk)}
+        accentColor={atRisk > 0 ? 'var(--error)' : 'var(--latency-color)'} active={tab === 'budgets'} onClick={() => onTabChange('budgets')} />
+    </div>
+  );
+}
+
 // ── Balances tab ──────────────────────────────────────────────
-function BalancesTab({ range, configuredProviders }) {
+function BalancesTab({ range, configuredProviders, onChanged }) {
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -46,6 +119,7 @@ function BalancesTab({ range, configuredProviders }) {
       setForm({ provider: 'anthropic', amount_usd: '', note: '' });
       setShowForm(false);
       fetchData();
+      onChanged?.();
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
   };
@@ -53,6 +127,7 @@ function BalancesTab({ range, configuredProviders }) {
   const handleDelete = async (id) => {
     await apiFetch(`/api/balances/${id}`, { method: 'DELETE' });
     fetchData();
+    onChanged?.();
   };
 
   const providers = (data?.providers || []).filter(p => !configuredProviders.length || configuredProviders.includes(p.provider));
@@ -72,6 +147,7 @@ function BalancesTab({ range, configuredProviders }) {
 
   return (
     <>
+      <TabIntro text={t('finance.balancesIntro')} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
         <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(s => !s)}>
           {t('finance.registerRecharge')}
@@ -189,7 +265,7 @@ function BalancesTab({ range, configuredProviders }) {
 }
 
 // ── Budgets tab ───────────────────────────────────────────────
-function BudgetsTab() {
+function BudgetsTab({ onChanged }) {
   const [budgets, setBudgets]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
@@ -224,6 +300,7 @@ function BudgetsTab() {
       setForm({ name: '', limit_usd: '', period: 'monthly' });
       setShowForm(false);
       fetchBudgets();
+      onChanged?.();
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
   };
@@ -231,6 +308,7 @@ function BudgetsTab() {
   const handleDelete = async (id) => {
     await apiFetch(`/api/budgets/${id}`, { method: 'DELETE' });
     fetchBudgets();
+    onChanged?.();
   };
 
   if (loading) {
@@ -247,6 +325,7 @@ function BudgetsTab() {
 
   return (
     <>
+      <TabIntro text={t('finance.budgetsIntro')} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 6 }}>
         <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(s => !s)}>
           {t('finance.newBudget')}
@@ -334,6 +413,8 @@ export default function Finance() {
   const [tab, setTab] = useState(searchParams.get('tab') === 'budgets' ? 'budgets' : 'balances');
   const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
   const [configuredProviders, setConfiguredProviders] = useState([]);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const bumpRefresh = () => setRefreshTick(n => n + 1);
   const { apiFetch } = useApi();
   const { t } = useTranslation();
 
@@ -356,23 +437,27 @@ export default function Finance() {
     <main className="obs-main obs-fade-in">
       <div className="obs-header">
         <div className="obs-page-title">{t('finance.title')}</div>
-        {tab === 'balances' && (
-          <>
-            <div className="obs-divider-v" />
-            <div className="obs-range-picker">
-              {RANGES.map(r => (
-                <button
-                  key={r}
-                  className={`obs-range-btn${range === r ? ' active' : ''}`}
-                  onClick={() => { setRange(r); localStorage.setItem('obs-range', r); }}
-                >{r}</button>
-              ))}
-            </div>
-          </>
-        )}
+        <div className="obs-divider-v" />
+        <div className="obs-range-picker">
+          {RANGES.map(r => (
+            <button
+              key={r}
+              className={`obs-range-btn${range === r ? ' active' : ''}`}
+              onClick={() => { setRange(r); localStorage.setItem('obs-range', r); }}
+            >{r}</button>
+          ))}
+        </div>
       </div>
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
+        <FinanceOverview
+          range={range}
+          tab={tab}
+          onTabChange={handleTabChange}
+          configuredProviders={configuredProviders}
+          refreshTick={refreshTick}
+        />
+
         <div className="obs-tabbar">
           <button className={`obs-tab${tab === 'balances' ? ' active' : ''}`} onClick={() => handleTabChange('balances')}>
             {t('finance.balancesTab')}
@@ -382,8 +467,8 @@ export default function Finance() {
           </button>
         </div>
 
-        {tab === 'balances' && <BalancesTab range={range} configuredProviders={configuredProviders} />}
-        {tab === 'budgets'  && <BudgetsTab />}
+        {tab === 'balances' && <BalancesTab range={range} configuredProviders={configuredProviders} onChanged={bumpRefresh} />}
+        {tab === 'budgets'  && <BudgetsTab onChanged={bumpRefresh} />}
       </div>
     </main>
   );

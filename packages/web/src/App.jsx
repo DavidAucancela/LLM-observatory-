@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
+import ThemeToggle from './components/ThemeToggle';
 import Dashboard from './pages/Dashboard';
 import Activity from './pages/Activity';
+import Models from './pages/Models';
+import Keys from './pages/Keys';
+import Sync from './pages/Sync';
 import Finance from './pages/Finance';
 import Settings from './pages/Settings';
-import Account  from './pages/Account';
 import LandingPage    from './pages/LandingPage';
 import Login          from './pages/Login';
 import Register       from './pages/Register';
@@ -58,6 +61,7 @@ function AppShell() {
 
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
+      <ThemeToggle darkMode={darkMode} onToggle={() => toggleDarkMode(!darkMode)} />
       {/* Mobile header — only visible on small screens */}
       <div className="obs-mobile-header">
         <button className="obs-mobile-hamburger" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
@@ -77,8 +81,6 @@ function AppShell() {
           <div className="obs-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
         )}
         <Sidebar
-          darkMode={darkMode}
-          setDarkMode={toggleDarkMode}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           collapsed={sidebarCollapsed}
@@ -87,13 +89,15 @@ function AppShell() {
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/activity"  element={<Activity />} />
+          <Route path="/models"    element={<Models />} />
+          <Route path="/keys"      element={<Keys />} />
+          <Route path="/sync"      element={<Sync />} />
           <Route path="/finance"   element={<Finance />} />
           <Route path="/settings"  element={<Settings />} />
-          <Route path="/account"   element={<Account />} />
           {/* Legacy redirects */}
           <Route path="/"          element={<Navigate to="/dashboard" replace />} />
           <Route path="/requests"  element={<Navigate to="/activity" replace />} />
-          <Route path="/models"    element={<Navigate to="/activity?tab=models" replace />} />
+          <Route path="/account"   element={<Navigate to="/settings?tab=account" replace />} />
           <Route path="/providers" element={<Navigate to="/finance" replace />} />
           <Route path="/budgets"   element={<Navigate to="/finance?tab=budgets" replace />} />
         </Routes>

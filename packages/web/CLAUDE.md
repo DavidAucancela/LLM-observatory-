@@ -4,11 +4,13 @@
 
 **Pages (react-router-dom v6):**
 - `/` → `LandingPage.jsx` (público, con su propio `LandingPage.css`); si hay sesión activa redirige a `/dashboard`
-- `/dashboard` → `Dashboard.jsx` — KPI strip con sparklines (cada card clickeable, dirige `activeMetric`), chart card con toggle 3D/2D (`MetricSurface3D` / `ModelTrendChart2D`, ver abajo), provider breakdown, proyección mensual
-- `/activity` → `Activity.jsx` — Tab **Requests** (tabla paginada, filtros, drawer, CSV export) + Tab **Models** (HBar chart, tabla comparativa)
+- `/dashboard` → `Dashboard.jsx` — no está en el sidebar como ítem de navegación; se llega vía el logo/marca "Observatory" arriba del sidebar (`obs-brand-link` en `Sidebar.jsx`). KPI strip con sparklines (cada card clickeable, dirige `activeMetric`), chart card con toggle 3D/2D (`MetricSurface3D` / `ModelTrendChart2D`, ver abajo), provider breakdown, gasto del rango seleccionado (`RangeSpend`, reemplazó a la antigua proyección mensual — usa `summary.total_cost_usd` + `prev_summary` del rango activo, no proyecta a futuro)
+- `/activity` → `Activity.jsx` — página **Solicitudes** (tabla paginada, filtros, drawer, CSV export). Ya no tiene tabs internas.
+- `/models` → `Models.jsx` — página **Modelos** (HBar chart de costo por modelo, tabla comparativa). Antes era la tab "Models" dentro de `/activity`; ahora es su propia página/ítem de sidebar.
+- `/keys` → `Keys.jsx` — página **Claves** (SDK + Admin keys, encriptadas AES-256-CBC, + sección de Observatory tokens). Antes era la tab "Keys" dentro de `/settings`; ahora es su propia página/ítem de sidebar.
+- `/sync` → `Sync.jsx` — página **Sincronización** (historial de sync por provider, solo admins pueden lanzar sync/borrar datos). Antes era la tab "Sync" dentro de `/settings`; ahora es su propia página/ítem de sidebar.
 - `/finance` → `Finance.jsx` — Tab **Balances** (saldo por provider, historial recargas) + Tab **Budgets** (límites de gasto con progress bars)
-- `/settings` → `Settings.jsx` — Tab **Keys** (SDK + Admin keys) + Tab **Sync** (historial sync por provider) + Tab **Alerts** (reglas Discord) + Tab **Webhooks** (outbound endpoints) + Tab **Team** (members + invitations + Observatory tokens)
-- `/account` → `Account.jsx` — Mi cuenta (perfil del usuario)
+- `/settings` → `Settings.jsx` — Tab **Mi cuenta** (perfil, contraseña, sesión — antes era la página `/account`, ahora vive acá) + Tab **Alerts** (reglas Discord) + Tab **Webhooks** (outbound endpoints) + Tab **Team** (members + invitations). Tab activa vía `?tab=` (`useSearchParams`), default `account`.
 
 **Public pages (outside ProtectedRoute):**
 - `/login` → `Login.jsx`
@@ -19,12 +21,12 @@
 
 Las páginas de auth (Login/Register/ForgotPassword/ResetPassword) usan el tema dark navy con clases `obs-auth-*` de `index.css`.
 
-**Redirects legacy:** `/requests` → `/activity`, `/models` → `/activity?tab=models`, `/providers` → `/finance`, `/budgets` → `/finance?tab=budgets` (los archivos `Requests.jsx`, `Models.jsx`, `Providers.jsx`, `Budgets.jsx` fueron eliminados)
+**Redirects legacy:** `/requests` → `/activity`, `/account` → `/settings?tab=account`, `/providers` → `/finance`, `/budgets` → `/finance?tab=budgets` (los archivos `Requests.jsx`, `Account.jsx`, `Providers.jsx`, `Budgets.jsx` fueron eliminados). `/models`, `/keys`, `/sync` ya no redirigen — son páginas reales, ver arriba.
 
 **i18n (react-i18next):** `src/i18n/index.js` + `src/i18n/locales/{en,es}.json`. Idioma en `localStorage('lang')`, default `en`. Toda string visible en UI debe ir vía `useTranslation()` / `t('key')` y añadirse a **ambos** locale files — nunca hardcodear texto en JSX.
 
 **Key components:**
-- `Sidebar.jsx` — 220px fijo, colapsable a 64px. Nav items con icono 18px + label + subtítulo descriptivo. User block (sin avatar): org + email + role badge; click abre dropdown con Mi cuenta / Tema / Idioma / Logout. Sin sección de proveedores. Props: `darkMode`, `setDarkMode`, `isOpen`, `onClose`, `collapsed`, `onToggleCollapse`.
+- `Sidebar.jsx` — 220px fijo, colapsable a 64px. Nav items con icono 18px + label + subtítulo descriptivo: Solicitudes (`/activity`), Modelos (`/models`), Finanzas, Claves (`/keys`), Sincronización (`/sync`), Ajustes — sin ítem de "Resumen" ni "Mi cuenta"; el logo/marca (`obs-brand-link`) hace de acceso directo a `/dashboard`, y "Mi cuenta" navega a `/settings?tab=account`. User block (sin avatar): org + email + role badge; click abre dropdown con Mi cuenta / Idioma / Logout. Sin sección de proveedores. Props: `isOpen`, `onClose`, `collapsed`, `onToggleCollapse`.
 - `ProviderBadge.jsx` — dot cuadrado amber/green. Props: `provider` (lowercase), `size` (`sm`|`lg`)
 - `RequestDrawer.jsx` — Panel derecho con metadata, token breakdown, prompt preview
 - `Sparkline.jsx` — SVG sparkline inline (sin Recharts)

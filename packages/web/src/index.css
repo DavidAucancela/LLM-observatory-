@@ -172,6 +172,17 @@ body {
   color: var(--text);
 }
 
+.obs-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+}
+.obs-brand-link:hover .obs-brand-text { color: var(--accent); }
+
 .obs-brand-mark {
   width: 20px; height: 20px;
   border-radius: 4px;
@@ -457,6 +468,7 @@ body {
   flex-shrink: 0;
   display: flex; align-items: center;
   padding: 0 24px;
+  padding-right: 68px; /* clears the fixed top-right theme toggle */
   border-bottom: 1px solid var(--border);
   gap: 16px;
   background: var(--page);
@@ -1386,6 +1398,30 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Global theme toggle — fixed top-right, same spot on every page/tab ── */
+.obs-theme-toggle {
+  position: fixed;
+  top: 12px;
+  right: 20px;
+  z-index: 210;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.obs-theme-toggle:hover { background: var(--hover); border-color: var(--border-strong, var(--border)); }
+
+@media (max-width: 767px) {
+  .obs-theme-toggle { top: 10px; right: 12px; width: 30px; height: 30px; }
+}
+
 /* ── Mobile header (hidden on desktop) ── */
 .obs-mobile-header {
   display: none;
@@ -1506,6 +1542,7 @@ body {
     height: auto;
     min-height: 52px;
     padding: 10px 16px;
+    padding-right: 52px; /* clears the fixed top-right theme toggle */
     gap: 8px;
   }
 

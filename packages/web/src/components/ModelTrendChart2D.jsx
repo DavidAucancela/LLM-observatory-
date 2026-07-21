@@ -46,12 +46,15 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
 
   const totalActivity = grid.values.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0);
-  const hasEnoughData = grid.hours.length > 1 && totalActivity > 0;
+  // >= 1, not > 1: buildGrid trims leading/trailing empty buckets, so a range
+  // with a single real day of activity legitimately collapses to one column.
+  const hasEnoughData = grid.hours.length >= 1 && totalActivity > 0;
 
-  // xLabels is indexed by the same position as grid.hours — see MetricSurface3D
-  // for why that alignment is safe (both queries share the exact same zero-fill).
+  // xLabels is indexed by the same position as the untrimmed bucket list —
+  // see MetricSurface3D's buildGrid for why the alignment is safe, and why
+  // grid.labelOffset must be added back to hi after trimming.
   const data = grid.hours.map((hour, hi) => {
-    const row = { name: xLabels[hi] ?? '' };
+    const row = { name: xLabels[grid.labelOffset + hi] ?? '' };
     grid.models.forEach((model, mi) => { row[model] = grid.values[mi][hi]; });
     return row;
   });

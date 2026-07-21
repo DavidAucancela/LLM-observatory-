@@ -303,40 +303,41 @@ function TagBreakdown({ range }) {
   );
 }
 
-// ── Monthly projection with progress bar ──────────────────────────────────────
+// ── Spend for the selected range, with per-provider progress bars ─────────────
 
-const PROJECTION_PERIOD_LABEL_KEY = {
-  day: 'dashboard.projectionPeriodDay',
-  week: 'dashboard.projectionPeriodWeek',
-  month: 'dashboard.projectionPeriodMonth',
-  quarter: 'dashboard.projectionPeriodQuarter',
+const RANGE_LABEL_KEY = {
+  '24h': 'dashboard.rangeLabel24h',
+  '7d':  'dashboard.rangeLabel7d',
+  '30d': 'dashboard.rangeLabel30d',
+  '90d': 'dashboard.rangeLabel90d',
 };
 
-function MonthlyProjection({ projection, configuredProviders }) {
+function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredProviders, loading }) {
   const { t } = useTranslation();
-  const items = (projection?.projection || []).filter(p => configuredProviders.includes(p.provider));
+  if (loading) return <div className="obs-skeleton" style={{ height: 120, borderRadius: 6 }} />;
+
+  const items = (byProvider || []).filter(p => configuredProviders.includes(p.provider));
   if (!items.length) return null;
 
-  const daysInPeriod = projection?.days_in_period || 30;
-  const periodLabelKey = PROJECTION_PERIOD_LABEL_KEY[projection?.unit] || PROJECTION_PERIOD_LABEL_KEY.month;
+  const total = parseFloat(totalCost || 0);
+  const rangeLabelKey = RANGE_LABEL_KEY[range] || RANGE_LABEL_KEY['7d'];
 
   return (
     <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
-      <div className="dash-card-head" style={{ marginBottom: 14 }}>
-        <div className="obs-section-label">{t('dashboard.monthlyProjection')}</div>
-        <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>{t(periodLabelKey)}</div>
+      <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div className="obs-section-label">{t('dashboard.spentThisRange')}</div>
+        <Delta value={calcDelta(totalCost, prevTotalCost)} inverse />
       </div>
+      <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 14 }}>{t(rangeLabelKey)}</div>
       <div className="dash-scroll" style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${items.length}, 1fr)`,
         gap: 0,
       }}>
         {items.map((p, i) => {
-          const daysPassed = daysInPeriod - (p.days_remaining || 0);
-          const periodPct  = Math.min(100, (daysPassed / daysInPeriod) * 100);
-          const spentSoFar = parseFloat(p.spent_this_period || 0);
-          const projected  = parseFloat(p.projected_period_total || 0);
-          const color      = PROVIDER_COLORS[p.provider] || 'var(--accent)';
+          const cost = parseFloat(p.total_cost || 0);
+          const pct  = total > 0 ? (cost / total) * 100 : 0;
+          const color = PROVIDER_COLORS[p.provider] || 'var(--accent)';
 
           return (
             <div key={p.provider} style={{
@@ -344,35 +345,21 @@ function MonthlyProjection({ projection, configuredProviders }) {
               paddingLeft:  i > 0 ? 28 : 0,
               borderRight:  i < items.length - 1 ? '1px solid var(--border-soft)' : 'none',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <ProviderBadge provider={p.provider} size="lg" />
                 <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                  {formatCost(projected)}
+                  {formatCost(cost)}
                 </span>
-              </div>
-
-              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span>
-                  {t('dashboard.spent')}{' '}
-                  <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(spentSoFar)}</span>
-                </span>
-                <span>{p.days_remaining > 0 ? `${p.days_remaining}d left` : t('dashboard.periodEnd')}</span>
               </div>
 
               <div className="iprog-bar" style={{ height: 4, borderRadius: 2 }}>
                 <div style={{
-                  height: '100%', borderRadius: 2, width: `${periodPct}%`,
+                  height: '100%', borderRadius: 2, width: `${pct}%`,
                   background: color, transition: 'width 0.6s var(--ease-out)',
                 }} />
               </div>
-              <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 4, display: 'flex', justifyContent: 'space-between', fontVariantNumeric: 'tabular-nums' }}>
-                <span>Day 1</span>
-                <span>Day {daysInPeriod}</span>
-              </div>
-
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
-                {t('dashboard.dailyAvg')}{' '}
-                <span style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatCost(p.avg_daily)}</span>
+              <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+                {pct.toFixed(0)}%
               </div>
             </div>
           );
@@ -449,7 +436,6 @@ const RANGES = ['24h', '7d', '30d', '90d'];
 export default function Dashboard() {
   const [range, setRange]         = useState(() => localStorage.getItem('obs-range') || '7d');
   const [summary, setSummary]     = useState(null);
-  const [projection, setProjection] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [syncing, setSyncing]     = useState(false);
   const [hasCredentials, setHasCredentials] = useState(true);
@@ -473,16 +459,14 @@ export default function Dashboard() {
       const excludeParam = excluded.length
         ? `&exclude_models=${encodeURIComponent(excluded.join(','))}`
         : '';
-      const [sumRes, projRes, credRes, reconRes] = await Promise.all([
+      const [sumRes, credRes, reconRes] = await Promise.all([
         apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
-        apiFetch(`/api/metrics/projection?range=${range}`),
         apiFetch(`/api/credentials`),
         apiFetch(`/api/reconciliation/latest`),
       ]);
       const sum = await sumRes.json();
       setSummary(sum);
       setAllModels(sum.all_models || []);
-      setProjection(await projRes.json());
       const creds = (await credRes.json());
       const credList = creds.credentials || creds.data || [];
       setHasCredentials(credList.length > 0);
@@ -690,6 +674,7 @@ export default function Dashboard() {
                       metric={activeMetric}
                       xLabels={xLabels}
                       loading={loading}
+                      range={range}
                     />
                   ) : (
                     <ModelTrendChart2D
@@ -730,7 +715,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Side panel: provider breakdown, monthly projection, tag breakdown */}
+          {/* Side panel: provider breakdown, range spend, tag breakdown */}
           <div className="dash-col-right">
             <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
               <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
@@ -739,7 +724,14 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <MonthlyProjection projection={projection} configuredProviders={configuredProviders} />
+            <RangeSpend
+              byProvider={byProvider}
+              totalCost={s?.total_cost_usd}
+              prevTotalCost={prev?.total_cost_usd}
+              range={range}
+              configuredProviders={configuredProviders}
+              loading={loading}
+            />
 
             <TagBreakdown range={range} />
           </div>
