@@ -21,25 +21,9 @@ Email:    demo@llm-observatory.com
 Password: Demo1234!
 ```
 
-> Read-only account with 30 days of pre-loaded data across Anthropic and OpenAI models.
-
 ### Preview
 
 ![Dashboard](media/dashboard.png)
-
-<details>
-<summary>More screenshots</summary>
-
-**Activity — request log with detail drawer**
-![Activity](media/request.png)
-
-**Settings — API keys & Observatory tokens**
-![Settings](media/config.png)
-
-**Login**
-![Login](media/login.png)
-
-</details>
 
 ---
 
