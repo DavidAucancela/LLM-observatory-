@@ -1,13 +1,17 @@
 {
   "nav": {
-    "overview": "Overview",
-    "overview_desc": "KPIs and real-time metrics",
-    "activity": "Activity",
-    "activity_desc": "Requests, models and export",
+    "requests": "Requests",
+    "requests_desc": "Live request log and export",
+    "models": "Models",
+    "models_desc": "Cost and usage by model",
     "finance": "Finance",
     "finance_desc": "Balances, budgets and alerts",
+    "keys": "Keys",
+    "keys_desc": "API and Observatory tokens",
+    "sync": "Sync",
+    "sync_desc": "Import history by provider",
     "settings": "Settings",
-    "settings_desc": "Keys, team and webhooks"
+    "settings_desc": "Account, alerts and webhooks"
   },
   "sidebar": {
     "providers": "Providers",
@@ -122,7 +126,6 @@
     "inviteLoadError": "Could not load invitation"
   },
   "account": {
-    "title": "My account",
     "profileSection": "Profile",
     "emailLabel": "Email",
     "emailHint": "Changing email does not require re-verification.",
@@ -224,9 +227,11 @@
     "errorsByType": "Errors by type",
     "noErrors": "No errors in this period",
     "tagBreakdown": "Tag breakdown",
-    "monthlyProjection": "Monthly projection",
-    "spent": "Spent",
-    "dailyAvg": "Daily avg",
+    "spentThisRange": "Spent this period",
+    "rangeLabel24h": "Last 24 hours",
+    "rangeLabel7d": "Last 7 days",
+    "rangeLabel30d": "Last 30 days",
+    "rangeLabel90d": "Last 90 days",
     "noKeysTitle": "No API keys configured",
     "noKeysSub": "Go to Settings → Keys to get started",
     "addKeyButton": "Add API key",
@@ -238,19 +243,12 @@
     "networkError": "Network error",
     "timeout": "Timeout",
     "unknownError": "Unknown",
-    "thisMonth": "Current month · independent of range",
-    "projectionPeriodDay": "Today",
-    "projectionPeriodWeek": "This week",
-    "projectionPeriodMonth": "This month",
-    "projectionPeriodQuarter": "This quarter",
-    "periodEnd": "Period end",
     "models": "Models",
     "allModels": "All",
     "noneModels": "None",
     "modelsSelected": "{{count}} of {{total}}"
   },
   "activity": {
-    "title": "Activity",
     "requestsTab": "Requests",
     "modelsTab": "Models",
     "searchPlaceholder": "Search by model or prompt…",
@@ -305,10 +303,17 @@
     "monthly": "Monthly",
     "limitLabel": "Limit (USD)",
     "limitDisplay": "Limit",
-    "spentDisplay": "Spent"
+    "spentDisplay": "Spent",
+    "balancesIntro": "Balances track the credit you load onto each provider (Anthropic, OpenAI). Register each top-up with \"+ Register recharge\" (provider + amount in USD); the system automatically subtracts the real spend from your API calls in the selected range to show the remaining balance.",
+    "budgetsIntro": "Budgets are spending limits you define yourself (daily, weekly or monthly). Create one with \"+ New budget\" by giving it a name, a period and a limit in USD; the progress bar compares the current period's spend against that limit and turns amber above 75% and red at 100%.",
+    "kpiRemaining": "Remaining balance",
+    "kpiSpent": "Spend ({{range}})",
+    "kpiBudgets": "Active budgets",
+    "kpiAtRisk": "Budgets at risk"
   },
   "settings": {
     "title": "Settings",
+    "accountTab": "My account",
     "keysTab": "Keys",
     "syncTab": "Sync",
     "alertsTab": "Alerts",

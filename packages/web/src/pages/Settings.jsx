@@ -1,453 +1,282 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../auth/AuthProvider';
 import { fmtDateTime, fmtDate } from '../utils/fmt';
 
-// ── Keys tab ──────────────────────────────────────────────────
-function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
-  const { apiFetch } = useApi();
-  const { t } = useTranslation();
-  const [testing,  setTesting]  = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [syncing,  setSyncing]  = useState(false);
-  const [syncOk,   setSyncOk]   = useState(null);
-  const [testErr,  setTestErr]  = useState(null);
+// ── Account tab ───────────────────────────────────────────────
+function Field({ label, children, hint }) {
+  return (
+    <div className="obs-field" style={{ marginBottom: 16 }}>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 5 }}>
+        {label}
+      </label>
+      {children}
+      {hint && <p style={{ fontSize: 11, color: 'var(--faint)', marginTop: 4 }}>{hint}</p>}
+    </div>
+  );
+}
 
-  const handleTest = async () => {
-    setTesting(true); setTestErr(null);
+function StatusMsg({ ok, msg }) {
+  if (!msg) return null;
+  return (
+    <p style={{
+      fontSize: 12,
+      color: ok ? 'var(--success)' : 'var(--error)',
+      marginTop: 10,
+      padding: '7px 10px',
+      borderRadius: 5,
+      background: ok
+        ? 'color-mix(in oklab, var(--success) 10%, transparent)'
+        : 'color-mix(in oklab, var(--error) 10%, transparent)',
+    }}>
+      {msg}
+    </p>
+  );
+}
+
+function ProfileSection({ user, updateUser, apiFetch }) {
+  const { t } = useTranslation();
+  const [email,   setEmail]   = useState(user?.email || '');
+  const [orgName, setOrgName] = useState(user?.orgName || '');
+  const [saving,  setSaving]  = useState(false);
+  const [status,  setStatus]  = useState(null);
+
+  const isAdmin = user?.role === 'admin';
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setStatus(null);
     try {
-      const res = await apiFetch(`/api/credentials/${cred.id}/test`, { method: 'POST' });
-      const d = await res.json();
-      if (!res.ok) {
-        setTestErr(d.error || `Error ${res.status}`);
+      const body = {};
+      if (email !== user.email) body.email = email;
+      if (isAdmin && orgName !== user.orgName) body.org_name = orgName;
+
+      if (!Object.keys(body).length) {
+        setStatus({ ok: true, msg: t('account.noChanges') });
         return;
       }
-      onTested(cred.id, d.valid);
-      if (!d.valid && d.error) setTestErr(d.error);
-    } catch (e) { setTestErr(e.message); } finally { setTesting(false); }
-  };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete key "${cred.label}"?`)) return;
-    setDeleting(true);
-    try {
-      await apiFetch(`/api/credentials/${cred.id}`, { method: 'DELETE' });
-      onDeleted(cred.id);
-    } finally { setDeleting(false); }
-  };
+      const res = await apiFetch('/api/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatus({ ok: false, msg: data.error }); return; }
 
-  const handleSync = async () => {
-    setSyncing(true); setSyncOk(null);
-    try {
-      const res = await apiFetch(`/api/credentials/${cred.id}/ping`, { method: 'POST' });
-      const d = await res.json();
-      if (!res.ok) { setSyncOk(false); return; }
-      setSyncOk(d.success ?? false);
-      if (d.success) setTimeout(() => setSyncOk(null), 3000);
-    } catch { setSyncOk(false); } finally { setSyncing(false); }
-  };
-
-  const isValid = cred.is_valid;
-  const tested  = !!cred.last_tested_at;
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 110px 170px 100px auto',
-      gap: 14, alignItems: 'center',
-      padding: '11px 0',
-      borderBottom: '1px solid var(--border-soft)'
-    }}>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{cred.label}</div>
-        {testErr && <span style={{ fontSize: 11, color: 'var(--error)' }}>{testErr}</span>}
-      </div>
-      <ProviderBadge provider={cred.provider} />
-      <span className="kchip">{cred.key_hint}</span>
-      <span className={`vbadge ${!tested ? '' : isValid ? 'vbadge-valid' : 'vbadge-invalid'}`}>
-        <span className="dot" style={{ background: !tested ? 'var(--faint)' : isValid ? 'var(--success)' : 'var(--error)', width: 5, height: 5 }} />
-        {!tested ? t('settings.keys.untested') : isValid ? t('settings.keys.valid') : t('settings.keys.invalid')}
-      </span>
-      <div style={{ display: 'flex', gap: 5 }}>
-        {cred.key_type === 'sdk' && (
-          <button className="obs-btn obs-btn-sm" disabled={syncing} onClick={handleSync}>
-            {syncing ? '…' : t('settings.keys.syncButton')}
-          </button>
-        )}
-        <button className="obs-btn obs-btn-sm" disabled={testing} onClick={handleTest}>
-          {testing ? '…' : t('settings.keys.testButton')}
-        </button>
-        {isAdmin && (
-          <button className="obs-btn obs-btn-ghost obs-btn-sm" disabled={deleting} onClick={handleDelete}
-            style={{ color: 'var(--muted)' }}>
-            {deleting ? '…' : t('common.delete')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AddKeyForm({ onSaved, onCancel }) {
-  const { apiFetch } = useApi();
-  const { t } = useTranslation();
-  const [form, setForm]   = useState({ provider: 'anthropic', key_type: 'sdk', label: '', value: '' });
-  const [show, setShow]   = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const handleSave = async () => {
-    if (!form.label.trim() || !form.value.trim()) return;
-    setSaving(true); setError('');
-    try {
-      const res = await apiFetch('/api/credentials', { method: 'POST', body: JSON.stringify(form) });
-      const d = await res.json();
-      if (res.ok) { onSaved(d.data); }
-      else { setError(Array.isArray(d.error) ? d.error.map(e => e.message).join(', ') : (d.error || 'Error saving')); }
-    } catch { setError('Connection error'); } finally { setSaving(false); }
-  };
-
-  const phLabel = form.provider === 'anthropic' ? (form.key_type === 'admin' ? 'sk-ant-admin-…' : 'sk-ant-api03-…')
-    : form.provider === 'gemini' ? 'AIza…'
-    : (form.key_type === 'admin' ? 'sk-admin-…' : 'sk-proj-…');
-
-  return (
-    <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto auto', gap: 10, alignItems: 'flex-end' }}>
-        <div className="obs-field">
-          <label>{t('settings.keys.labelField')}</label>
-          <input className="obs-input obs-input-lg" placeholder={t('settings.keys.labelPlaceholder')} value={form.label} onChange={e => set('label', e.target.value)} />
-        </div>
-        <div className="obs-field">
-          <label>{t('settings.keys.providerTypeField')}</label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.provider} onChange={e => {
-              const provider = e.target.value;
-              setForm(f => ({ ...f, provider, key_type: provider === 'gemini' ? 'sdk' : f.key_type }));
-            }}>
-              <option value="anthropic">Anthropic</option>
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-            </select>
-            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.key_type} disabled={form.provider === 'gemini'} onChange={e => set('key_type', e.target.value)}>
-              <option value="sdk">{t('settings.keys.sdkType')}</option>
-              {form.provider !== 'gemini' && <option value="admin">{t('settings.keys.adminType')}</option>}
-            </select>
-          </div>
-        </div>
-        <div className="obs-field" style={{ position: 'relative' }}>
-          <label>{t('settings.keys.apiKeyField')}</label>
-          <input
-            className="obs-input obs-input-lg"
-            type={show ? 'text' : 'password'}
-            placeholder={phLabel}
-            value={form.value}
-            onChange={e => set('value', e.target.value)}
-            style={{ fontFamily: 'var(--font-mono)', paddingRight: 32 }}
-          />
-          <button type="button" onClick={() => setShow(v => !v)}
-            style={{ position: 'absolute', right: 8, bottom: 8, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
-            {show ? t('auth.hidePassword') : t('auth.showPassword')}
-          </button>
-        </div>
-        <button className="obs-btn" onClick={onCancel} style={{ alignSelf: 'flex-end', height: 36 }}>{t('common.cancel')}</button>
-        <button className="obs-btn obs-btn-primary" disabled={saving} onClick={handleSave} style={{ alignSelf: 'flex-end', height: 36 }}>
-          {saving ? '…' : t('common.save')}
-        </button>
-      </div>
-      {error && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--error)' }}>{error}</div>}
-    </div>
-  );
-}
-
-function KeysTab() {
-  const { apiFetch } = useApi();
-  const { user } = useAuth();
-  const { t } = useTranslation();
-  const isAdmin = user?.role === 'admin';
-  const [credentials, setCredentials] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-
-  const fetchCredentials = async () => {
-    try {
-      const res = await apiFetch('/api/credentials');
-      const d = await res.json();
-      setCredentials(d.credentials || d.data || []);
-    } finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchCredentials(); }, []);
-
-  const handleDeleted = (id) => setCredentials(cs => cs.filter(c => c.id !== id));
-  const handleTested  = (id, isValid) => setCredentials(cs => cs.map(c => c.id === id ? { ...c, is_valid: isValid, last_tested_at: new Date().toISOString() } : c));
-  const handleSaved   = (cred) => { setCredentials(cs => [cred, ...cs]); setShowForm(false); };
-
-  const sdkKeys   = credentials.filter(c => c.key_type === 'sdk');
-  const adminKeys = credentials.filter(c => c.key_type === 'admin');
-
-  return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div className="obs-section-label">{t('settings.keys.sdkTitle')}</div>
-        {isAdmin && <button className="obs-btn obs-btn-primary obs-btn-sm" onClick={() => setShowForm(v => !v)}>{t('settings.keys.addButton')}</button>}
-      </div>
-
-      {showForm && <AddKeyForm onSaved={handleSaved} onCancel={() => setShowForm(false)} />}
-
-      {loading ? (
-        <div className="obs-skeleton" style={{ height: 40, borderRadius: 4 }} />
-      ) : sdkKeys.length === 0 && !showForm ? (
-        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>{t('settings.keys.noSdk')}</div>
-      ) : (
-        sdkKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} isAdmin={isAdmin} />)
-      )}
-
-      <div style={{ marginTop: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div className="obs-section-label">{t('settings.keys.adminTitle')}</div>
-      </div>
-
-      {!loading && adminKeys.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '12px 0' }}>{t('settings.keys.noAdmin')}</div>
-      ) : (
-        adminKeys.map(c => <KeyRow key={c.id} cred={c} onDeleted={handleDeleted} onTested={handleTested} isAdmin={isAdmin} />)
-      )}
-
-      <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--muted)' }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-        </svg>
-        {t('settings.keys.encryption')}
-      </div>
-
-      <ObservatoryTokensSection />
-    </>
-  );
-}
-
-// ── Observatory Tokens section ─────────────────────────────────────────
-function ObservatoryTokensSection() {
-  const { apiFetch } = useApi();
-  const { user } = useAuth();
-  const { t } = useTranslation();
-  const isAdmin = user?.role === 'admin';
-  const [tokens, setTokens]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [name, setName]       = useState('');
-  const [saving, setSaving]   = useState(false);
-  const [newToken, setNewToken] = useState(null);
-  const [copiedId, setCopiedId] = useState(null);
-
-  const fetchTokens = async () => {
-    try {
-      const d = await (await apiFetch('/api/tokens')).json();
-      setTokens(d.tokens || []);
-    } finally { setLoading(false); }
-  };
-  useEffect(() => { fetchTokens(); }, []);
-
-  const handleCreate = async () => {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      const d = await (await apiFetch('/api/tokens', { method: 'POST', body: JSON.stringify({ name: name.trim() }) })).json();
-      if (d.success) { setNewToken(d.data); setName(''); fetchTokens(); }
-    } finally { setSaving(false); }
-  };
-
-  const handleRevoke = async (id) => {
-    if (!confirm('Revoke this token? SDK calls using it will stop working.')) return;
-    await apiFetch(`/api/tokens/${id}`, { method: 'DELETE' });
-    fetchTokens();
-  };
-
-  const copy = (text, id) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+      updateUser({ email: data.email, orgName: data.orgName });
+      setEmail(data.email);
+      setOrgName(data.orgName || '');
+      setStatus({ ok: true, msg: t('account.profileUpdated') });
+    } catch (err) {
+      setStatus({ ok: false, msg: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div style={{ marginTop: 36 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div className="obs-section-label">{t('settings.keys.tokensSection')}</div>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
-        {t('settings.keys.tokensInfo')}
-      </div>
-
-      {newToken && (
-        <div style={{ background: 'color-mix(in oklab, var(--success) 8%, transparent)', border: '1px solid color-mix(in oklab, var(--success) 30%, transparent)', borderRadius: 6, padding: '12px 14px', marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>{t('settings.keys.tokenCreated')}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, flex: 1, wordBreak: 'break-all', color: 'var(--text)' }}>{newToken.token}</code>
-            <button className="obs-btn obs-btn-sm" onClick={() => copy(newToken.token, 'new')}>
-              {copiedId === 'new' ? t('common.copied') : t('common.copy')}
-            </button>
-          </div>
-          <button style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setNewToken(null)}>
-            {t('common.dismiss')}
-          </button>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+    <section className="obs-card">
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
+        {t('account.profileSection')}
+      </h2>
+      <form onSubmit={handleSubmit}>
+        <Field label={t('account.emailLabel')} hint={t('account.emailHint')}>
           <input
             className="obs-input"
-            placeholder={t('settings.keys.tokenNamePlaceholder')}
-            value={name}
-            onChange={e => setName(e.target.value)}
-            style={{ flex: 1 }}
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            style={{ width: '100%' }}
           />
-          <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={!name.trim() || saving} onClick={handleCreate}>
-            {saving ? '…' : t('settings.keys.createButton')}
-          </button>
-        </div>
-      )}
+        </Field>
 
-      {loading ? (
-        <div className="obs-skeleton" style={{ height: 36, borderRadius: 4 }} />
-      ) : tokens.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>{t('settings.keys.noTokens')}</div>
-      ) : tokens.map(tok => (
-        <div key={tok.id} style={{
-          display: 'grid', gridTemplateColumns: '1fr 140px 110px auto',
-          gap: 12, alignItems: 'center',
-          padding: '10px 0', borderBottom: '1px solid var(--border-soft)',
-          opacity: tok.revoked_at ? 0.45 : 1,
-        }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{tok.name}</div>
-            <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{tok.token_prefix}…</code>
-          </div>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-            {tok.last_used_at ? t('settings.keys.lastUsed', { date: fmtDateTime(tok.last_used_at) }) : t('settings.keys.neverUsed')}
-          </span>
-          <span style={{ fontSize: 11, color: tok.revoked_at ? 'var(--error)' : 'var(--muted)' }}>
-            {tok.revoked_at ? t('settings.keys.revokedStatus') : t('settings.keys.createdDate', { date: fmtDate(tok.created_at) })}
-          </span>
-          {isAdmin && !tok.revoked_at && (
-            <button className="obs-btn obs-btn-ghost obs-btn-sm" style={{ color: 'var(--muted)' }} onClick={() => handleRevoke(tok.id)}>
-              {t('common.revoke')}
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
+        {isAdmin && (
+          <Field label={t('account.orgNameLabel')} hint={t('account.orgNameHint')}>
+            <input
+              className="obs-input"
+              type="text"
+              value={orgName}
+              onChange={e => setOrgName(e.target.value)}
+              maxLength={100}
+              style={{ width: '100%' }}
+            />
+          </Field>
+        )}
+
+        <StatusMsg {...(status || {})} msg={status?.msg} />
+
+        <button
+          type="submit"
+          className="obs-btn obs-btn-primary obs-btn-sm"
+          disabled={saving}
+          style={{ marginTop: 12 }}
+        >
+          {saving ? t('common.saving') : t('account.saveButton')}
+        </button>
+      </form>
+    </section>
   );
 }
 
-// ── Sync tab ──────────────────────────────────────────────────
-function SyncTab() {
-  const { apiFetch } = useApi();
-  const { user } = useAuth();
+function PasswordSection({ apiFetch }) {
   const { t } = useTranslation();
-  const isAdmin = user?.role === 'admin';
-  const [logs, setLogs]         = useState([]);
-  const [syncing, setSyncing]   = useState({});
-  const [clearing, setClearing] = useState({});
-  const [syncDays, setSyncDays] = useState('30');
-  const [msg, setMsg]           = useState(null);
+  const [current,  setCurrent]  = useState('');
+  const [next,     setNext]     = useState('');
+  const [confirm,  setConfirm]  = useState('');
+  const [saving,   setSaving]   = useState(false);
+  const [status,   setStatus]   = useState(null);
 
-  const fetchLogs = async () => {
-    try { const d = await (await apiFetch('/api/sync/logs')).json(); setLogs(d.logs || []); } catch {}
-  };
-  useEffect(() => { fetchLogs(); }, []);
-
-  const handleSync = async (provider) => {
-    setSyncing(s => ({ ...s, [provider]: true })); setMsg(null);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (next !== confirm) {
+      setStatus({ ok: false, msg: t('account.passwordMismatch') });
+      return;
+    }
+    setSaving(true);
+    setStatus(null);
     try {
-      const d = await (await apiFetch(`/api/sync/${provider}?days=${syncDays}`, { method: 'POST' })).json();
-      setMsg(d.success ? { ok: true, text: `Sync started for ${provider}` } : { ok: false, text: d.error || 'Sync error' });
-      setTimeout(fetchLogs, 5000);
-    } catch { setMsg({ ok: false, text: 'Connection error' }); }
-    finally { setSyncing(s => ({ ...s, [provider]: false })); }
+      const res = await apiFetch('/api/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify({ current_password: current, new_password: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setStatus({ ok: false, msg: data.error }); return; }
+
+      setStatus({ ok: true, msg: data.message });
+      setCurrent(''); setNext(''); setConfirm('');
+    } catch (err) {
+      setStatus({ ok: false, msg: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleClear = async (provider) => {
-    if (!confirm(`Delete ALL ${provider} data? This cannot be undone.`)) return;
-    setClearing(s => ({ ...s, [provider]: true })); setMsg(null);
-    try {
-      const d = await (await apiFetch(`/api/sync/${provider}/data`, { method: 'DELETE' })).json();
-      setMsg(d.success ? { ok: true, text: `${d.deleted} records deleted` } : { ok: false, text: 'Error' });
-    } catch { setMsg({ ok: false, text: 'Connection error' }); }
-    finally { setClearing(s => ({ ...s, [provider]: false })); }
-  };
+  return (
+    <section className="obs-card">
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 18 }}>
+        {t('account.passwordSection')}
+      </h2>
+      <form onSubmit={handleSubmit}>
+        <Field label={t('account.currentPassword')}>
+          <input
+            className="obs-input"
+            type="password"
+            value={current}
+            onChange={e => setCurrent(e.target.value)}
+            required
+            autoComplete="current-password"
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label={t('account.newPassword')} hint={t('account.passwordMinHint')}>
+          <input
+            className="obs-input"
+            type="password"
+            value={next}
+            onChange={e => setNext(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label={t('account.confirmPassword')}>
+          <input
+            className="obs-input"
+            type="password"
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            style={{ width: '100%' }}
+          />
+        </Field>
 
-  const stateColor = (s) => s === 'success' ? 'var(--success)' : s === 'error' ? 'var(--error)' : 'var(--accent)';
+        <StatusMsg {...(status || {})} msg={status?.msg} />
+
+        <button
+          type="submit"
+          className="obs-btn obs-btn-primary obs-btn-sm"
+          disabled={saving}
+          style={{ marginTop: 12 }}
+        >
+          {saving ? t('account.updating') : t('account.updateButton')}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function SessionSection({ user, apiFetch, logout }) {
+  const { t } = useTranslation();
+  const [info, setInfo] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => setInfo(d))
+      .catch(() => {});
+  }, []);
+
+  const roleLabel = user?.role === 'admin' ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
+
+  return (
+    <section className="obs-card" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+          {t('account.sessionSection')}
+        </h2>
+        <button
+          className="obs-btn obs-btn-sm"
+          style={{ color: 'var(--error)', borderColor: 'color-mix(in oklab, var(--error) 30%, transparent)' }}
+          onClick={logout}
+        >
+          {t('account.logoutButton')}
+        </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 20 }}>
+        {[
+          { label: t('account.emailInfo'),    value: user?.email,            mono: true },
+          { label: t('account.orgInfo'),      value: user?.orgName || '—' },
+          { label: t('account.roleInfo'),     value: roleLabel },
+          { label: t('account.memberSince'),  value: fmtDate(info?.createdAt) },
+          { label: t('account.lastLogin'),    value: fmtDate(info?.lastLoginAt) },
+        ].map(({ label, value, mono }) => (
+          <div key={label}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', fontFamily: mono ? 'var(--font-mono)' : undefined, wordBreak: 'break-all' }}>
+              {value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AccountTab() {
+  const { user, updateUser, logout } = useAuth();
+  const { apiFetch } = useApi();
 
   return (
     <>
-      {['anthropic', 'openai'].map(p => (
-        <div key={p} style={{
-          display: 'grid',
-          gridTemplateColumns: '140px 1fr auto auto',
-          gap: 14, alignItems: 'center',
-          padding: '16px 0',
-          borderBottom: '1px solid var(--border-soft)'
-        }}>
-          <ProviderBadge provider={p} size="lg" />
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {logs.find(l => l.provider === p) ? (
-              <>{t('settings.sync.lastSync')}{' '}<span style={{ color: 'var(--text)' }}>{fmtDateTime(logs.find(l => l.provider === p).started_at)}</span></>
-            ) : t('settings.sync.neverSynced')}
-          </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {isAdmin && (
-              <>
-                <select className="obs-select" style={{ height: 30 }} value={syncDays} onChange={e => setSyncDays(e.target.value)}>
-                  <option value="7">{t('settings.sync.days7')}</option>
-                  <option value="30">{t('settings.sync.days30')}</option>
-                  <option value="60">{t('settings.sync.days60')}</option>
-                  <option value="90">{t('settings.sync.days90')}</option>
-                </select>
-                <button className="obs-btn obs-btn-primary obs-btn-sm" disabled={syncing[p]} onClick={() => handleSync(p)}>
-                  {syncing[p] ? '…' : t('settings.sync.runButton')}
-                </button>
-              </>
-            )}
-          </div>
-          {isAdmin && (
-            <button className="obs-btn obs-btn-danger obs-btn-sm" disabled={clearing[p]} onClick={() => handleClear(p)}>
-              {clearing[p] ? '…' : t('settings.sync.clearButton')}
-            </button>
-          )}
-        </div>
-      ))}
+      <SessionSection user={user} apiFetch={apiFetch} logout={logout} />
 
-      {msg && (
-        <div style={{ marginTop: 10, fontSize: 12, color: msg.ok ? 'var(--success)' : 'var(--error)' }}>{msg.text}</div>
-      )}
-
-      {logs.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('settings.sync.logTitle')}</div>
-          {logs.slice(0, 10).map(l => (
-            <div key={l.id} style={{
-              display: 'grid', gridTemplateColumns: '14px 120px 1fr 80px 90px',
-              gap: 12, alignItems: 'center', padding: '8px 0',
-              fontSize: 12, borderBottom: '1px solid var(--border-soft)'
-            }}>
-              <span className="dot" style={{ background: stateColor(l.status), width: 7, height: 7 }} />
-              <ProviderBadge provider={l.provider} />
-              <span style={{ color: l.status === 'error' ? 'var(--error)' : 'var(--muted)' }}>
-                {l.error_message || (l.status === 'running' ? t('settings.sync.inProgress') : t('settings.sync.completed'))}
-              </span>
-              <span style={{ color: 'var(--muted)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {l.records_synced > 0 ? `+${l.records_synced}` : '—'}
-              </span>
-              <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 11, textAlign: 'right' }}>
-                {fmtDateTime(l.started_at)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: 20,
+        alignItems: 'start',
+      }}>
+        <ProfileSection  user={user} updateUser={updateUser} apiFetch={apiFetch} />
+        <PasswordSection apiFetch={apiFetch} />
+      </div>
     </>
   );
 }
@@ -971,9 +800,18 @@ function TeamTab() {
 }
 
 // ── Page ──────────────────────────────────────────────────────
+const VALID_TABS = ['account', 'alerts', 'webhooks', 'team'];
+
 export default function Settings() {
-  const [tab, setTab] = useState('keys');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'account';
+  const [tab, setTab] = useState(initialTab);
   const { t } = useTranslation();
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    setSearchParams(newTab === 'account' ? {} : { tab: newTab }, { replace: true });
+  };
 
   return (
     <main className="obs-main obs-fade-in">
@@ -983,15 +821,13 @@ export default function Settings() {
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <div className="obs-tabbar">
-          <button className={`obs-tab${tab === 'keys'   ? ' active' : ''}`} onClick={() => setTab('keys')}>{t('settings.keysTab')}</button>
-          <button className={`obs-tab${tab === 'sync'   ? ' active' : ''}`} onClick={() => setTab('sync')}>{t('settings.syncTab')}</button>
-          <button className={`obs-tab${tab === 'alerts'   ? ' active' : ''}`} onClick={() => setTab('alerts')}>{t('settings.alertsTab')}</button>
-          <button className={`obs-tab${tab === 'webhooks' ? ' active' : ''}`} onClick={() => setTab('webhooks')}>{t('settings.webhooksTab')}</button>
-          <button className={`obs-tab${tab === 'team'     ? ' active' : ''}`} onClick={() => setTab('team')}>{t('settings.teamTab')}</button>
+          <button className={`obs-tab${tab === 'account'  ? ' active' : ''}`} onClick={() => handleTabChange('account')}>{t('settings.accountTab')}</button>
+          <button className={`obs-tab${tab === 'alerts'   ? ' active' : ''}`} onClick={() => handleTabChange('alerts')}>{t('settings.alertsTab')}</button>
+          <button className={`obs-tab${tab === 'webhooks' ? ' active' : ''}`} onClick={() => handleTabChange('webhooks')}>{t('settings.webhooksTab')}</button>
+          <button className={`obs-tab${tab === 'team'     ? ' active' : ''}`} onClick={() => handleTabChange('team')}>{t('settings.teamTab')}</button>
         </div>
 
-        {tab === 'keys'   && <KeysTab />}
-        {tab === 'sync'   && <SyncTab />}
+        {tab === 'account'  && <AccountTab />}
         {tab === 'alerts'   && <AlertsTab />}
         {tab === 'webhooks' && <WebhooksTab />}
         {tab === 'team'     && <TeamTab />}

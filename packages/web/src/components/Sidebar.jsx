@@ -1,25 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import i18n from '../i18n';
 
 /* ── Nav icons ── */
-function IconGrid() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  );
-}
-
 function IconActivity() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  );
+}
+
+function IconModels() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
+      <polyline points="3 7 12 12 21 7" />
+      <line x1="12" y1="12" x2="12" y2="22" />
+    </svg>
+  );
+}
+
+function IconKey() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="M10.6 12.4 20 3l2 2-1.5 1.5L22 8l-2.5 2.5-2-2-2.6 2.6" />
+    </svg>
+  );
+}
+
+function IconSync() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M20.49 9A9 9 0 0 0 5.6 5.6L1 10m22 4-4.6 4.4A9 9 0 0 1 3.51 15" />
     </svg>
   );
 }
@@ -38,26 +56,6 @@ function IconSettings() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-function IconSun() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="4" />
-      <line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" />
-      <line x1="4.22" y1="4.22" x2="7.05" y2="7.05" /><line x1="16.95" y1="16.95" x2="19.78" y2="19.78" />
-      <line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" />
-      <line x1="4.22" y1="19.78" x2="7.05" y2="16.95" /><line x1="16.95" y1="7.05" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
-
-function IconMoon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </svg>
   );
 }
@@ -116,14 +114,22 @@ function IconChevronRight() {
   );
 }
 
+// "Resumen" (Dashboard) isn't a list item anymore — it's reached via the
+// brand logo/link at the top of the sidebar instead, see the `obs-brand`
+// block below. Requests/Models/Keys/Sync used to be tabs inside single pages
+// (Activity, Settings); they're now their own top-level items with their own
+// routes. "Mi cuenta" moved the other way — it used to be its own page, now
+// it's a tab inside Settings (see the user-menu `navigate` calls below).
 const navDefs = [
-  { to: '/dashboard', labelKey: 'nav.overview', descKey: 'nav.overview_desc', Icon: IconGrid     },
-  { to: '/activity',  labelKey: 'nav.activity',  descKey: 'nav.activity_desc', Icon: IconActivity },
-  { to: '/finance',   labelKey: 'nav.finance',   descKey: 'nav.finance_desc',  Icon: IconFinance  },
-  { to: '/settings',  labelKey: 'nav.settings',  descKey: 'nav.settings_desc', Icon: IconSettings },
+  { to: '/activity',  labelKey: 'nav.requests', descKey: 'nav.requests_desc', Icon: IconActivity },
+  { to: '/models',    labelKey: 'nav.models',   descKey: 'nav.models_desc',   Icon: IconModels   },
+  { to: '/finance',   labelKey: 'nav.finance',  descKey: 'nav.finance_desc',  Icon: IconFinance  },
+  { to: '/keys',      labelKey: 'nav.keys',     descKey: 'nav.keys_desc',     Icon: IconKey      },
+  { to: '/sync',      labelKey: 'nav.sync',     descKey: 'nav.sync_desc',     Icon: IconSync     },
+  { to: '/settings',  labelKey: 'nav.settings', descKey: 'nav.settings_desc', Icon: IconSettings },
 ];
 
-export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collapsed, onToggleCollapse }) {
+export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -156,11 +162,6 @@ export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collap
     logout();
   };
 
-  const handleTheme = () => {
-    setDarkMode(!darkMode);
-    setMenuOpen(false);
-  };
-
   const handleLang = () => {
     toggleLanguage();
     setMenuOpen(false);
@@ -168,10 +169,13 @@ export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collap
 
   return (
     <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
-      {/* Brand */}
+      {/* Brand — doubles as the entry point to Resumen/Dashboard now that it's
+          no longer a regular nav item */}
       <div className="obs-brand">
-        <img src="/logoMain.png" alt="Observatory" className="obs-brand-logo" />
-        <span className="obs-brand-text">Observatory</span>
+        <Link to="/dashboard" className="obs-brand-link" title={t('dashboard.title')} onClick={onClose}>
+          <img src="/logoMain.png" alt="Observatory" className="obs-brand-logo" />
+          <span className="obs-brand-text">Observatory</span>
+        </Link>
         <button
           className="obs-sidebar-toggle"
           onClick={onToggleCollapse}
@@ -189,7 +193,6 @@ export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collap
             <NavLink
               key={to}
               to={to}
-              end={to === '/dashboard'}
               className={({ isActive }) => `obs-nav-item${isActive ? ' active' : ''}`}
               onClick={onClose}
               title={collapsed ? label : undefined}
@@ -212,7 +215,7 @@ export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collap
         <div
           className="obs-user-icon-collapsed"
           title={user?.email}
-          onClick={() => navigate('/account')}
+          onClick={() => navigate('/settings?tab=account')}
           style={{ cursor: 'pointer' }}
         >
           <IconUser />
@@ -237,15 +240,11 @@ export default function Sidebar({ darkMode, setDarkMode, isOpen, onClose, collap
 
             {menuOpen && (
               <div className="obs-user-menu">
-                <button className="obs-user-menu-item" onClick={() => { setMenuOpen(false); navigate('/account'); }}>
+                <button className="obs-user-menu-item" onClick={() => { setMenuOpen(false); navigate('/settings?tab=account'); }}>
                   <IconAccount />
                   <span>{t('sidebar.myAccount')}</span>
                 </button>
                 <div className="obs-user-menu-sep" />
-                <button className="obs-user-menu-item" onClick={handleTheme}>
-                  {darkMode ? <IconSun /> : <IconMoon />}
-                  <span>{darkMode ? t('sidebar.themeLight') : t('sidebar.themeDark')}</span>
-                </button>
                 <button className="obs-user-menu-item" onClick={handleLang}>
                   <IconGlobe />
                   <span>{i18n.language === 'en' ? 'Español' : 'English'}</span>

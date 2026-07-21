@@ -1,13 +1,17 @@
 {
   "nav": {
-    "overview": "Resumen",
-    "overview_desc": "KPIs y métricas en tiempo real",
-    "activity": "Actividad",
-    "activity_desc": "Llamadas, modelos y exportación",
+    "requests": "Solicitudes",
+    "requests_desc": "Registro de solicitudes en vivo y exportación",
+    "models": "Modelos",
+    "models_desc": "Costo y uso por modelo",
     "finance": "Finanzas",
     "finance_desc": "Balances, presupuestos y alertas",
+    "keys": "Claves",
+    "keys_desc": "Claves API y tokens de Observatory",
+    "sync": "Sincronización",
+    "sync_desc": "Historial de importación por proveedor",
     "settings": "Ajustes",
-    "settings_desc": "Claves, equipo y webhooks"
+    "settings_desc": "Cuenta, alertas y webhooks"
   },
   "sidebar": {
     "providers": "Proveedores",
@@ -122,7 +126,6 @@
     "inviteLoadError": "No se pudo cargar la invitación"
   },
   "account": {
-    "title": "Mi cuenta",
     "profileSection": "Perfil",
     "emailLabel": "Correo electrónico",
     "emailHint": "Cambiar el correo no requiere re-verificación.",
@@ -224,9 +227,11 @@
     "errorsByType": "Errores por tipo",
     "noErrors": "Sin errores en este período",
     "tagBreakdown": "Desglose por etiqueta",
-    "monthlyProjection": "Proyección mensual",
-    "spent": "Gastado",
-    "dailyAvg": "Promedio diario",
+    "spentThisRange": "Gasto en el período",
+    "rangeLabel24h": "Últimas 24 horas",
+    "rangeLabel7d": "Últimos 7 días",
+    "rangeLabel30d": "Últimos 30 días",
+    "rangeLabel90d": "Últimos 90 días",
     "noKeysTitle": "No hay claves API configuradas",
     "noKeysSub": "Ve a Ajustes → Claves para comenzar",
     "addKeyButton": "Agregar clave API",
@@ -238,19 +243,12 @@
     "networkError": "Error de red",
     "timeout": "Tiempo de espera agotado",
     "unknownError": "Desconocido",
-    "thisMonth": "Mes actual · no depende del rango",
-    "projectionPeriodDay": "Hoy",
-    "projectionPeriodWeek": "Esta semana",
-    "projectionPeriodMonth": "Este mes",
-    "projectionPeriodQuarter": "Este trimestre",
-    "periodEnd": "Fin del período",
     "models": "Modelos",
     "allModels": "Todos",
     "noneModels": "Ninguno",
     "modelsSelected": "{{count}} de {{total}}"
   },
   "activity": {
-    "title": "Actividad",
     "requestsTab": "Solicitudes",
     "modelsTab": "Modelos",
     "searchPlaceholder": "Buscar por modelo o prompt…",
@@ -305,10 +303,17 @@
     "monthly": "Mensual",
     "limitLabel": "Límite (USD)",
     "limitDisplay": "Límite",
-    "spentDisplay": "Gastado"
+    "spentDisplay": "Gastado",
+    "balancesIntro": "Los saldos registran el crédito que cargas a cada proveedor (Anthropic, OpenAI). Registra cada recarga con «+ Registrar recarga» (proveedor + monto en USD); el sistema descuenta automáticamente el gasto real de tus llamadas API en el rango seleccionado para mostrar el saldo restante.",
+    "budgetsIntro": "Los presupuestos son límites de gasto que tú defines (diario, semanal o mensual). Crea uno con «+ Nuevo presupuesto» indicando nombre, período y límite en USD; la barra de progreso compara el gasto del período actual contra ese límite y se pone ámbar al superar el 75% y roja al llegar al 100%.",
+    "kpiRemaining": "Saldo restante",
+    "kpiSpent": "Gasto ({{range}})",
+    "kpiBudgets": "Presupuestos activos",
+    "kpiAtRisk": "Presupuestos en riesgo"
   },
   "settings": {
     "title": "Ajustes",
+    "accountTab": "Mi cuenta",
     "keysTab": "Claves",
     "syncTab": "Sincronización",
     "alertsTab": "Alertas",
