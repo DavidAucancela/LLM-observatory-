@@ -200,6 +200,7 @@ CI: `.github/workflows/test.yml` — 3 jobs paralelos (sdk-node, sdk-python, api
 - `trust proxy` is set to `1` in Express (`app.set('trust proxy', 1)`) — required for Railway's reverse proxy so `express-rate-limit` reads the real client IP from `X-Forwarded-For`.
 - JWT tokens expire after **1 hour** by default (`JWT_EXPIRES_IN=1h`). Server-side revocation via `POST /api/auth/logout` adds the JTI to `revoked_tokens` table. Cron cleans expired JTIs every 15 min.
 - DB backups: `scripts/backup.sh` + `.github/workflows/backup.yml` — pg_dump daily to S3/R2. Requires secrets: `DATABASE_URL`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET`, `R2_ACCOUNT_ID` in GitHub Actions.
+- `scripts/reprice-zero-cost-calls.js` — recalculates `cost_usd` for historical `api_calls` rows that landed at $0 because their model wasn't yet in the SDK pricing tables (`ANTHROPIC_PRICING`/`OPENAI_PRICING`/`GEMINI_PRICING` in `packages/sdk/src/index.js`) at ingest time. Only touches `status_code < 400 AND cost_confidence = 'known'` rows — never overwrites a genuine $0 or a call already flagged `unknown`. Dry-run by default; `--apply` writes, `--org=<id>` scopes to one org.
 
 ---
 

@@ -13,8 +13,8 @@ class TestCalculateCost:
         assert calculate_cost("claude-sonnet-4-6", 1_000_000, 1_000_000) == pytest.approx(18.0)
 
     def test_opus_cost(self):
-        # (1M input * $15) + (1M output * $75) = $90
-        assert calculate_cost("claude-opus-4-6", 1_000_000, 1_000_000) == pytest.approx(90.0)
+        # (1M input * $5) + (1M output * $25) = $30
+        assert calculate_cost("claude-opus-4-6", 1_000_000, 1_000_000) == pytest.approx(30.0)
 
     def test_haiku_cost(self):
         # (1M input * $0.80) + (1M output * $4.00) = $4.80
