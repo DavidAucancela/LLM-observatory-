@@ -10,7 +10,7 @@ describe('calculateCost (Anthropic)', () => {
 
   it('calculates cost for claude-opus correctly', () => {
     const cost = calculateCost('claude-opus-4-6', 1_000_000, 1_000_000);
-    assert.strictEqual(cost, 90.0); // 15.0 + 75.0
+    assert.strictEqual(cost, 30.0); // 5.0 + 25.0
   });
 
   it('returns zero for unknown models', () => {
