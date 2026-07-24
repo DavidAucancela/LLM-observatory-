@@ -2,82 +2,9 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Html, Grid, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { useTranslation } from 'react-i18next';
-import { formatCost, fmtLatency } from '../utils/fmt';
 import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
+import { buildGrid, formatMetricValue } from '../utils/metricGrid';
 import * as THREE from 'three';
-
-function fmtCompact(n) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return Math.round(n).toString();
-}
-
-export function formatMetricValue(value, metric) {
-  switch (metric) {
-    case 'cost':      return formatCost(value);
-    case 'latency':   return fmtLatency(value);
-    case 'errorRate': return `${(value * 100).toFixed(1)}%`;
-    default:          return fmtCompact(value);
-  }
-}
-
-export function extractMetric(row, metric) {
-  if (!row) return 0;
-  const requests = parseInt(row.requests || 0, 10);
-  switch (metric) {
-    case 'requests':  return requests;
-    case 'tokens':    return parseFloat(row.total_tokens || 0);
-    case 'cost':      return parseFloat(row.cost_usd || 0);
-    case 'latency':   return parseFloat(row.avg_latency_ms || 0);
-    case 'errorRate': return requests > 0 ? parseInt(row.error_count || 0, 10) / requests : 0;
-    default:          return 0;
-  }
-}
-
-export function buildGrid(modelTimeSeries, metric) {
-  const hours = [...new Set(modelTimeSeries.map(r => r.hour))].sort((a, b) => new Date(a) - new Date(b));
-  // Zero-fill (generate_series in metrics.js) emits one row per hour for
-  // every model regardless of activity — drop models with no requests in
-  // any bucket so the grid only shows models that actually have data.
-  const modelsWithActivity = new Set(
-    modelTimeSeries.filter(r => parseInt(r.requests || 0, 10) > 0).map(r => r.model)
-  );
-  const models = [...modelsWithActivity]
-    .sort((a, b) => (a === 'Other' ? 1 : 0) - (b === 'Other' ? 1 : 0));
-
-  const cellMap = new Map();
-  for (const row of modelTimeSeries) cellMap.set(`${row.hour}|${row.model}`, row);
-
-  let max = 0;
-  const values = models.map(model =>
-    hours.map(hour => {
-      const v = extractMetric(cellMap.get(`${hour}|${model}`), metric);
-      if (v > max) max = v;
-      return v;
-    })
-  );
-
-  // Trim leading/trailing buckets where every model is zero. The backend
-  // zero-fills the *entire* selected range (e.g. all 91 buckets for 90d)
-  // even when real activity only spans a narrower window inside it (a new
-  // account, or a demo dataset that only has ~30 days of history) — left
-  // untrimmed, that padding inflates gridSpan/cameraDistance for the whole
-  // scene and the real bars end up crammed into a small corner. Only the
-  // outer edges are trimmed (not gaps in the middle) so a genuine "quiet
-  // day" between active ones still renders as an empty column, not a jump
-  // cut. `labelOffset` lets consumers keep indexing the original xLabels
-  // array, which is built from the untrimmed bucket list.
-  let trimStart = 0;
-  let trimEnd = hours.length;
-  const columnHasActivity = (hi) => values.some(row => row[hi] > 0);
-  while (trimStart < trimEnd && !columnHasActivity(trimStart)) trimStart++;
-  while (trimEnd > trimStart && !columnHasActivity(trimEnd - 1)) trimEnd--;
-
-  const trimmedHours  = hours.slice(trimStart, trimEnd);
-  const trimmedValues = values.map(row => row.slice(trimStart, trimEnd));
-
-  return { hours: trimmedHours, models, values: trimmedValues, max: max || 1, labelOffset: trimStart };
-}
 
 const BAR_SIZE = 0.62;
 const SPACING  = 0.9;
@@ -230,7 +157,7 @@ function pickLabelIndices(count) {
 // buildGrid trims leading/trailing empty buckets, every grid.hours index hi
 // must be offset by grid.labelOffset to land back on the right xLabels entry.
 // `?? ''` below is just a guard, not the real defense.
-function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCameraDistance, barSize, labelFontSize, controlsRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, onDragStart, onDragEnd }) {
+function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCameraDistance, barSize, labelFontSize, controlsRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels }) {
   const { hours, models, values, max, labelOffset } = grid;
   const [autoRotate, setAutoRotate] = useState(true);
   const idleTimerRef = useRef(null);
@@ -308,7 +235,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCa
         color={palette.shadow}
       />
       {models.map((model, mi) => (
-        values[mi].map((value, hi) => {
+        hiddenModels.has(model) ? null : values[mi].map((value, hi) => {
           const ratio = value / max;
           const height = value > 0 ? Math.max(ratio * MAX_HEIGHT, MIN_VISIBLE_HEIGHT) : ratio * MAX_HEIGHT;
           const x = offsetX + hi * SPACING;
@@ -368,8 +295,8 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCa
         enablePan
         autoRotate={autoRotate}
         autoRotateSpeed={AUTO_ROTATE_SPEED}
-        onStart={() => { pauseAutoRotate(); onDragStart(); }}
-        onEnd={() => { scheduleAutoRotate(); onDragEnd(); }}
+        onStart={pauseAutoRotate}
+        onEnd={scheduleAutoRotate}
         minDistance={Math.min(cameraDistance * 0.4, minCameraDistance)}
         maxDistance={cameraDistance * 1.8}
         maxPolarAngle={Math.PI / 2.1}
@@ -397,18 +324,13 @@ function useThemePalette() {
   return palette;
 }
 
-export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range }) {
+export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set() }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const controlsRef = useRef();
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
   const [hovered, setHovered] = useState(null);
   const [pinned, setPinned] = useState(null);
-  const [dragging, setDragging] = useState(false);
-  // Hovering/pinning a bar or dragging the camera all count as "interacting
-  // with the 3D view" — the legend and controls-help overlays fade out for
-  // that duration so they don't sit on top of what the user is looking at.
-  const interacting = !!(hovered || pinned || dragging);
 
   const handlePinToggle = (cellInfo) => {
     setPinned(prev => (prev && prev.key === cellInfo.key ? null : cellInfo));
@@ -494,19 +416,9 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
           onHoverChange={setHovered}
           onUnhoverChange={(key) => setHovered(prev => (prev && prev.key === key ? null : prev))}
           onPinToggle={handlePinToggle}
-          onDragStart={() => setDragging(true)}
-          onDragEnd={() => setDragging(false)}
+          hiddenModels={hiddenModels}
         />
       </Canvas>
-
-      <div className={`ms3d-legend${interacting ? ' ms3d-panel--hidden' : ''}`}>
-        {grid.models.map((model, mi) => (
-          <span key={model} className="ms3d-legend-item">
-            <span className="ms3d-legend-dot" style={{ background: colorForModelIndex(model === 'Other' ? -1 : mi) }} />
-            {model === 'Other' ? t('dashboard.other') : model}
-          </span>
-        ))}
-      </div>
 
       <button
         type="button"
@@ -520,39 +432,6 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
         </svg>
       </button>
-
-      <div className={`ms3d-controls-card${interacting ? ' ms3d-panel--hidden' : ''}`}>
-        <div className="ms3d-controls-row">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="9" cy="7" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="9" cy="17" r="1" />
-            <circle cx="15" cy="7" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="17" r="1" />
-          </svg>
-          {t('dashboard.controlRotate')}
-        </div>
-        <div className="ms3d-controls-row">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            <line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
-          </svg>
-          {t('dashboard.controlZoom')}
-        </div>
-        <div className="ms3d-controls-row">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="5 9 2 12 5 15" /><polyline points="9 5 12 2 15 5" />
-            <polyline points="15 19 12 22 9 19" /><polyline points="19 9 22 12 19 15" />
-            <line x1="2" y1="12" x2="22" y2="12" /><line x1="12" y1="2" x2="12" y2="22" />
-          </svg>
-          {t('dashboard.controlPan')}
-        </div>
-        <div className="ms3d-controls-row">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 9V4.5a1.5 1.5 0 0 1 3 0V9" />
-            <path d="M12 9V3.5a1.5 1.5 0 0 1 3 0V9" />
-            <path d="M15 9.5V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-2c-2.5 0-3.5-1-5-3l-2.7-4a1.4 1.4 0 0 1 2-2L6 12" />
-          </svg>
-          {t('dashboard.controlClick')}
-        </div>
-      </div>
     </div>
   );
 }

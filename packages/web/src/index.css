@@ -728,7 +728,133 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative; /* anchors .dash-chart-expand-tab when the toolbar is collapsed */
 }
+
+/* ── Chart toolbar (unifies legend, usage hint, refresh, 2D/3D toggle) ── */
+.dash-chart-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.dash-chart-toolbar-title { flex-shrink: 0; white-space: nowrap; }
+
+.dash-chart-toolbar-legend {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.dash-chart-toolbar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+.dash-chart-toolbar-legend-item:hover { background: var(--hover); color: var(--text); }
+
+.dash-chart-toolbar-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dash-chart-toolbar-hint { position: relative; flex-shrink: 0; }
+
+.dash-chart-toolbar-hint-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.dash-chart-toolbar-hint-btn:hover { color: var(--text); background: var(--hover); }
+
+.dash-chart-toolbar-hint-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.dash-chart-toolbar-hint-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.dash-chart-toolbar-hint-row svg { flex-shrink: 0; opacity: 0.85; }
+
+.dash-chart-collapse-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.dash-chart-collapse-btn:hover { color: var(--text); background: var(--hover); }
+
+.dash-chart-expand-tab {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.dash-chart-expand-tab:hover { color: var(--text); background: var(--hover); }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .dash-chart-body {
   flex: 1;
@@ -756,65 +882,6 @@ body {
 }
 .ms3d-wrap canvas { cursor: grab; }
 .ms3d-wrap canvas:active { cursor: grabbing; }
-
-.ms3d-legend {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-.ms3d-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 80%, transparent);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-/* Legend + controls-help overlays fade out while the user is hovering a bar,
-   has one pinned, or is dragging the camera — see `interacting` in
-   MetricSurface3D — so they don't sit on top of the thing being looked at. */
-.ms3d-panel--hidden {
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.ms3d-legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.ms3d-controls-card {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 85%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  pointer-events: none;
-}
-.ms3d-controls-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.ms3d-controls-row svg { flex-shrink: 0; opacity: 0.85; }
 
 .ms3d-reset-btn {
   position: absolute;
