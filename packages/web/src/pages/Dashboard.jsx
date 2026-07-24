@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import HBar from '../components/HBar';
+import ChartToolbar, { IconExpand } from '../components/ChartToolbar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 import { formatCost, fmtLatency } from '../utils/fmt';
+import { buildGrid } from '../utils/metricGrid';
 
 // three.js + @react-three/fiber/drei add ~800KB minified — lazy-load so the
 // bundle for every other route stays light; only the Dashboard route pays for it.
@@ -445,6 +447,15 @@ export default function Dashboard() {
   const [reconciliation, setReconciliation] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
   const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '3d');
+  // Client-side-only visual toggle for which models' bars/lines are shown in
+  // the chart — unrelated to `disabledModels` above (that one is a server-side
+  // filter sent as exclude_models, affecting KPIs/breakdowns too). Not
+  // persisted: it's meant to be a lightweight, session-only declutter, same
+  // as the toggle recharts' own <Legend> used to provide for the 2D view only.
+  const [hiddenModels, setHiddenModels] = useState(() => new Set());
+  const [toolbarCollapsed, setToolbarCollapsed] = useState(
+    () => localStorage.getItem('obs-chart-toolbar-collapsed') === 'true'
+  );
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
@@ -509,6 +520,25 @@ export default function Dashboard() {
   const byProvider     = summary?.by_provider     || [];
   const byModel        = summary?.by_model        || [];
   const errorBreakdown = summary?.error_breakdown || [];
+
+  // Shared model list for the chart toolbar's legend — derived independently
+  // of hiddenModels, so a hidden model still shows up (dimmed) as a toggle
+  // target. modelTimeSeries already reflects disabledModels' server-side
+  // exclude_models filter, so a ModelPicker-disabled model can never appear here.
+  const modelTimeSeries = summary?.model_time_series || [];
+  const grid = useMemo(() => buildGrid(modelTimeSeries, activeMetric), [modelTimeSeries, activeMetric]);
+
+  const toggleHiddenModel = (model) => setHiddenModels(prev => {
+    const next = new Set(prev);
+    next.has(model) ? next.delete(model) : next.add(model);
+    return next;
+  });
+
+  const toggleToolbarCollapsed = () => setToolbarCollapsed(prev => {
+    const next = !prev;
+    localStorage.setItem('obs-chart-toolbar-collapsed', String(next));
+    return next;
+  });
 
   const tokenSpark = timeSeries.map(r => Object.values(r.byProvider).reduce((a, b) => a + b, 0));
   const reqSpark    = timeSeries.map(r => r.requests);
@@ -579,18 +609,6 @@ export default function Dashboard() {
             <span className="dot dot-pulse" style={{ background: connected ? 'var(--success)' : 'var(--faint)' }} />
             <span>{connected ? t('dashboard.live') : t('dashboard.offline')}</span>
           </div>
-          <button
-            className="obs-btn"
-            onClick={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
-            disabled={syncing}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }}>
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-            </svg>
-            {t('dashboard.refresh')}
-          </button>
         </div>
       </div>
 
@@ -651,37 +669,47 @@ export default function Dashboard() {
           <div className="dash-col-left">
             {/* Tokens over time */}
             <div className="obs-card dash-chart-card" style={{ padding: '16px 20px' }}>
-              <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div className="obs-section-label">{t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}</div>
-                <div className="obs-range-picker">
-                  <button
-                    className={`obs-range-btn${chartView === '3d' ? ' active' : ''}`}
-                    title={t('dashboard.view3D')}
-                    onClick={() => { setChartView('3d'); localStorage.setItem('obs-chart-view', '3d'); }}
-                  >3D</button>
-                  <button
-                    className={`obs-range-btn${chartView === '2d' ? ' active' : ''}`}
-                    title={t('dashboard.view2D')}
-                    onClick={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
-                  >2D</button>
-                </div>
-              </div>
+              {toolbarCollapsed ? (
+                <button
+                  type="button"
+                  className="dash-chart-expand-tab"
+                  title={t('dashboard.expandToolbar')}
+                  aria-label={t('dashboard.expandToolbar')}
+                  onClick={toggleToolbarCollapsed}
+                >
+                  <IconExpand />
+                </button>
+              ) : (
+                <ChartToolbar
+                  title={t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}
+                  models={grid.models}
+                  hiddenModels={hiddenModels}
+                  onToggleModel={toggleHiddenModel}
+                  chartView={chartView}
+                  onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
+                  onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
+                  syncing={syncing}
+                  onToggleCollapsed={toggleToolbarCollapsed}
+                />
+              )}
               <div className="dash-chart-body">
                 <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
                   {chartView === '3d' ? (
                     <MetricSurface3D
-                      modelTimeSeries={summary?.model_time_series || []}
+                      modelTimeSeries={modelTimeSeries}
                       metric={activeMetric}
                       xLabels={xLabels}
                       loading={loading}
                       range={range}
+                      hiddenModels={hiddenModels}
                     />
                   ) : (
                     <ModelTrendChart2D
-                      modelTimeSeries={summary?.model_time_series || []}
+                      modelTimeSeries={modelTimeSeries}
                       metric={activeMetric}
                       xLabels={xLabels}
                       loading={loading}
+                      hiddenModels={hiddenModels}
                     />
                   )}
                 </Suspense>
@@ -736,8 +764,6 @@ export default function Dashboard() {
             <TagBreakdown range={range} />
           </div>
         </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </main>
   );

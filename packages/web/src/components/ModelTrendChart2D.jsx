@@ -1,11 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend,
+  CartesianGrid, Tooltip,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
-import { buildGrid, extractMetric, formatMetricValue } from './MetricSurface3D';
+import { buildGrid, formatMetricValue } from '../utils/metricGrid';
 
 // Same live-theme-follow behavior as MetricSurface3D's useThemePalette — duplicated
 // here (not exported from the 3D file) to keep that file untouched functionally.
@@ -39,10 +39,9 @@ function CustomTooltip({ active, payload, label, metric }) {
   );
 }
 
-export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading }) {
+export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading, hiddenModels = new Set() }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
-  const [hiddenModels, setHiddenModels] = useState(() => new Set());
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
 
   const totalActivity = grid.values.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0);
@@ -71,14 +70,6 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
     );
   }
 
-  const toggleModel = (model) => {
-    setHiddenModels(prev => {
-      const next = new Set(prev);
-      next.has(model) ? next.delete(model) : next.add(model);
-      return next;
-    });
-  };
-
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -93,14 +84,6 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
           tickFormatter={(v) => formatMetricValue(v, metric)}
         />
         <Tooltip content={<CustomTooltip metric={metric} />} cursor={{ stroke: palette.border }} />
-        <Legend
-          onClick={(e) => toggleModel(e.dataKey)}
-          formatter={(value) => (
-            <span style={{ opacity: hiddenModels.has(value) ? 0.4 : 1, cursor: 'pointer', fontSize: 12 }}>
-              {value === 'Other' ? t('dashboard.other') : value}
-            </span>
-          )}
-        />
         {grid.models.map((model, mi) => (
           <Line
             key={model}
