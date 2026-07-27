@@ -32,6 +32,8 @@ const tokensRouter      = require('./routes/tokens');
 const teamRouter        = require('./routes/team');
 const webhooksRouter    = require('./routes/webhooks');
 const reconciliationRouter = require('./routes/reconciliation');
+const insightsRouter    = require('./routes/insights');
+const notificationsRouter = require('./routes/notifications');
 const { checkAlerts }   = require('./jobs/alertChecker');
 const { runReconciliation } = require('./jobs/reconciliation');
 const { seedDemo }      = require('./db/seed-demo');
@@ -97,6 +99,8 @@ app.use('/api/tokens', tokensRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/reconciliation', reconciliationRouter);
+app.use('/api/insights', insightsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // ── 404 handler — must be after all routes ────────────────────────────────────
 app.use((req, res) => {

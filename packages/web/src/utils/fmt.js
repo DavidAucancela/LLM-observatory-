@@ -31,3 +31,21 @@ export function fmtLatency(ms) {
   const n = Math.round(ms ?? 0);
   return n >= 1000 ? `${(n / 1000).toFixed(2)}s` : `${n}ms`;
 }
+
+/**
+ * "just now" / "8 min ago" / "2h ago" / "3d ago", falling back to fmtDate
+ * past a week — for events with a real timestamp (notifications), not a
+ * substitute for one. Takes `t` from the caller instead of importing
+ * react-i18next here, so this file stays framework-agnostic.
+ */
+export function fmtRelative(iso, t) {
+  if (!iso) return '—';
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (diffMin < 1)  return t('common.justNow');
+  if (diffMin < 60) return t('common.minutesAgo', { count: diffMin });
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24)   return t('common.hoursAgo', { count: diffH });
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7)    return t('common.daysAgo', { count: diffD });
+  return fmtDate(iso);
+}

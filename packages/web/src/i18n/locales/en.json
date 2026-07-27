@@ -61,7 +61,37 @@
     "dismiss": "Dismiss",
     "of": "of",
     "noData": "No data for this period",
-    "all": "All"
+    "all": "All",
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} min ago",
+    "minutesAgo_other": "{{count}} min ago",
+    "hoursAgo_one": "{{count}}h ago",
+    "hoursAgo_other": "{{count}}h ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago"
+  },
+  "palette": {
+    "placeholder": "Search pages, models, actions…",
+    "noResults": "No results",
+    "groupPages": "Pages",
+    "groupModels": "Models",
+    "groupActions": "Actions",
+    "actionLogout": "Log out",
+    "actionLanguage": "Switch language",
+    "actionAlerts": "Go to Settings → Alerts",
+    "actionWebhooks": "Go to Settings → Webhooks",
+    "actionTeam": "Go to Settings → Team"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications",
+    "viewAll": "View all in Settings → Alerts",
+    "allProviders": "Total",
+    "budgetAlertMsg": "Spend alert — {{provider}} went over {{threshold}} (current: {{current}})",
+    "deliveryFailed": "· failed to notify Discord",
+    "reconciliationMsg": "{{provider}} reconciliation off by {{pct}}%",
+    "teamJoinedMsg": "{{email}} accepted the team invitation"
   },
   "auth": {
     "brand": "Observatory",
@@ -208,6 +238,26 @@
     "latencyOverTime": "Avg latency over time",
     "errorRateOverTime": "Error rate over time",
     "errorRate": "Error rate",
+    "comparePrevToggle": "vs. previous period",
+    "prevPeriodLabel": "Previous period",
+    "insights": {
+      "severityCritical": "Critical",
+      "severityWarning": "Warning",
+      "severityImprovement": "Improvement",
+      "costSpikeTitle": "{{model}} spend +{{pct}}%",
+      "costSpikeDetail": "{{from}} → {{to}} in the current range, vs. the previous period.",
+      "errorRateTitle": "{{model}} error rate at {{pct}}%",
+      "errorRateDetail": "{{errors}} of {{requests}} requests failed in the current range.",
+      "latencyTitle": "{{model}} latency +{{pct}}%",
+      "latencyDetail": "{{from}} → {{to}} average latency vs. the previous period.",
+      "improvementTitle": "Cost per request dropped {{pct}}%",
+      "improvementDetail": "From {{from}} to {{to}} per request vs. the previous period.",
+      "viewDetails": "View filtered activity",
+      "viewErrors": "View errors",
+      "viewModels": "View models",
+      "dismiss24h": "Mute 24h",
+      "dismiss": "Dismiss"
+    },
     "controlRotate": "Drag to rotate",
     "controlZoom": "Scroll to zoom",
     "controlPan": "Right-click drag to pan",
@@ -278,6 +328,13 @@
     "tokensCol": "Tokens",
     "totalCostCol": "Total cost",
     "avgLatencyCol": "Avg latency"
+  },
+  "models": {
+    "efficiencyTitle": "Efficiency by model",
+    "efficiencySubtitle": "Cost per 1K tokens vs. average latency — bubble size is request volume",
+    "axisLatency": "average latency →",
+    "axisCostPer1k": "cost per 1K tokens →",
+    "efficiencyBestValue": "{{model}} has the best cost/latency ratio in this range."
   },
   "finance": {
     "title": "Finance",

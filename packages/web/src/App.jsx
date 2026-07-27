@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
 import ThemeToggle from './components/ThemeToggle';
+import NotificationBell from './components/NotificationBell';
+import CommandPalette from './components/CommandPalette';
 import Dashboard from './pages/Dashboard';
 import Activity from './pages/Activity';
 import Models from './pages/Models';
@@ -62,6 +64,8 @@ function AppShell() {
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
       <ThemeToggle darkMode={darkMode} onToggle={() => toggleDarkMode(!darkMode)} />
+      <NotificationBell />
+      <CommandPalette />
       {/* Mobile header — only visible on small screens */}
       <div className="obs-mobile-header">
         <button className="obs-mobile-hamburger" onClick={() => setSidebarOpen(true)} aria-label="Open menu">

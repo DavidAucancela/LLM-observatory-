@@ -325,3 +325,31 @@ ALTER TABLE alert_rules ADD COLUMN IF NOT EXISTS threshold_pct DECIMAL(6, 2);
 ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS likely_retry_of INTEGER REFERENCES api_calls(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_api_calls_retry_lookup ON api_calls(org_id, provider, model, prompt_preview, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_api_calls_likely_retry ON api_calls(likely_retry_of) WHERE likely_retry_of IS NOT NULL;
+
+-- ── Insight dismissals — insights themselves are computed on-demand from
+--    api_calls (see services/insights.js), never persisted. The only state
+--    kept is which insight_key an org muted and until when, so "Silenciar
+--    24h" is shared across the whole org, not per-browser. insight_key is a
+--    deterministic string per detector+entity (e.g. "cost_spike:openai:gpt-4o"
+--    or "improvement:org" for the org-level detector). ─────────────────────
+CREATE TABLE IF NOT EXISTS insight_dismissals (
+  id               SERIAL PRIMARY KEY,
+  org_id           INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  insight_key      TEXT NOT NULL,
+  dismissed_until  TIMESTAMPTZ NOT NULL,
+  dismissed_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(org_id, insight_key)
+);
+CREATE INDEX IF NOT EXISTS idx_insight_dismissals_org ON insight_dismissals(org_id);
+
+-- ── Notification reads — a single "read up to here" watermark per user, not a
+--    row per notification. Notifications themselves are never stored either;
+--    they're assembled on every GET /api/notifications from tables that
+--    already have real timestamps: alert_history, reconciliation_runs
+--    (status alert|error), and invitations.accepted_at. Default '-infinity'
+--    means everything is unread until the user's first read-all. ───────────
+CREATE TABLE IF NOT EXISTS notification_reads (
+  user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at  TIMESTAMPTZ NOT NULL DEFAULT '-infinity'
+);

@@ -4,6 +4,7 @@ import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import HBar from '../components/HBar';
 import ChartToolbar, { IconExpand } from '../components/ChartToolbar';
+import InsightsPanel from '../components/InsightsPanel';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 import { formatCost, fmtLatency } from '../utils/fmt';
@@ -445,6 +446,7 @@ export default function Dashboard() {
   const [disabledModels, setDisabledModels] = useState(() => new Set());
   const [allModels, setAllModels] = useState([]);
   const [reconciliation, setReconciliation] = useState([]);
+  const [insights, setInsights] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
   const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '3d');
   // Client-side-only visual toggle for which models' bars/lines are shown in
@@ -455,6 +457,11 @@ export default function Dashboard() {
   const [hiddenModels, setHiddenModels] = useState(() => new Set());
   const [toolbarCollapsed, setToolbarCollapsed] = useState(
     () => localStorage.getItem('obs-chart-toolbar-collapsed') === 'true'
+  );
+  // 2D-only, additive metrics only (requests/tokens/cost) — see ChartToolbar's
+  // showCompare prop below for where the restriction is enforced.
+  const [comparePrev, setComparePrev] = useState(
+    () => localStorage.getItem('obs-chart-compare-prev') === 'true'
   );
   const { connected, on, off } = useSocket();
   const { apiFetch }  = useApi();
@@ -470,10 +477,11 @@ export default function Dashboard() {
       const excludeParam = excluded.length
         ? `&exclude_models=${encodeURIComponent(excluded.join(','))}`
         : '';
-      const [sumRes, credRes, reconRes] = await Promise.all([
+      const [sumRes, credRes, reconRes, insightsRes] = await Promise.all([
         apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
         apiFetch(`/api/credentials`),
         apiFetch(`/api/reconciliation/latest`),
+        apiFetch(`/api/insights/summary?range=${range}`),
       ]);
       const sum = await sumRes.json();
       setSummary(sum);
@@ -483,9 +491,21 @@ export default function Dashboard() {
       setHasCredentials(credList.length > 0);
       setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
       setReconciliation((await reconRes.json()).latest || []);
+      setInsights((await insightsRes.json()).insights || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [range, disabledModels]);
+
+  const handleDismissInsight = async (insightKey) => {
+    setInsights(prev => prev.filter(i => i.insight_key !== insightKey));
+    try {
+      await apiFetch('/api/insights/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_key: insightKey }),
+      });
+    } catch (err) { console.error(err); }
+  };
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -507,6 +527,20 @@ export default function Dashboard() {
     hourMap[row.hour].cost     += parseFloat(row.cost_usd || 0);
   }
   const timeSeries = Object.values(hourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
+
+  // Previous-period series, bucketed the same way as time_series but already
+  // shifted onto the current period's bucket grid server-side (see
+  // prev_time_series in metrics.js) — index i here lines up with index i of
+  // timeSeries/xLabels, not with any real previous-period date.
+  const prevTimeSeriesRaw = summary?.prev_time_series || [];
+  const prevHourMap = {};
+  for (const row of prevTimeSeriesRaw) {
+    if (!prevHourMap[row.hour]) prevHourMap[row.hour] = { hour: row.hour, tokens: 0, requests: 0, cost: 0 };
+    prevHourMap[row.hour].tokens   += parseInt(row.total_tokens || 0);
+    prevHourMap[row.hour].requests += parseInt(row.requests || 0);
+    prevHourMap[row.hour].cost     += parseFloat(row.cost_usd || 0);
+  }
+  const prevTimeSeries = Object.values(prevHourMap).sort((a, b) => new Date(a.hour) - new Date(b.hour));
 
   // 24h uses hourly buckets → show hours; all other ranges use daily buckets → show dates.
   const useDate = range !== '24h';
@@ -539,6 +573,27 @@ export default function Dashboard() {
     localStorage.setItem('obs-chart-toolbar-collapsed', String(next));
     return next;
   });
+
+  const toggleComparePrev = () => setComparePrev(prev => {
+    const next = !prev;
+    localStorage.setItem('obs-chart-compare-prev', String(next));
+    return next;
+  });
+
+  // requests/tokens/cost are additive across providers, so a single "previous
+  // period total" line is honest for them — latency/errorRate would need a
+  // weighted average, not a sum, so the toggle just doesn't offer those.
+  const COMPARE_METRIC_FIELD = { requests: 'total_requests', tokens: 'total_tokens', cost: 'total_cost_usd' };
+  const COMPARE_SERIES_KEY   = { requests: 'requests', tokens: 'tokens', cost: 'cost' };
+  const compareSupported = chartView === '2d' && Boolean(COMPARE_METRIC_FIELD[activeMetric]);
+  const compareDelta = compareSupported
+    ? calcDelta(s?.[COMPARE_METRIC_FIELD[activeMetric]], prev?.[COMPARE_METRIC_FIELD[activeMetric]])
+    : null;
+  // Sliced to match ModelTrendChart2D's trimmed grid so index i of prevSeries
+  // lines up with index i of the chart's own per-model data rows.
+  const prevMetricSeries = compareSupported
+    ? prevTimeSeries.map(r => r[COMPARE_SERIES_KEY[activeMetric]]).slice(grid.labelOffset, grid.labelOffset + grid.hours.length)
+    : null;
 
   const tokenSpark = timeSeries.map(r => Object.values(r.byProvider).reduce((a, b) => a + b, 0));
   const reqSpark    = timeSeries.map(r => r.requests);
@@ -613,6 +668,8 @@ export default function Dashboard() {
       </div>
 
       <div className="obs-content dash-content">
+        <InsightsPanel insights={insights} loading={loading} range={range} onDismiss={handleDismissInsight} />
+
         {/* KPI Cards */}
         <div className="kpi-strip dash-kpi" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
           <KpiCard
@@ -690,6 +747,10 @@ export default function Dashboard() {
                   onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
                   syncing={syncing}
                   onToggleCollapsed={toggleToolbarCollapsed}
+                  showCompare={compareSupported}
+                  comparePrev={comparePrev}
+                  onToggleCompare={toggleComparePrev}
+                  compareDelta={compareDelta}
                 />
               )}
               <div className="dash-chart-body">
@@ -710,6 +771,7 @@ export default function Dashboard() {
                       xLabels={xLabels}
                       loading={loading}
                       hiddenModels={hiddenModels}
+                      prevSeries={compareSupported && comparePrev ? prevMetricSeries : null}
                     />
                   )}
                 </Suspense>

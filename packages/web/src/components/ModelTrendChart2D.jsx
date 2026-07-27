@@ -31,7 +31,7 @@ function CustomTooltip({ active, payload, label, metric }) {
       {sorted.map(entry => (
         <div key={entry.dataKey} className="chart2d-tooltip-row">
           <span className="chart2d-tooltip-dot" style={{ background: entry.color }} />
-          <span className="chart2d-tooltip-name">{entry.dataKey}</span>
+          <span className="chart2d-tooltip-name">{entry.name || entry.dataKey}</span>
           <span className="chart2d-tooltip-value">{formatMetricValue(entry.value, metric)}</span>
         </div>
       ))}
@@ -39,7 +39,10 @@ function CustomTooltip({ active, payload, label, metric }) {
   );
 }
 
-export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading, hiddenModels = new Set() }) {
+// `prevSeries`, when given, must already be aligned index-for-index with the
+// trimmed grid (see Dashboard.jsx — it slices by grid.labelOffset/hours.length
+// before passing down), so this component never needs to know about trimming.
+export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading, hiddenModels = new Set(), prevSeries = null }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
@@ -55,6 +58,7 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
   const data = grid.hours.map((hour, hi) => {
     const row = { name: xLabels[grid.labelOffset + hi] ?? '' };
     grid.models.forEach((model, mi) => { row[model] = grid.values[mi][hi]; });
+    if (prevSeries) row.__prev = prevSeries[hi] ?? null;
     return row;
   });
 
@@ -96,6 +100,18 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
             activeDot={{ r: 4 }}
           />
         ))}
+        {prevSeries && (
+          <Line
+            dataKey="__prev"
+            name={t('dashboard.prevPeriodLabel')}
+            type="monotone"
+            stroke={palette.muted}
+            strokeWidth={2}
+            strokeDasharray="5 4"
+            dot={false}
+            activeDot={{ r: 3 }}
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
   );
