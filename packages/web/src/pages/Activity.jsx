@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
@@ -11,10 +12,14 @@ const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gem
 
 // ── Requests tab ──────────────────────────────────────────────
 function RequestsTab({ range, onRangeChange, configuredProviders }) {
+  // Deep-link support: insight cards on the Dashboard link here with
+  // ?model=<model>&status=error to jump straight to the offending rows.
+  const [searchParams] = useSearchParams();
   const [data, setData]         = useState(null);
   const [page, setPage]         = useState(1);
   const [provider, setProvider] = useState('');
-  const [status, setStatus]     = useState('');
+  const [status, setStatus]     = useState(() => searchParams.get('status') || '');
+  const [model, setModel]       = useState(() => searchParams.get('model') || '');
   const [search, setSearch]     = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [sortBy, setSortBy]     = useState('timestamp');
@@ -49,6 +54,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
       const params = new URLSearchParams({ page, limit: 20, sortBy, sortDir, range });
       if (provider) params.set('provider', provider);
       if (status)   params.set('status',   status);
+      if (model)    params.set('model',    model);
       if (search)   params.set('search',   search);
       if (tagKey)   params.set('tag_key',  tagKey);
       if (tagValue) params.set('tag_value', tagValue);
@@ -56,7 +62,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
       setData(await res.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [page, range, provider, status, search, sortBy, sortDir, tagKey, tagValue]);
+  }, [page, range, provider, status, model, search, sortBy, sortDir, tagKey, tagValue]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -76,6 +82,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
       const params = new URLSearchParams({ range });
       if (provider) params.set('provider', provider);
       if (status)   params.set('status',   status);
+      if (model)    params.set('model',    model);
       if (search)   params.set('search',   search);
       if (tagKey)   params.set('tag_key',  tagKey);
       if (tagValue) params.set('tag_value', tagValue);
@@ -106,6 +113,18 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
             onChange={e => setSearchInput(e.target.value)}
           />
         </div>
+
+        {model && (
+          <span className="obs-btn obs-btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'default' }}>
+            <span className="col-mono" style={{ fontFamily: 'var(--font-mono)' }}>{model}</span>
+            <button
+              type="button"
+              aria-label={t('common.remove')}
+              onClick={() => { setModel(''); setPage(1); }}
+              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, fontSize: 13, lineHeight: 1 }}
+            >×</button>
+          </span>
+        )}
 
         <select
           className="obs-btn"

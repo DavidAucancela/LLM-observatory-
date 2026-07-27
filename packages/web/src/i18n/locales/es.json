@@ -61,7 +61,37 @@
     "dismiss": "Cerrar",
     "of": "de",
     "noData": "Sin datos para este período",
-    "all": "Todos"
+    "all": "Todos",
+    "justNow": "justo ahora",
+    "minutesAgo_one": "hace {{count}} min",
+    "minutesAgo_other": "hace {{count}} min",
+    "hoursAgo_one": "hace {{count}}h",
+    "hoursAgo_other": "hace {{count}}h",
+    "daysAgo_one": "hace {{count}} día",
+    "daysAgo_other": "hace {{count}} días"
+  },
+  "palette": {
+    "placeholder": "Buscar páginas, modelos, acciones…",
+    "noResults": "Sin resultados",
+    "groupPages": "Páginas",
+    "groupModels": "Modelos",
+    "groupActions": "Acciones",
+    "actionLogout": "Cerrar sesión",
+    "actionLanguage": "Cambiar idioma",
+    "actionAlerts": "Ir a Ajustes → Alertas",
+    "actionWebhooks": "Ir a Ajustes → Webhooks",
+    "actionTeam": "Ir a Ajustes → Equipo"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "markAllRead": "Marcar todo leído",
+    "empty": "No hay notificaciones",
+    "viewAll": "Ver todo en Ajustes → Alertas",
+    "allProviders": "Total",
+    "budgetAlertMsg": "Alerta de gasto — {{provider}} superó {{threshold}} (actual: {{current}})",
+    "deliveryFailed": "· no se pudo notificar a Discord",
+    "reconciliationMsg": "Reconciliación de {{provider}} con {{pct}}% de desviación",
+    "teamJoinedMsg": "{{email}} aceptó la invitación al equipo"
   },
   "auth": {
     "brand": "Observatory",
@@ -208,6 +238,26 @@
     "latencyOverTime": "Latencia promedio en el tiempo",
     "errorRateOverTime": "Tasa de error en el tiempo",
     "errorRate": "Tasa de error",
+    "comparePrevToggle": "vs. periodo anterior",
+    "prevPeriodLabel": "Periodo anterior",
+    "insights": {
+      "severityCritical": "Crítico",
+      "severityWarning": "Atención",
+      "severityImprovement": "Mejora",
+      "costSpikeTitle": "Gasto de {{model}} +{{pct}}%",
+      "costSpikeDetail": "{{from}} → {{to}} en el rango actual, frente al periodo anterior.",
+      "errorRateTitle": "Tasa de error de {{model}} al {{pct}}%",
+      "errorRateDetail": "{{errors}} de {{requests}} solicitudes fallaron en el rango actual.",
+      "latencyTitle": "Latencia de {{model}} +{{pct}}%",
+      "latencyDetail": "{{from}} → {{to}} de latencia promedio frente al periodo anterior.",
+      "improvementTitle": "Costo por solicitud bajó {{pct}}%",
+      "improvementDetail": "De {{from}} a {{to}} por solicitud frente al periodo anterior.",
+      "viewDetails": "Ver actividad filtrada",
+      "viewErrors": "Ver errores",
+      "viewModels": "Ver modelos",
+      "dismiss24h": "Silenciar 24h",
+      "dismiss": "Descartar"
+    },
     "controlRotate": "Arrastra para rotar",
     "controlZoom": "Desplaza para zoom",
     "controlPan": "Clic derecho para desplazar",
@@ -278,6 +328,13 @@
     "tokensCol": "Tokens",
     "totalCostCol": "Costo total",
     "avgLatencyCol": "Latencia promedio"
+  },
+  "models": {
+    "efficiencyTitle": "Eficiencia por modelo",
+    "efficiencySubtitle": "Costo por 1K tokens vs. latencia promedio — el tamaño de la burbuja es volumen de solicitudes",
+    "axisLatency": "latencia promedio →",
+    "axisCostPer1k": "costo por 1K tokens →",
+    "efficiencyBestValue": "{{model}} tiene la mejor relación costo/latencia del rango."
   },
   "finance": {
     "title": "Finanzas",

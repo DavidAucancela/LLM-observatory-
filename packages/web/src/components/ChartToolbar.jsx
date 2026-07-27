@@ -123,6 +123,7 @@ function HelpPopover({ chartView }) {
 export default function ChartToolbar({
   title, models, hiddenModels, onToggleModel,
   chartView, onSetChartView, onRefresh, syncing, onToggleCollapsed,
+  showCompare, comparePrev, onToggleCompare, compareDelta,
 }) {
   const { t } = useTranslation();
 
@@ -149,6 +150,22 @@ export default function ChartToolbar({
       </div>
 
       <HelpPopover chartView={chartView} />
+
+      {showCompare && (
+        <button
+          type="button"
+          className={`obs-btn obs-btn-sm${comparePrev ? ' obs-btn-active' : ''}`}
+          title={t('dashboard.comparePrevToggle')}
+          onClick={onToggleCompare}
+        >
+          {t('dashboard.comparePrevToggle')}
+          {comparePrev && typeof compareDelta === 'number' && !isNaN(compareDelta) && (
+            <span style={{ marginLeft: 5, fontWeight: 600, color: compareDelta > 0 ? 'var(--error)' : 'var(--success)' }}>
+              {compareDelta > 0 ? '↑' : '↓'} {Math.abs(compareDelta).toFixed(1)}%
+            </span>
+          )}
+        </button>
+      )}
 
       <div className="obs-range-picker">
         <button

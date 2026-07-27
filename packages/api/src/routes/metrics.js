@@ -2,6 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const pool = require('../db/pool');
 const { deliverWebhooks } = require('../services/webhooks');
+const { getRangeIntervals } = require('../utils/dateRange');
 
 const router = express.Router();
 
@@ -209,10 +210,7 @@ router.get('/summary', async (req, res) => {
   try {
     const { orgId } = req.user;
     const range    = req.query.range || '7d';
-    const rangeMap = { '24h':'24 hours', '7d':'7 days', '30d':'30 days', '60d':'60 days', '90d':'90 days' };
-    const doubleMap= { '24h':'48 hours', '7d':'14 days', '30d':'60 days', '60d':'120 days', '90d':'180 days' };
-    const interval    = rangeMap[range] || '7 days';
-    const dblInterval = doubleMap[range] || '14 days';
+    const { interval, dblInterval } = getRangeIntervals(range);
     const startDate = req.query.start;
     const endDate   = req.query.end;
     // Daily buckets for ranges ≥ 7d so the chart differentiates days (not just hours);
@@ -281,7 +279,23 @@ router.get('/summary', async (req, res) => {
       tsJoinFilter += ` AND ac.model <> ALL($${tsParams.length})`;
     }
 
-    const [summary, byModel, byProvider, timeSeries, modelTimeSeries, prevSummary, errorBreakdown, allModels] = await Promise.all([
+    // prev_time_series: same bucket grid as time_series (same tsSeriesStart/
+    // tsSeriesEnd/bucketUnit), but each bucket is filled from the equivalent
+    // bucket of the immediately preceding period — every previous-period
+    // timestamp is shifted forward by `interval` so it lands in the same
+    // relative bucket as its current-period counterpart. That lets the
+    // dashboard overlay a "previous period" line aligned by bucket index,
+    // not by calendar date. Only meaningful for the preset-range path (the
+    // custom start/end path isn't used by the dashboard for this endpoint).
+    const isCustomRange = Boolean(startDate && endDate);
+    const prevTsParams = [orgId];
+    let prevTsJoinFilter = `ac.org_id = $1 AND ac.timestamp > NOW() - INTERVAL '${dblInterval}' AND ac.timestamp <= NOW() - INTERVAL '${interval}'`;
+    if (excludeModels.length) {
+      prevTsParams.push(excludeModels);
+      prevTsJoinFilter += ` AND ac.model <> ALL($${prevTsParams.length})`;
+    }
+
+    const [summary, byModel, byProvider, timeSeries, modelTimeSeries, prevSummary, errorBreakdown, allModels, prevTimeSeries] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) as total_requests,
                 COALESCE(SUM(total_tokens),0)       as total_tokens,
@@ -380,6 +394,20 @@ router.get('/summary', async (req, res) => {
          GROUP BY model ORDER BY requests DESC`,
         baseParams
       ),
+      isCustomRange ? Promise.resolve({ rows: [] }) : pool.query(
+        `SELECT bs.bucket as hour, p.provider,
+                COALESCE(SUM(ac.total_tokens),0) as total_tokens,
+                COALESCE(SUM(ac.cost_usd),0)     as cost_usd,
+                COUNT(ac.id) as requests
+         FROM generate_series(${tsSeriesStart}, ${tsSeriesEnd}, INTERVAL '1 ${bucketUnit}') AS bs(bucket)
+         CROSS JOIN (VALUES ('anthropic'), ('openai'), ('gemini')) AS p(provider)
+         LEFT JOIN api_calls ac
+                ON date_trunc('${bucketUnit}', ac.timestamp + INTERVAL '${interval}') = bs.bucket
+               AND ac.provider = p.provider
+               AND ${prevTsJoinFilter}
+         GROUP BY bs.bucket, p.provider ORDER BY hour ASC`,
+        prevTsParams
+      ),
     ]);
 
     res.json({
@@ -391,6 +419,7 @@ router.get('/summary', async (req, res) => {
       model_time_series:  modelTimeSeries.rows,
       error_breakdown:    errorBreakdown.rows,
       all_models:         allModels.rows,
+      prev_time_series:   prevTimeSeries.rows,
     });
   } catch (err) {
     console.error('GET /api/metrics/summary error:', err);
@@ -485,6 +514,7 @@ router.get('/export', async (req, res) => {
     const endDate  = req.query.end;
     const provider = req.query.provider;
     const status   = req.query.status;
+    const model    = req.query.model;
     const search   = req.query.search?.trim();
     const tagKey   = req.query.tag_key?.trim();
     const tagValue = req.query.tag_value?.trim();
@@ -498,6 +528,7 @@ router.get('/export', async (req, res) => {
       where += ` AND timestamp > NOW() - INTERVAL '${interval}'`;
     }
     if (provider) { params.push(provider); where += ` AND provider = $${params.length}`; }
+    if (model)    { params.push(model);    where += ` AND model = $${params.length}`; }
     if (status === 'error')   where += ` AND status_code >= 400`;
     if (status === 'success') where += ` AND status_code < 400`;
     if (search) {
