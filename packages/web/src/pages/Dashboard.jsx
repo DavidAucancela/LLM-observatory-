@@ -727,7 +727,9 @@ export default function Dashboard() {
         </div>
 
         {/* Chart spans the full content width; the toolbar is a vertical rail on
-            its left edge so nothing eats into the plot's height. */}
+            its right edge (row-reverse in CSS — this stays the first DOM child
+            so mobile, which switches to flex-direction:column, keeps it on top
+            as a horizontal bar) so nothing eats into the plot's height. */}
         <div className="obs-card dash-chart-card">
           {toolbarCollapsed ? (
             <button
@@ -793,8 +795,16 @@ export default function Dashboard() {
         />
 
         {/* Breakdown cards — auto-fit grid, so adding a card here reflows the
-            row instead of needing a hand-tuned column split. */}
+            row instead of needing a hand-tuned column split. Provider
+            breakdown leads the row, then the rest of the info cards. */}
         <div className="dash-cards-grid">
+          <div className="obs-card dash-sub-card">
+            <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
+            <div className="dash-scroll">
+              <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
+            </div>
+          </div>
+
           <div className="obs-card dash-sub-card">
             <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
@@ -808,13 +818,6 @@ export default function Dashboard() {
             </div>
             <div className="dash-scroll">
               <TopModels byModel={byModel} loading={loading} />
-            </div>
-          </div>
-
-          <div className="obs-card dash-sub-card">
-            <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
-            <div className="dash-scroll">
-              <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
             </div>
           </div>
 
