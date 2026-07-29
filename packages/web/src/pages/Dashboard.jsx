@@ -131,13 +131,16 @@ function ProviderBreakdown({ byProvider, loading, reconciliation }) {
         const run   = (reconciliation || []).find(r => r.provider === p.provider);
         return (
           <div key={p.provider}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Provider name and the reconciliation badge stack, so the numbers
+                on the right always fit — the card is one column of an auto-fit
+                grid and can get down to ~320px. */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                 <ProviderBadge provider={p.provider} />
                 <ReconciliationBadge run={run} />
               </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                <span style={{ color: 'var(--text)', fontWeight: 500, width: 46, textAlign: 'right', display: 'inline-block' }}>{formatCost(cost)}</span>
+              <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                <span style={{ color: 'var(--text)', fontWeight: 500, textAlign: 'right', display: 'inline-block' }}>{formatCost(cost)}</span>
                 <span style={{ width: 32, textAlign: 'right', display: 'inline-block' }}>{pct.toFixed(0)}%</span>
                 <span style={{ width: 58, textAlign: 'right', display: 'inline-block' }}>{reqs.toLocaleString()} req</span>
               </div>
@@ -174,13 +177,15 @@ function TopModels({ byModel, loading }) {
         const color = PROVIDER_COLORS[m.provider] || 'var(--accent)';
         return (
           <div key={`${m.provider}-${m.model}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Name and bar both flex (name was a fixed 180px) so the row still
+                fits when this card is one narrow column of the auto-fit grid. */}
             <div style={{
               fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
-              width: 180, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+              flex: '2 1 0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }} title={m.model}>
               {m.model}
             </div>
-            <div className="iprog-bar" style={{ flex: 1, height: 5, borderRadius: 3 }}>
+            <div className="iprog-bar" style={{ flex: '1 1 0', minWidth: 24, height: 5, borderRadius: 3 }}>
               <div style={{
                 height: '100%', borderRadius: 3, width: `${pct}%`,
                 background: color, transition: 'width 0.6s var(--ease-out)',
@@ -270,7 +275,7 @@ function TagBreakdown({ range }) {
   const maxCost = Math.max(...data.map(d => parseFloat(d.total_cost || 0)), 0.0001);
 
   return (
-    <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+    <div className="obs-card dash-sub-card">
       <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div className="obs-section-label">{t('dashboard.tagBreakdown')}</div>
         <select
@@ -326,15 +331,15 @@ function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredPro
   const rangeLabelKey = RANGE_LABEL_KEY[range] || RANGE_LABEL_KEY['7d'];
 
   return (
-    <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
+    <div className="obs-card dash-sub-card dash-range-spend">
       <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="obs-section-label">{t('dashboard.spentThisRange')}</div>
         <Delta value={calcDelta(totalCost, prevTotalCost)} inverse />
       </div>
       <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 14 }}>{t(rangeLabelKey)}</div>
-      <div className="dash-scroll" style={{
+      <div className="dash-scroll dash-range-spend-grid" style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
         gap: 0,
       }}>
         {items.map((p, i) => {
@@ -671,7 +676,7 @@ export default function Dashboard() {
         <InsightsPanel insights={insights} loading={loading} range={range} onDismiss={handleDismissInsight} />
 
         {/* KPI Cards */}
-        <div className="kpi-strip dash-kpi" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        <div className="kpi-strip dash-kpi">
           <KpiCard
             label={t('activity.requestsCol')}
             value={loading ? '—' : fmt(s?.total_requests ?? 0)}
@@ -721,110 +726,106 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main grid: chart + sub-breakdowns (left) | side panel (right) — fits one viewport, no page scroll */}
-        <div className="dash-main-grid">
-          <div className="dash-col-left">
-            {/* Tokens over time */}
-            <div className="obs-card dash-chart-card" style={{ padding: '16px 20px' }}>
-              {toolbarCollapsed ? (
-                <button
-                  type="button"
-                  className="dash-chart-expand-tab"
-                  title={t('dashboard.expandToolbar')}
-                  aria-label={t('dashboard.expandToolbar')}
-                  onClick={toggleToolbarCollapsed}
-                >
-                  <IconExpand />
-                </button>
-              ) : (
-                <ChartToolbar
-                  title={t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}
-                  models={grid.models}
+        {/* Chart spans the full content width; the toolbar is a vertical rail on
+            its left edge so nothing eats into the plot's height. */}
+        <div className="obs-card dash-chart-card">
+          {toolbarCollapsed ? (
+            <button
+              type="button"
+              className="dash-chart-expand-tab"
+              title={t('dashboard.expandToolbar')}
+              aria-label={t('dashboard.expandToolbar')}
+              onClick={toggleToolbarCollapsed}
+            >
+              <IconExpand />
+            </button>
+          ) : (
+            <ChartToolbar
+              title={t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}
+              models={grid.models}
+              hiddenModels={hiddenModels}
+              onToggleModel={toggleHiddenModel}
+              chartView={chartView}
+              onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
+              onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
+              syncing={syncing}
+              onToggleCollapsed={toggleToolbarCollapsed}
+              showCompare={compareSupported}
+              comparePrev={comparePrev}
+              onToggleCompare={toggleComparePrev}
+              compareDelta={compareDelta}
+            />
+          )}
+          <div className="dash-chart-body">
+            <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
+              {chartView === '3d' ? (
+                <MetricSurface3D
+                  modelTimeSeries={modelTimeSeries}
+                  metric={activeMetric}
+                  xLabels={xLabels}
+                  loading={loading}
+                  range={range}
                   hiddenModels={hiddenModels}
-                  onToggleModel={toggleHiddenModel}
-                  chartView={chartView}
-                  onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
-                  onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
-                  syncing={syncing}
-                  onToggleCollapsed={toggleToolbarCollapsed}
-                  showCompare={compareSupported}
-                  comparePrev={comparePrev}
-                  onToggleCompare={toggleComparePrev}
-                  compareDelta={compareDelta}
+                />
+              ) : (
+                <ModelTrendChart2D
+                  modelTimeSeries={modelTimeSeries}
+                  metric={activeMetric}
+                  xLabels={xLabels}
+                  loading={loading}
+                  hiddenModels={hiddenModels}
+                  prevSeries={compareSupported && comparePrev ? prevMetricSeries : null}
                 />
               )}
-              <div className="dash-chart-body">
-                <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
-                  {chartView === '3d' ? (
-                    <MetricSurface3D
-                      modelTimeSeries={modelTimeSeries}
-                      metric={activeMetric}
-                      xLabels={xLabels}
-                      loading={loading}
-                      range={range}
-                      hiddenModels={hiddenModels}
-                    />
-                  ) : (
-                    <ModelTrendChart2D
-                      modelTimeSeries={modelTimeSeries}
-                      metric={activeMetric}
-                      xLabels={xLabels}
-                      loading={loading}
-                      hiddenModels={hiddenModels}
-                      prevSeries={compareSupported && comparePrev ? prevMetricSeries : null}
-                    />
-                  )}
-                </Suspense>
+            </Suspense>
+          </div>
+        </div>
+
+        {/* Full-width band: the providers render side by side with dividers, so
+            this one card reads better spanning the row than boxed in a column. */}
+        <RangeSpend
+          byProvider={byProvider}
+          totalCost={s?.total_cost_usd}
+          prevTotalCost={prev?.total_cost_usd}
+          range={range}
+          configuredProviders={configuredProviders}
+          loading={loading}
+        />
+
+        {/* Breakdown cards — auto-fit grid, so adding a card here reflows the
+            row instead of needing a hand-tuned column split. */}
+        <div className="dash-cards-grid">
+          <div className="obs-card dash-sub-card">
+            <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div className="obs-section-label">{t('dashboard.topModels')}</div>
+                <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>sorted by cost</div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 14, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                <span>{t('dashboard.cost')}</span>
+                <span>{t('dashboard.reqs')}</span>
               </div>
             </div>
-
-            {/* Top models + Error breakdown, side by side */}
-            <div className="dash-split-row">
-              <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
-                <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div>
-                    <div className="obs-section-label">{t('dashboard.topModels')}</div>
-                    <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>sorted by cost</div>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 16 }}>
-                    <span style={{ width: 52, textAlign: 'right' }}>{t('dashboard.cost')}</span>
-                    <span style={{ width: 42, textAlign: 'right' }}>{t('dashboard.reqs')}</span>
-                  </div>
-                </div>
-                <div className="dash-scroll">
-                  <TopModels byModel={byModel} loading={loading} />
-                </div>
-              </div>
-
-              <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
-                <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
-                <div className="dash-scroll">
-                  <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
-                </div>
-              </div>
+            <div className="dash-scroll">
+              <TopModels byModel={byModel} loading={loading} />
             </div>
           </div>
 
-          {/* Side panel: provider breakdown, range spend, tag breakdown */}
-          <div className="dash-col-right">
-            <div className="obs-card dash-sub-card" style={{ padding: '16px 20px' }}>
-              <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
-              <div className="dash-scroll">
-                <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
-              </div>
+          <div className="obs-card dash-sub-card">
+            <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
+            <div className="dash-scroll">
+              <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
             </div>
-
-            <RangeSpend
-              byProvider={byProvider}
-              totalCost={s?.total_cost_usd}
-              prevTotalCost={prev?.total_cost_usd}
-              range={range}
-              configuredProviders={configuredProviders}
-              loading={loading}
-            />
-
-            <TagBreakdown range={range} />
           </div>
+
+          <div className="obs-card dash-sub-card">
+            <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
+            <div className="dash-scroll">
+              <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
+            </div>
+          </div>
+
+          <TagBreakdown range={range} />
         </div>
       </div>
     </main>
