@@ -714,91 +714,128 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-/* ── Dashboard: single-viewport layout (no page scroll) ── */
+/* ── Dashboard: scrolling single-column layout ────────────────────────────────
+   This used to be pinned to one viewport (overflow:hidden + a 2.3fr/1fr grid),
+   so every card added had to steal height from the others. It scrolls now:
+   cards keep readable heights and new ones just extend the column. */
 .dash-content {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-}
-
-.dash-kpi { margin-bottom: 14px; flex-shrink: 0; }
-
-.dash-main-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 2.3fr 1fr;
   gap: 14px;
 }
 
-.dash-col-left,
-.dash-col-right {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 14px;
+.dash-kpi {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 0;
+  flex-shrink: 0;
 }
 
+/* Chart: spans the full content width. Height is viewport-relative but clamped
+   so it stays usable on short laptops without becoming a billboard on tall
+   monitors — and so the cards below stay partly visible as a scroll affordance. */
 .dash-chart-card {
-  flex: 1.5;
+  padding: 0;
+  height: clamp(360px, 54vh, 620px);
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative; /* anchors .dash-chart-expand-tab when the rail is collapsed */
+  flex-shrink: 0;
+}
+
+/* ── Chart rail — vertical toolbar down the chart card's left edge
+   (legend, usage hint, refresh, 2D/3D toggle) ── */
+.dash-chart-rail {
+  flex-shrink: 0;
+  width: 178px;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: relative; /* anchors .dash-chart-expand-tab when the toolbar is collapsed */
+  gap: 12px;
+  padding: 16px 12px 14px 16px;
+  border-right: 1px solid var(--border);
 }
 
-/* ── Chart toolbar (unifies legend, usage hint, refresh, 2D/3D toggle) ── */
-.dash-chart-toolbar {
+.dash-chart-rail-head {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
 }
 
-.dash-chart-toolbar-title { flex-shrink: 0; white-space: nowrap; }
-
-.dash-chart-toolbar-legend {
-  flex: 1;
+.dash-chart-rail-title {
   min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
+  line-height: 1.35;
 }
 
-.dash-chart-toolbar-legend-item {
-  display: inline-flex;
+.dash-chart-rail-legend {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dash-chart-rail-legend-item {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  width: 100%;
   font-size: 11px;
   color: var(--muted);
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 5px;
-  padding: 3px 8px;
+  padding: 4px 7px;
   cursor: pointer;
   font-family: var(--font-sans);
-  white-space: nowrap;
-  transition: background 0.1s, color 0.1s;
+  text-align: left;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
-.dash-chart-toolbar-legend-item:hover { background: var(--hover); color: var(--text); }
+.dash-chart-rail-legend-item:hover {
+  background: var(--hover);
+  color: var(--text);
+  border-color: var(--border);
+}
 
-.dash-chart-toolbar-legend-dot {
+.dash-chart-rail-legend-dot {
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  display: inline-block;
   flex-shrink: 0;
 }
 
-.dash-chart-toolbar-hint { position: relative; flex-shrink: 0; }
+.dash-chart-rail-legend-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.dash-chart-toolbar-hint-btn {
-  width: 24px;
-  height: 24px;
+.dash-chart-rail-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dash-chart-rail-compare { justify-content: center; }
+
+.dash-chart-rail-views { align-self: stretch; }
+.dash-chart-rail-views .obs-range-btn { flex: 1; text-align: center; }
+
+.dash-chart-rail-actions { display: flex; align-items: center; gap: 6px; }
+.dash-chart-rail-refresh { flex: 1; justify-content: center; }
+
+.dash-chart-rail-hint { position: relative; flex-shrink: 0; }
+
+.dash-chart-rail-hint-btn {
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -809,12 +846,14 @@ body {
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
-.dash-chart-toolbar-hint-btn:hover { color: var(--text); background: var(--hover); }
+.dash-chart-rail-hint-btn:hover { color: var(--text); background: var(--hover); }
 
-.dash-chart-toolbar-hint-panel {
+/* Opens upward/rightward — the button sits at the bottom-left of the rail, so
+   the old top/right anchoring would push the panel off the card. */
+.dash-chart-rail-hint-panel {
   position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -827,19 +866,19 @@ body {
   white-space: nowrap;
 }
 
-.dash-chart-toolbar-hint-row {
+.dash-chart-rail-hint-row {
   display: flex;
   align-items: center;
   gap: 7px;
   font-size: 11px;
   color: var(--muted);
 }
-.dash-chart-toolbar-hint-row svg { flex-shrink: 0; opacity: 0.85; }
+.dash-chart-rail-hint-row svg { flex-shrink: 0; opacity: 0.85; }
 
 .dash-chart-collapse-btn {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -854,8 +893,8 @@ body {
 
 .dash-chart-expand-tab {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  left: 10px;
   z-index: 2;
   width: 26px;
   height: 26px;
@@ -875,10 +914,12 @@ body {
 
 .dash-chart-body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
   align-items: center;
+  padding: 14px 18px;
 }
 .dash-chart-body > * { width: 100%; }
 
@@ -986,20 +1027,33 @@ body {
   outline-offset: 2px;
 }
 
-.dash-split-row {
-  flex: 1;
-  min-height: 0;
-  display: flex;
+/* Breakdown cards below the chart. auto-fit means a new card reflows the row on
+   its own — no hand-tuned column split to update every time one is added. */
+.dash-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 14px;
+  align-items: stretch;
 }
 
 .dash-sub-card {
-  flex: 1;
+  padding: 16px 20px;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+/* Capped so one card with many rows can't stretch the whole grid row; the
+   overflow scrolls inside .dash-scroll instead. */
+.dash-cards-grid > .dash-sub-card {
+  min-height: 190px;
+  max-height: 340px;
+}
+
+/* Full-width band under the chart — providers sit side by side with dividers,
+   which reads better across the row than boxed into one grid column. */
+.dash-range-spend { flex-shrink: 0; }
 
 .dash-card-head { flex-shrink: 0; }
 
@@ -1007,11 +1061,16 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Without this, `overflow-x` computes to `auto` (a non-visible overflow on
+     one axis forces the other) and every card grows a stray horizontal bar. */
+  overflow-x: hidden;
 }
 
-.dash-col-right > .obs-card {
-  flex: 1;
-  min-height: 0;
+/* Between tablet and desktop the 5-up KPI row and the 178px rail both get too
+   cramped, well before the mobile breakpoint takes over. */
+@media (max-width: 1240px) {
+  .dash-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash-chart-rail { width: 148px; padding-left: 14px; }
 }
 
 /* Card-style KPI */
@@ -1428,6 +1487,25 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+/* The page-level scroller gets a real, grabbable bar — 4px is fine for the
+   incidental overflow inside a card, but the content column is now the primary
+   way to move through a page and needs a visible affordance. */
+.obs-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.obs-content::-webkit-scrollbar { width: 10px; }
+.obs-content::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.obs-content::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}
+
 /* ── Animations ── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -1824,28 +1902,63 @@ body {
     flex-direction: column !important;
   }
 
-  /* Dashboard: fall back to normal stacked/scrollable layout on mobile */
-  .dash-content {
-    display: block;
-    overflow-y: auto;
+  /* Dashboard: single column, cards sized by their content */
+  .dash-cards-grid {
+    grid-template-columns: 1fr;
   }
-  .dash-main-grid {
-    display: block;
+  /* Column count comes from an inline style (one per provider) — !important is
+     the only way to override it for the stacked mobile layout. */
+  .dash-range-spend-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
   }
-  .dash-col-left,
-  .dash-col-right {
-    display: block;
+  .dash-range-spend-grid > div {
+    padding: 0 !important;
+    border-right: none !important;
   }
-  .dash-chart-card,
-  .dash-sub-card,
-  .dash-col-right > .obs-card {
-    margin-bottom: 14px;
-  }
-  .dash-split-row {
-    display: block;
+  .dash-cards-grid > .dash-sub-card {
+    max-height: none;
   }
   .dash-scroll {
     overflow-y: visible;
+  }
+
+  /* Chart: the rail can't fit beside the plot on a phone, so it goes back on
+     top as a horizontal bar with the legend scrolling sideways. */
+  .dash-chart-card {
+    height: auto;
+    flex-direction: column;
+  }
+  .dash-chart-rail {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .dash-chart-rail-head { flex: 1 0 100%; }
+  .dash-chart-rail-legend {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .dash-chart-rail-legend-item { width: auto; flex-shrink: 0; border-color: var(--border); }
+  .dash-chart-rail-foot {
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .dash-chart-rail-hint-panel { bottom: auto; top: calc(100% + 6px); }
+  .dash-chart-body {
+    height: 340px;
+    padding: 12px 14px;
   }
 
   /* Header: allow wrapping */

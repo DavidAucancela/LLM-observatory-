@@ -103,7 +103,7 @@ function InsightCard({ insight, range, onDismiss }) {
 export default function InsightsPanel({ insights, loading, range, onDismiss }) {
   if (loading && !insights.length) {
     return (
-      <div className="insight-row" style={{ marginBottom: 18 }}>
+      <div className="insight-row">
         {[...Array(2)].map((_, i) => <div key={i} className="obs-skeleton" style={{ height: 132, borderRadius: 10 }} />)}
       </div>
     );
@@ -112,7 +112,7 @@ export default function InsightsPanel({ insights, loading, range, onDismiss }) {
   if (!insights.length) return null;
 
   return (
-    <div className="insight-row" style={{ marginBottom: 18 }}>
+    <div className="insight-row">
       {insights.map(insight => (
         <InsightCard key={insight.insight_key} insight={insight} range={range} onDismiss={onDismiss} />
       ))}
