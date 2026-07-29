@@ -737,13 +737,16 @@ body {
   padding: 0;
   height: clamp(360px, 54vh, 620px);
   display: flex;
-  flex-direction: row;
+  /* row-reverse (not a DOM swap) so the rail — first in the JSX — renders on
+     the right on desktop, while mobile's flex-direction:column override below
+     still stacks it on top in plain DOM order. */
+  flex-direction: row-reverse;
   overflow: hidden;
   position: relative; /* anchors .dash-chart-expand-tab when the rail is collapsed */
   flex-shrink: 0;
 }
 
-/* ── Chart rail — vertical toolbar down the chart card's left edge
+/* ── Chart rail — vertical toolbar down the chart card's right edge
    (legend, usage hint, refresh, 2D/3D toggle) ── */
 .dash-chart-rail {
   flex-shrink: 0;
@@ -752,8 +755,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 12px 14px 16px;
-  border-right: 1px solid var(--border);
+  padding: 16px 16px 14px 12px;
+  border-left: 1px solid var(--border);
 }
 
 .dash-chart-rail-head {
@@ -848,12 +851,13 @@ body {
 }
 .dash-chart-rail-hint-btn:hover { color: var(--text); background: var(--hover); }
 
-/* Opens upward/rightward — the button sits at the bottom-left of the rail, so
-   the old top/right anchoring would push the panel off the card. */
+/* Opens upward/leftward — the button sits at the bottom of a rail pinned to
+   the card's right edge, so anchoring from the left would push the panel
+   off the card. */
 .dash-chart-rail-hint-panel {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 0;
+  right: 0;
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -894,7 +898,7 @@ body {
 .dash-chart-expand-tab {
   position: absolute;
   top: 10px;
-  left: 10px;
+  right: 10px;
   z-index: 2;
   width: 26px;
   height: 26px;
@@ -1070,7 +1074,7 @@ body {
    cramped, well before the mobile breakpoint takes over. */
 @media (max-width: 1240px) {
   .dash-kpi { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .dash-chart-rail { width: 148px; padding-left: 14px; }
+  .dash-chart-rail { width: 148px; padding-right: 14px; }
 }
 
 /* Card-style KPI */
@@ -1935,7 +1939,7 @@ body {
     align-items: center;
     gap: 10px;
     padding: 12px 14px;
-    border-right: none;
+    border-left: none;
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
   }
@@ -1955,7 +1959,7 @@ body {
     padding-top: 10px;
     border-top: 1px solid var(--border);
   }
-  .dash-chart-rail-hint-panel { bottom: auto; top: calc(100% + 6px); }
+  .dash-chart-rail-hint-panel { bottom: auto; top: calc(100% + 6px); left: 0; right: auto; }
   .dash-chart-body {
     height: 340px;
     padding: 12px 14px;

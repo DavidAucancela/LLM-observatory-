@@ -22,21 +22,22 @@ function IconRefresh({ spinning }) {
   );
 }
 
-// Points "left" — collapsing tucks the rail away against the card's left edge.
+// Points "right" — the rail sits on the card's right edge, so collapsing
+// tucks it away in that direction.
 function IconCollapse() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
+      <polyline points="9 18 15 12 9 6" />
     </svg>
   );
 }
 
-// Points "right" — used on the floating expand tab left behind once the rail
-// is collapsed, so its direction reads as "bring the rail back".
+// Points "left" — used on the floating expand tab left behind once the rail
+// is collapsed, so its direction reads as "bring the rail back" from the right.
 export function IconExpand() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
+      <polyline points="15 18 9 12 15 6" />
     </svg>
   );
 }
