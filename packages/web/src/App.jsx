@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
-import ThemeToggle from './components/ThemeToggle';
-import NotificationBell from './components/NotificationBell';
 import CommandPalette from './components/CommandPalette';
 import Dashboard from './pages/Dashboard';
 import Activity from './pages/Activity';
@@ -63,8 +61,6 @@ function AppShell() {
 
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
-      <ThemeToggle darkMode={darkMode} onToggle={() => toggleDarkMode(!darkMode)} />
-      <NotificationBell />
       <CommandPalette />
       {/* Mobile header — only visible on small screens */}
       <div className="obs-mobile-header">
@@ -89,15 +85,16 @@ function AppShell() {
           onClose={() => setSidebarOpen(false)}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapse}
+          darkMode={darkMode}
         />
         <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/activity"  element={<Activity />} />
-          <Route path="/models"    element={<Models />} />
-          <Route path="/keys"      element={<Keys />} />
-          <Route path="/sync"      element={<Sync />} />
-          <Route path="/finance"   element={<Finance />} />
-          <Route path="/settings"  element={<Settings />} />
+          <Route path="/dashboard" element={<Dashboard darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/activity"  element={<Activity darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/models"    element={<Models darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/keys"      element={<Keys darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/sync"      element={<Sync darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/finance"   element={<Finance darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+          <Route path="/settings"  element={<Settings darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
           {/* Legacy redirects */}
           <Route path="/"          element={<Navigate to="/dashboard" replace />} />
           <Route path="/requests"  element={<Navigate to="/activity" replace />} />

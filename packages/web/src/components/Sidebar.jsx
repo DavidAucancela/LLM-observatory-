@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { NavLink, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../auth/AuthProvider';
-import i18n from '../i18n';
 
 /* ── Nav icons ── */
 function IconActivity() {
@@ -60,44 +58,6 @@ function IconSettings() {
   );
 }
 
-function IconGlobe() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-
-function IconLogout() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function IconUser() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function IconAccount() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
 function IconChevronLeft() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -118,8 +78,8 @@ function IconChevronRight() {
 // brand logo/link at the top of the sidebar instead, see the `obs-brand`
 // block below. Requests/Models/Keys/Sync used to be tabs inside single pages
 // (Activity, Settings); they're now their own top-level items with their own
-// routes. "Mi cuenta" moved the other way — it used to be its own page, now
-// it's a tab inside Settings (see the user-menu `navigate` calls below).
+// routes. Account/language/logout live in the top bar's account menu now
+// (see TopBar.jsx), not in the sidebar.
 const navDefs = [
   { to: '/activity',  labelKey: 'nav.requests', descKey: 'nav.requests_desc', Icon: IconActivity },
   { to: '/models',    labelKey: 'nav.models',   descKey: 'nav.models_desc',   Icon: IconModels   },
@@ -129,43 +89,9 @@ const navDefs = [
   { to: '/settings',  labelKey: 'nav.settings', descKey: 'nav.settings_desc', Icon: IconSettings },
 ];
 
-export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, darkMode }) {
   const { t } = useTranslation();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const userBlockRef = useRef(null);
-
-  const roleLabel = user?.role === 'admin' ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
-  const isAdmin   = user?.role === 'admin';
-
-  const toggleLanguage = () => {
-    const next = i18n.language === 'en' ? 'es' : 'en';
-    i18n.changeLanguage(next);
-    localStorage.setItem('lang', next);
-  };
-
-  // Close menu on click outside
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e) => {
-      if (userBlockRef.current && !userBlockRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen]);
-
-  const handleLogout = () => {
-    setMenuOpen(false);
-    logout();
-  };
-
-  const handleLang = () => {
-    toggleLanguage();
-    setMenuOpen(false);
-  };
+  const logoSrc = darkMode ? '/logo-dark.png' : '/logo-light.png';
 
   return (
     <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
@@ -173,7 +99,7 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
           no longer a regular nav item */}
       <div className="obs-brand">
         <Link to="/dashboard" className="obs-brand-link" title={t('dashboard.title')} onClick={onClose}>
-          <img src="/logoMain.png" alt="Observatory" className="obs-brand-logo" />
+          <img src={logoSrc} alt="Observatory" className="obs-brand-logo" />
           <span className="obs-brand-text">Observatory</span>
         </Link>
         <button
@@ -208,57 +134,6 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
       </nav>
 
       <div className="obs-nav-spacer" />
-
-      {/* User block */}
-      <div className="obs-user-block" ref={userBlockRef}>
-        {/* Collapsed: show user icon only */}
-        <div
-          className="obs-user-icon-collapsed"
-          title={user?.email}
-          onClick={() => navigate('/settings?tab=account')}
-          style={{ cursor: 'pointer' }}
-        >
-          <IconUser />
-        </div>
-
-        {/* Expanded: clickable user info + dropdown */}
-        {user && (
-          <>
-            <button
-              className="obs-user-info--btn"
-              onClick={() => setMenuOpen(v => !v)}
-              title={t('sidebar.myAccount')}
-            >
-              <div className="obs-user-text-block">
-                {user.orgName && (
-                  <div className="obs-user-org">{user.orgName}</div>
-                )}
-                <div className="obs-user-email">{user.email}</div>
-              </div>
-              <span className={`obs-role-badge${isAdmin ? ' role-admin' : ''}`}>{roleLabel}</span>
-            </button>
-
-            {menuOpen && (
-              <div className="obs-user-menu">
-                <button className="obs-user-menu-item" onClick={() => { setMenuOpen(false); navigate('/settings?tab=account'); }}>
-                  <IconAccount />
-                  <span>{t('sidebar.myAccount')}</span>
-                </button>
-                <div className="obs-user-menu-sep" />
-                <button className="obs-user-menu-item" onClick={handleLang}>
-                  <IconGlobe />
-                  <span>{i18n.language === 'en' ? 'Español' : 'English'}</span>
-                </button>
-                <div className="obs-user-menu-sep" />
-                <button className="obs-user-menu-item obs-user-menu-item--danger" onClick={handleLogout}>
-                  <IconLogout />
-                  <span>{t('sidebar.signOut')}</span>
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </aside>
   );
 }

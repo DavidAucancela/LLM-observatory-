@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
+import TopBar from '../components/TopBar';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../auth/AuthProvider';
 import { fmtDateTime, fmtDate } from '../utils/fmt';
@@ -802,7 +803,7 @@ function TeamTab() {
 // ── Page ──────────────────────────────────────────────────────
 const VALID_TABS = ['account', 'alerts', 'webhooks', 'team'];
 
-export default function Settings() {
+export default function Settings({ darkMode, onToggleDarkMode }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = VALID_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'account';
   const [tab, setTab] = useState(initialTab);
@@ -815,9 +816,7 @@ export default function Settings() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('settings.title')}</div>
-      </div>
+      <TopBar title={t('settings.title')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <div className="obs-tabbar">

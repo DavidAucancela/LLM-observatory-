@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import RequestDrawer from '../components/RequestDrawer';
+import TopBar from '../components/TopBar';
 import { fmtDateTime, formatCost, fmtLatency } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
@@ -274,7 +275,7 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────
-export default function Activity() {
+export default function Activity({ darkMode, onToggleDarkMode }) {
   const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const { apiFetch } = useApi();
@@ -297,9 +298,7 @@ export default function Activity() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('activity.requestsTab')}</div>
-      </div>
+      <TopBar title={t('activity.requestsTab')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <RequestsTab range={range} onRangeChange={handleRangeChange} configuredProviders={configuredProviders} />

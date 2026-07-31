@@ -1,0 +1,172 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../auth/AuthProvider';
+import i18n from '../i18n';
+import NotificationBell from './NotificationBell';
+
+function IconGlobe() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+function IconUser() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function IconAccount() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function IconLogout() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function IconSun() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" />
+      <line x1="4.22" y1="4.22" x2="7.05" y2="7.05" /><line x1="16.95" y1="16.95" x2="19.78" y2="19.78" />
+      <line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" />
+      <line x1="4.22" y1="19.78" x2="7.05" y2="16.95" /><line x1="16.95" y1="7.05" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+// Account dropdown — mirrors the sidebar's user-menu pattern (same
+// obs-user-menu-item classes) so both dropdowns look and behave identically.
+function AccountMenu({ darkMode, onToggleDarkMode }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const isAdmin = user?.role === 'admin';
+  const roleLabel = isAdmin ? t('sidebar.roleAdmin') : t('sidebar.roleMember');
+
+  return (
+    <div className="obs-account-wrap" ref={ref}>
+      <button
+        type="button"
+        className="obs-topbar-btn"
+        onClick={() => setOpen(o => !o)}
+        aria-label={t('sidebar.myAccount')}
+        title={user?.email}
+      >
+        <IconUser />
+      </button>
+
+      {open && (
+        <div className="obs-account-panel">
+          {user && (
+            <div className="obs-account-panel-head">
+              {user.orgName && <div className="obs-user-org">{user.orgName}</div>}
+              <div className="obs-user-email">{user.email}</div>
+              <span className={`obs-role-badge${isAdmin ? ' role-admin' : ''}`}>{roleLabel}</span>
+            </div>
+          )}
+          <div className="obs-user-menu-sep" />
+          <button className="obs-user-menu-item" onClick={() => { setOpen(false); navigate('/settings?tab=account'); }}>
+            <IconAccount />
+            <span>{t('sidebar.myAccount')}</span>
+          </button>
+          <button className="obs-user-menu-item" onClick={() => { onToggleDarkMode(!darkMode); setOpen(false); }}>
+            {darkMode ? <IconSun /> : <IconMoon />}
+            <span>{darkMode ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}</span>
+          </button>
+          <div className="obs-user-menu-sep" />
+          <button className="obs-user-menu-item obs-user-menu-item--danger" onClick={() => { setOpen(false); logout(); }}>
+            <IconLogout />
+            <span>{t('sidebar.signOut')}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Unified top bar rendered by every page: section title, optional date range
+// filter, language, notifications and account — replaces the old mix of a
+// per-page header plus globally fixed theme toggle / notification bell.
+export default function TopBar({ title, ranges, range, onRangeChange, darkMode, onToggleDarkMode }) {
+  const { t } = useTranslation();
+
+  const toggleLanguage = () => {
+    const next = i18n.language === 'en' ? 'es' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('lang', next);
+  };
+
+  return (
+    <div className="obs-header">
+      <div className="obs-page-title">{title}</div>
+
+      {ranges && (
+        <>
+          <div className="obs-divider-v" />
+          <div className="obs-range-picker">
+            {ranges.map(r => (
+              <button
+                key={r}
+                className={`obs-range-btn${range === r ? ' active' : ''}`}
+                onClick={() => onRangeChange(r)}
+              >{r}</button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="obs-header-right">
+        <button
+          type="button"
+          className="obs-topbar-btn obs-topbar-lang"
+          onClick={toggleLanguage}
+          title={i18n.language === 'en' ? 'Español' : 'English'}
+        >
+          <IconGlobe />
+          <span>{i18n.language.toUpperCase()}</span>
+        </button>
+        <NotificationBell />
+        <AccountMenu darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+      </div>
+    </div>
+  );
+}

@@ -228,9 +228,7 @@
     "showLess": "Show less"
   },
   "dashboard": {
-    "title": "Overview",
-    "live": "Live",
-    "offline": "Offline",
+    "title": "Dashboard",
     "refresh": "Refresh",
     "tokensOverTime": "Tokens over time",
     "requestsOverTime": "Requests over time",
@@ -296,11 +294,7 @@
     "serverError": "Server error",
     "networkError": "Network error",
     "timeout": "Timeout",
-    "unknownError": "Unknown",
-    "models": "Models",
-    "allModels": "All",
-    "noneModels": "None",
-    "modelsSelected": "{{count}} of {{total}}"
+    "unknownError": "Unknown"
   },
   "activity": {
     "requestsTab": "Requests",

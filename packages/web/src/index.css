@@ -104,6 +104,7 @@ body {
 
 /* ── Sidebar ── */
 .obs-sidebar {
+  position: relative;
   width: 220px;
   flex: 0 0 220px;
   border-right: 1px solid var(--border);
@@ -113,10 +114,14 @@ body {
   background: var(--surface);
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
               flex-basis 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
+  overflow: visible;
 }
 
-/* ── Sidebar collapsed ── */
+/* ── Sidebar collapsed ──
+   Nav items keep the exact same padding/alignment as expanded (only
+   obs-brand-text/obs-nav-body shrink to 0 via their own transitions) so
+   icons stay pinned at the same x/y instead of re-centering and looking
+   like they grew. ── */
 .obs-sidebar.collapsed {
   width: 64px;
   flex: 0 0 64px;
@@ -126,27 +131,13 @@ body {
   padding: 0 0 14px;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-}
-.obs-sidebar.collapsed .obs-brand-text { display: none; }
-.obs-sidebar.collapsed .obs-sidebar-toggle { margin-left: 0; }
-
-.obs-sidebar.collapsed .obs-nav { padding: 8px 8px 0; }
-.obs-sidebar.collapsed .obs-nav-item {
-  align-items: center;
   justify-content: center;
-  padding: 8px;
 }
-.obs-sidebar.collapsed .obs-nav-item.active::before { left: -8px; }
-.obs-sidebar.collapsed .obs-nav-label { display: none; }
-.obs-sidebar.collapsed .obs-nav-desc  { display: none; }
+.obs-sidebar.collapsed .obs-brand-text { opacity: 0; max-width: 0; }
 
-.obs-sidebar.collapsed .obs-user-block { padding: 10px 8px 10px; }
-.obs-sidebar.collapsed .obs-user-info--btn { display: none; }
-.obs-sidebar.collapsed .obs-user-icon-collapsed { display: flex; }
-
-/* ── Sidebar toggle button ── */
+/* ── Sidebar toggle button — sits inline inside the brand row when
+   expanded; pops out onto the sidebar's right edge when collapsed so the
+   64px rail doesn't have to make room for it. ── */
 .obs-sidebar-toggle {
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
@@ -160,6 +151,16 @@ body {
   margin-left: auto;
 }
 .obs-sidebar-toggle:hover { background: var(--hover); color: var(--text); }
+
+.obs-sidebar.collapsed .obs-sidebar-toggle {
+  position: absolute;
+  top: 14px;
+  right: -11px;
+  margin-left: 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm, 0 1px 4px rgba(0, 0, 0, 0.18));
+  z-index: 5;
+}
 
 .obs-brand {
   padding: 0 18px 18px;
@@ -182,6 +183,14 @@ body {
   text-decoration: none;
 }
 .obs-brand-link:hover .obs-brand-text { color: var(--accent); }
+
+.obs-brand-text {
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 160px;
+  opacity: 1;
+  transition: opacity 0.16s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
 .obs-brand-mark {
   width: 20px; height: 20px;
@@ -217,7 +226,7 @@ body {
   margin-bottom: 2px;
   display: flex; align-items: flex-start; gap: 10px;
   text-decoration: none;
-  transition: color 0.1s, background 0.1s;
+  transition: color 0.1s, background 0.1s, gap 0.16s ease;
   user-select: none;
 }
 
@@ -235,6 +244,10 @@ body {
 .obs-nav-body {
   display: flex; flex-direction: column; gap: 1px;
   min-width: 0;
+  overflow: hidden;
+  max-width: 160px;
+  opacity: 1;
+  transition: opacity 0.16s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .obs-nav-desc {
@@ -294,22 +307,6 @@ body {
   margin-bottom: 2px;
 }
 
-.obs-theme-toggle {
-  margin: 8px 18px 0;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--muted);
-  display: flex; align-items: center; gap: 7px;
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  transition: background 0.1s, color 0.1s;
-}
-
-.obs-theme-toggle:hover { background: var(--hover); color: var(--text); }
-
 .obs-logout-btn {
   margin: 4px 18px 0;
   padding: 7px 10px;
@@ -326,31 +323,6 @@ body {
 }
 
 .obs-logout-btn:hover { background: color-mix(in oklab, var(--error) 10%, transparent); color: var(--error); }
-
-/* ── Sidebar user block ── */
-.obs-user-block {
-  margin-top: 8px;
-  padding: 10px 12px 10px;
-  border-top: 1px solid var(--border);
-  position: relative;
-}
-
-.obs-user-info--btn {
-  width: 100%;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 7px 8px;
-  text-align: left;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  transition: background 0.1s;
-}
-.obs-user-info--btn:hover { background: var(--hover); }
-
-.obs-user-text-block {
-  min-width: 0; flex: 1;
-}
 
 .obs-user-org {
   font-size: 12px; font-weight: 600;
@@ -382,14 +354,6 @@ body {
 .obs-role-badge.role-admin {
   color: var(--accent);
   border-color: color-mix(in oklab, var(--accent) 35%, transparent);
-}
-
-/* collapsed: show only user icon */
-.obs-user-icon-collapsed {
-  display: none;
-  align-items: center; justify-content: center;
-  width: 100%; padding: 6px 0;
-  color: var(--muted);
 }
 
 /* ── User menu dropdown ── */
@@ -468,7 +432,6 @@ body {
   flex-shrink: 0;
   display: flex; align-items: center;
   padding: 0 24px;
-  padding-right: 68px; /* clears the fixed top-right theme toggle */
   border-bottom: 1px solid var(--border);
   gap: 16px;
   background: var(--page);
@@ -510,11 +473,57 @@ body {
 .obs-range-btn.active { background: var(--accent); color: var(--d-page, #fff); font-weight: 600; }
 .obs-range-btn + .obs-range-btn { border-left: 1px solid var(--border); }
 
-.obs-header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.obs-header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
-.obs-live {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 12px; color: var(--muted);
+/* ── Top bar controls (language / notifications / account) ── */
+.obs-topbar-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.obs-topbar-btn:hover { background: var(--hover); border-color: var(--border-strong, var(--border)); }
+
+.obs-topbar-lang {
+  width: auto;
+  padding: 0 9px;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+
+.obs-account-wrap { position: relative; }
+
+.obs-account-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: var(--shadow-md);
+  z-index: 210;
+  display: flex; flex-direction: column; gap: 1px;
+}
+
+.obs-account-panel-head {
+  padding: 8px 10px 6px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+
+@media (max-width: 767px) {
+  .obs-topbar-lang span { display: none; }
 }
 
 /* ── Buttons ── */
@@ -553,82 +562,6 @@ body {
 .obs-btn-active {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-/* ── Model picker (dashboard) ── */
-.obs-modelpicker { position: relative; }
-
-.obs-modelpicker-count {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--hover);
-  border-radius: 4px;
-  padding: 1px 6px;
-  margin-left: 2px;
-  white-space: nowrap;
-}
-.obs-btn-active .obs-modelpicker-count { color: var(--accent); }
-
-.obs-modelpicker-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 40;
-  width: 300px;
-  max-width: min(300px, 90vw);
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.obs-modelpicker-actions {
-  display: flex;
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.obs-modelpicker-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.obs-modelpicker-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text);
-}
-.obs-modelpicker-item:hover { background: var(--hover); }
-.obs-modelpicker-item input { cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
-
-.obs-modelpicker-name {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.obs-modelpicker-reqs {
-  font-size: 10px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
 }
 
 /* ── Content area ── */
@@ -757,6 +690,23 @@ body {
   gap: 12px;
   padding: 16px 16px 14px 12px;
   border-left: 1px solid var(--border);
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.16s ease, border-color 0.22s ease;
+}
+
+/* Stays mounted (Dashboard.jsx no longer conditionally unmounts it) so this
+   class animates the collapse instead of the old instant swap for the
+   floating expand tab. Compound selector (not just the modifier class alone)
+   so it outranks the same-specificity `.dash-chart-rail { width: … }`
+   overrides in the breakpoints below regardless of source order. */
+.dash-chart-rail.dash-chart-rail--collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
 }
 
 .dash-chart-rail-head {
@@ -834,9 +784,8 @@ body {
 .dash-chart-rail-actions { display: flex; align-items: center; gap: 6px; }
 .dash-chart-rail-refresh { flex: 1; justify-content: center; }
 
-.dash-chart-rail-hint { position: relative; flex-shrink: 0; }
-
 .dash-chart-rail-hint-btn {
+  flex-shrink: 0;
   width: 26px;
   height: 26px;
   display: flex;
@@ -847,37 +796,47 @@ body {
   border-radius: 5px;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 .dash-chart-rail-hint-btn:hover { color: var(--text); background: var(--hover); }
+.dash-chart-rail-hint-btn.is-active { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
-/* Opens upward/leftward — the button sits at the bottom of a rail pinned to
-   the card's right edge, so anchoring from the left would push the panel
-   off the card. */
-.dash-chart-rail-hint-panel {
+/* Usage-hint content itself (rotate/zoom/pan/legend-click) now renders as
+   .dash-chart-hint-banner, overlaid on the chart plot in .dash-chart-body —
+   see ChartHintBanner in ChartToolbar.jsx. Anchoring it to the plot instead
+   of this button reads better since the hints describe interacting with the
+   plot, not the rail, and the rail can be far from the plot's center. */
+.dash-chart-hint-banner {
   position: absolute;
-  bottom: calc(100% + 6px);
+  left: 0;
   right: 0;
-  z-index: 40;
+  bottom: 0;
+  z-index: 5;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
   background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  padding: 10px 12px;
-  white-space: nowrap;
+  border-top: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 0 0 4px 4px;
+  animation: dash-hint-slide-up 0.18s ease;
 }
 
-.dash-chart-rail-hint-row {
+@keyframes dash-hint-slide-up {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.dash-chart-hint-banner-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   font-size: 11px;
   color: var(--muted);
+  white-space: nowrap;
 }
-.dash-chart-rail-hint-row svg { flex-shrink: 0; opacity: 0.85; }
+.dash-chart-hint-banner-row svg { flex-shrink: 0; opacity: 0.85; }
 
 .dash-chart-collapse-btn {
   flex-shrink: 0;
@@ -895,11 +854,43 @@ body {
 }
 .dash-chart-collapse-btn:hover { color: var(--text); background: var(--hover); }
 
-.dash-chart-expand-tab {
+/* Floating controls shown in the rail's place once it's collapsed — a
+   compact 2D/3D toggle plus the expand tab, so switching chart view doesn't
+   require reopening the rail first. Always mounted (like the rail itself)
+   and cross-faded via .is-visible so the swap animates. Flex items with
+   position:absolute drop out of .dash-chart-card's row layout, so this
+   doesn't disturb the rail/chart-body split. */
+.dash-chart-collapsed-controls {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.dash-chart-collapsed-controls.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dash-chart-collapsed-views {
+  height: 26px;
+  background: var(--surface-raised, var(--surface));
+}
+.dash-chart-collapsed-views .obs-range-btn {
+  padding: 0 8px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.dash-chart-expand-tab {
   width: 26px;
   height: 26px;
   display: flex;
@@ -924,6 +915,7 @@ body {
   display: flex;
   align-items: center;
   padding: 14px 18px;
+  position: relative; /* anchors .dash-chart-hint-banner to the plot, not the whole card */
 }
 .dash-chart-body > * { width: 100%; }
 
@@ -1649,37 +1641,10 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ── Global theme toggle — fixed top-right, same spot on every page/tab ── */
-.obs-theme-toggle {
-  position: fixed;
-  top: 12px;
-  right: 20px;
-  z-index: 210;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.obs-theme-toggle:hover { background: var(--hover); border-color: var(--border-strong, var(--border)); }
-
-@media (max-width: 767px) {
-  .obs-theme-toggle { top: 10px; right: 12px; width: 30px; height: 30px; }
-}
-
-/* ── Notification bell — fixed, same pattern as the theme toggle, sits just
-   left of it so both stay in the same spot on every page. ── */
+/* ── Notification bell — laid out inline in the top bar's obs-header-right,
+   same icon-button pattern as .obs-topbar-btn / .obs-account-wrap. ── */
 .obs-notif-bell-wrap {
-  position: fixed;
-  top: 12px;
-  right: 60px;
-  z-index: 210;
+  position: relative;
 }
 
 .obs-notif-bell {
@@ -1812,7 +1777,6 @@ body {
 .obs-notif-panel-foot:hover { background: var(--hover); }
 
 @media (max-width: 767px) {
-  .obs-notif-bell-wrap { top: 10px; right: 50px; }
   .obs-notif-bell { width: 30px; height: 30px; }
 }
 
@@ -1885,15 +1849,14 @@ body {
     width: 220px;
     flex: 0 0 220px;
   }
-  .obs-sidebar.collapsed .obs-brand { padding: 0 18px 18px; justify-content: flex-start; }
-  .obs-sidebar.collapsed .obs-brand-text { display: inline; }
-  .obs-sidebar.collapsed .obs-nav { padding: 8px 10px 0; }
-  .obs-sidebar.collapsed .obs-nav-item { align-items: flex-start; justify-content: flex-start; padding: 8px 10px; }
-  .obs-sidebar.collapsed .obs-nav-label { display: inline; }
-  .obs-sidebar.collapsed .obs-nav-desc  { display: block; }
-  .obs-sidebar.collapsed .obs-user-block { padding: 10px 12px 10px; }
-  .obs-sidebar.collapsed .obs-user-info--btn { display: flex; }
-  .obs-sidebar.collapsed .obs-user-icon-collapsed { display: none; }
+  .obs-sidebar.collapsed .obs-brand { padding: 0 18px 18px; flex-direction: row; justify-content: flex-start; }
+  .obs-sidebar.collapsed .obs-brand-text { opacity: 1; max-width: none; }
+  .obs-sidebar.collapsed .obs-sidebar-toggle {
+    position: static;
+    margin-left: auto;
+    background: transparent;
+    box-shadow: none;
+  }
 
   /* KPI strip: 2 columns on mobile */
   .kpi-strip {
@@ -1942,6 +1905,17 @@ body {
     border-left: none;
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
+    transition: max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.16s ease, border-color 0.22s ease;
+    max-height: 300px;
+  }
+  /* The rail is a horizontal bar here, so the collapse dimension flips from
+     width (desktop) to max-height. */
+  .dash-chart-rail.dash-chart-rail--collapsed {
+    width: auto;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
   }
   .dash-chart-rail-head { flex: 1 0 100%; }
   .dash-chart-rail-legend {
@@ -1959,7 +1933,7 @@ body {
     padding-top: 10px;
     border-top: 1px solid var(--border);
   }
-  .dash-chart-rail-hint-panel { bottom: auto; top: calc(100% + 6px); left: 0; right: auto; }
+  .dash-chart-hint-banner { padding: 8px 12px; gap: 4px 10px; }
   .dash-chart-body {
     height: 340px;
     padding: 12px 14px;
@@ -1971,7 +1945,6 @@ body {
     height: auto;
     min-height: 52px;
     padding: 10px 16px;
-    padding-right: 52px; /* clears the fixed top-right theme toggle */
     gap: 8px;
   }
 
