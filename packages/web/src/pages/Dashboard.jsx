@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import HBar from '../components/HBar';
-import ChartToolbar, { IconExpand } from '../components/ChartToolbar';
+import ChartToolbar, { ChartHintBanner } from '../components/ChartToolbar';
 import InsightsPanel from '../components/InsightsPanel';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
@@ -463,6 +463,9 @@ export default function Dashboard() {
   const [toolbarCollapsed, setToolbarCollapsed] = useState(
     () => localStorage.getItem('obs-chart-toolbar-collapsed') === 'true'
   );
+  // Usage-hint banner shown along the bottom of the chart plot (not a popover
+  // in the rail — see ChartHintBanner). Session-only, no localStorage.
+  const [chartHintOpen, setChartHintOpen] = useState(false);
   // 2D-only, additive metrics only (requests/tokens/cost) — see ChartToolbar's
   // showCompare prop below for where the restriction is enforced.
   const [comparePrev, setComparePrev] = useState(
@@ -576,8 +579,27 @@ export default function Dashboard() {
   const toggleToolbarCollapsed = () => setToolbarCollapsed(prev => {
     const next = !prev;
     localStorage.setItem('obs-chart-toolbar-collapsed', String(next));
+    // Collapsing hides the hint trigger button itself, so leaving the banner
+    // open would strand it with no way to close it short of re-expanding.
+    if (next) setChartHintOpen(false);
     return next;
   });
+
+  const toggleChartHint = () => setChartHintOpen(o => !o);
+
+  // Click-away-to-close: dismiss on any click outside the whole chart card,
+  // not just outside the banner/button — otherwise clicking the rail's own
+  // 2D/3D toggle or legend (reasonable while the hint is open, e.g. to
+  // compare the 3D-only rotate/zoom/pan hints against 2D) would close it too.
+  useEffect(() => {
+    if (!chartHintOpen) return;
+    const onDoc = (e) => {
+      if (e.target.closest('.dash-chart-card')) return;
+      setChartHintOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [chartHintOpen]);
 
   const toggleComparePrev = () => setComparePrev(prev => {
     const next = !prev;
@@ -676,35 +698,30 @@ export default function Dashboard() {
         {/* Chart spans the full content width; the toolbar is a vertical rail on
             its right edge (row-reverse in CSS — this stays the first DOM child
             so mobile, which switches to flex-direction:column, keeps it on top
-            as a horizontal bar) so nothing eats into the plot's height. */}
+            as a horizontal bar) so nothing eats into the plot's height.
+            ChartToolbar always stays mounted now (collapse only toggles a CSS
+            class) so the rail animates open/closed instead of snapping, and
+            renders its own floating 2D/3D toggle + expand tab that stay
+            reachable while the rail is collapsed. */}
         <div className="obs-card dash-chart-card">
-          {toolbarCollapsed ? (
-            <button
-              type="button"
-              className="dash-chart-expand-tab"
-              title={t('dashboard.expandToolbar')}
-              aria-label={t('dashboard.expandToolbar')}
-              onClick={toggleToolbarCollapsed}
-            >
-              <IconExpand />
-            </button>
-          ) : (
-            <ChartToolbar
-              title={t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}
-              models={grid.models}
-              hiddenModels={hiddenModels}
-              onToggleModel={toggleHiddenModel}
-              chartView={chartView}
-              onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
-              onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
-              syncing={syncing}
-              onToggleCollapsed={toggleToolbarCollapsed}
-              showCompare={compareSupported}
-              comparePrev={comparePrev}
-              onToggleCompare={toggleComparePrev}
-              compareDelta={compareDelta}
-            />
-          )}
+          <ChartToolbar
+            title={t(METRIC_HEADER_KEYS[activeMetric] || 'dashboard.tokensOverTime')}
+            models={grid.models}
+            hiddenModels={hiddenModels}
+            onToggleModel={toggleHiddenModel}
+            chartView={chartView}
+            onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
+            onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
+            syncing={syncing}
+            collapsed={toolbarCollapsed}
+            onToggleCollapsed={toggleToolbarCollapsed}
+            hintOpen={chartHintOpen}
+            onToggleHint={toggleChartHint}
+            showCompare={compareSupported}
+            comparePrev={comparePrev}
+            onToggleCompare={toggleComparePrev}
+            compareDelta={compareDelta}
+          />
           <div className="dash-chart-body">
             <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
               {chartView === '3d' ? (
@@ -727,6 +744,7 @@ export default function Dashboard() {
                 />
               )}
             </Suspense>
+            <ChartHintBanner chartView={chartView} open={chartHintOpen} />
           </div>
         </div>
 
