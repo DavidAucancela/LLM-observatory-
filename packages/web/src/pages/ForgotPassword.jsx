@@ -32,7 +32,7 @@ export default function ForgotPassword() {
       <div className="obs-auth-card">
 
         <div className="obs-auth-brand">
-          <img src="/logoMain.png" alt="Observatory" />
+          <img src="/logo-dark.png" alt="Observatory" />
           <span className="obs-auth-brand-name">{t('auth.brand')}</span>
         </div>
 

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import HBar from '../components/HBar';
 import ChartToolbar, { ChartHintBanner } from '../components/ChartToolbar';
 import InsightsPanel from '../components/InsightsPanel';
+import TopBar from '../components/TopBar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 import { formatCost, fmtLatency } from '../utils/fmt';
@@ -377,87 +378,23 @@ function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredPro
   );
 }
 
-// ── Model picker (multi-select popover) ───────────────────────────────────────
-
-function ModelPicker({ allModels, disabledModels, onToggle, onSetAll, onSetNone }) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
-  if (!allModels.length) return null;
-
-  const total    = allModels.length;
-  const selected = allModels.filter(m => !disabledModels.has(m.model)).length;
-  const allOn    = selected === total;
-
-  return (
-    <div className="obs-modelpicker" ref={ref}>
-      <button
-        className={`obs-btn${allOn ? '' : ' obs-btn-active'}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-        </svg>
-        {t('dashboard.models')}
-        <span className="obs-modelpicker-count">
-          {allOn ? t('dashboard.allModels') : t('dashboard.modelsSelected', { count: selected, total })}
-        </span>
-      </button>
-      {open && (
-        <div className="obs-modelpicker-panel">
-          <div className="obs-modelpicker-actions">
-            <button className="obs-btn obs-btn-sm" onClick={onSetAll}>{t('dashboard.allModels')}</button>
-            <button className="obs-btn obs-btn-sm" onClick={onSetNone}>{t('dashboard.noneModels')}</button>
-          </div>
-          <div className="obs-modelpicker-list">
-            {allModels.map(m => {
-              const on = !disabledModels.has(m.model);
-              const color = PROVIDER_COLORS[m.provider] || 'var(--accent)';
-              return (
-                <label key={m.model} className="obs-modelpicker-item">
-                  <input type="checkbox" checked={on} onChange={() => onToggle(m.model)} />
-                  <span className="dot" style={{ background: color, width: 7, height: 7, borderRadius: 2, flexShrink: 0 }} />
-                  <span className="obs-modelpicker-name">{m.model}</span>
-                  <span className="obs-modelpicker-reqs">{parseInt(m.requests || 0).toLocaleString()}</span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const RANGES = ['24h', '7d', '30d', '90d'];
 
-export default function Dashboard() {
+export default function Dashboard({ darkMode, onToggleDarkMode }) {
   const [range, setRange]         = useState(() => localStorage.getItem('obs-range') || '7d');
   const [summary, setSummary]     = useState(null);
   const [loading, setLoading]     = useState(true);
   const [syncing, setSyncing]     = useState(false);
   const [hasCredentials, setHasCredentials] = useState(true);
   const [configuredProviders, setConfiguredProviders] = useState([]);
-  const [disabledModels, setDisabledModels] = useState(() => new Set());
-  const [allModels, setAllModels] = useState([]);
   const [reconciliation, setReconciliation] = useState([]);
   const [insights, setInsights] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
   const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '2d');
   // Client-side-only visual toggle for which models' bars/lines are shown in
-  // the chart — unrelated to `disabledModels` above (that one is a server-side
-  // filter sent as exclude_models, affecting KPIs/breakdowns too). Not
-  // persisted: it's meant to be a lightweight, session-only declutter, same
+  // the chart. Not persisted: it's meant to be a lightweight, session-only declutter, same
   // as the toggle recharts' own <Legend> used to provide for the 2D view only.
   const [hiddenModels, setHiddenModels] = useState(() => new Set());
   const [toolbarCollapsed, setToolbarCollapsed] = useState(
@@ -471,29 +408,21 @@ export default function Dashboard() {
   const [comparePrev, setComparePrev] = useState(
     () => localStorage.getItem('obs-chart-compare-prev') === 'true'
   );
-  const { connected, on, off } = useSocket();
+  const { on, off } = useSocket();
   const { apiFetch }  = useApi();
   const { t, i18n } = useTranslation();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      // Send the models the user has toggled off so the whole dashboard reflects
-      // the selection. Derived only from `disabledModels` (not `allModels`) to
-      // avoid a refetch loop, since the response also refreshes `allModels`.
-      const excluded = [...disabledModels];
-      const excludeParam = excluded.length
-        ? `&exclude_models=${encodeURIComponent(excluded.join(','))}`
-        : '';
       const [sumRes, credRes, reconRes, insightsRes] = await Promise.all([
-        apiFetch(`/api/metrics/summary?range=${range}${excludeParam}`),
+        apiFetch(`/api/metrics/summary?range=${range}`),
         apiFetch(`/api/credentials`),
         apiFetch(`/api/reconciliation/latest`),
         apiFetch(`/api/insights/summary?range=${range}`),
       ]);
       const sum = await sumRes.json();
       setSummary(sum);
-      setAllModels(sum.all_models || []);
       const creds = (await credRes.json());
       const credList = creds.credentials || creds.data || [];
       setHasCredentials(credList.length > 0);
@@ -502,7 +431,7 @@ export default function Dashboard() {
       setInsights((await insightsRes.json()).insights || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [range, disabledModels]);
+  }, [range]);
 
   const handleDismissInsight = async (insightKey) => {
     setInsights(prev => prev.filter(i => i.insight_key !== insightKey));
@@ -564,9 +493,7 @@ export default function Dashboard() {
   const errorBreakdown = summary?.error_breakdown || [];
 
   // Shared model list for the chart toolbar's legend — derived independently
-  // of hiddenModels, so a hidden model still shows up (dimmed) as a toggle
-  // target. modelTimeSeries already reflects disabledModels' server-side
-  // exclude_models filter, so a ModelPicker-disabled model can never appear here.
+  // of hiddenModels, so a hidden model still shows up (dimmed) as a toggle target.
   const modelTimeSeries = summary?.model_time_series || [];
   const grid = useMemo(() => buildGrid(modelTimeSeries, activeMetric), [modelTimeSeries, activeMetric]);
 
@@ -639,9 +566,7 @@ export default function Dashboard() {
   if (!loading && !hasCredentials) {
     return (
       <main className="obs-main">
-        <div className="obs-header">
-          <div className="obs-page-title">{t('dashboard.title')}</div>
-        </div>
+        <TopBar title={t('dashboard.title')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
         <div className="obs-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="obs-empty">
             <div className="obs-empty-icon">
@@ -663,36 +588,14 @@ export default function Dashboard() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('dashboard.title')}</div>
-        <div className="obs-divider-v" />
-        <div className="obs-range-picker">
-          {RANGES.map(r => (
-            <button
-              key={r}
-              className={`obs-range-btn${range === r ? ' active' : ''}`}
-              onClick={() => { setRange(r); localStorage.setItem('obs-range', r); }}
-            >{r}</button>
-          ))}
-        </div>
-        <ModelPicker
-          allModels={allModels}
-          disabledModels={disabledModels}
-          onToggle={(model) => setDisabledModels(prev => {
-            const next = new Set(prev);
-            next.has(model) ? next.delete(model) : next.add(model);
-            return next;
-          })}
-          onSetAll={() => setDisabledModels(new Set())}
-          onSetNone={() => setDisabledModels(new Set(allModels.map(m => m.model)))}
-        />
-        <div className="obs-header-right">
-          <div className="obs-live">
-            <span className="dot dot-pulse" style={{ background: connected ? 'var(--success)' : 'var(--faint)' }} />
-            <span>{connected ? t('dashboard.live') : t('dashboard.offline')}</span>
-          </div>
-        </div>
-      </div>
+      <TopBar
+        title={t('dashboard.title')}
+        ranges={RANGES}
+        range={range}
+        onRangeChange={(r) => { setRange(r); localStorage.setItem('obs-range', r); }}
+        darkMode={darkMode}
+        onToggleDarkMode={onToggleDarkMode}
+      />
 
       <div className="obs-content dash-content">
         {/* Chart spans the full content width; the toolbar is a vertical rail on

@@ -228,9 +228,7 @@
     "showLess": "Mostrar menos"
   },
   "dashboard": {
-    "title": "Resumen",
-    "live": "En vivo",
-    "offline": "Desconectado",
+    "title": "Dashboard",
     "refresh": "Actualizar",
     "tokensOverTime": "Tokens en el tiempo",
     "requestsOverTime": "Solicitudes en el tiempo",
@@ -296,11 +294,7 @@
     "serverError": "Error del servidor",
     "networkError": "Error de red",
     "timeout": "Tiempo de espera agotado",
-    "unknownError": "Desconocido",
-    "models": "Modelos",
-    "allModels": "Todos",
-    "noneModels": "Ninguno",
-    "modelsSelected": "{{count}} de {{total}}"
+    "unknownError": "Desconocido"
   },
   "activity": {
     "requestsTab": "Solicitudes",

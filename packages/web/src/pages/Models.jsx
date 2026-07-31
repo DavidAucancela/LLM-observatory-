@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import HBar from '../components/HBar';
+import TopBar from '../components/TopBar';
 import { formatCost, fmtLatency } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
@@ -120,7 +121,7 @@ function EfficiencyScatter({ models }) {
   );
 }
 
-export default function Models() {
+export default function Models({ darkMode, onToggleDarkMode }) {
   const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -146,9 +147,7 @@ export default function Models() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('activity.modelsTab')}</div>
-      </div>
+      <TopBar title={t('activity.modelsTab')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
+import TopBar from '../components/TopBar';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../auth/AuthProvider';
 import { fmtDateTime } from '../utils/fmt';
 
-export default function Sync() {
+export default function Sync({ darkMode, onToggleDarkMode }) {
   const { apiFetch } = useApi();
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -45,9 +46,7 @@ export default function Sync() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('settings.syncTab')}</div>
-      </div>
+      <TopBar title={t('settings.syncTab')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         {['anthropic', 'openai'].map(p => (

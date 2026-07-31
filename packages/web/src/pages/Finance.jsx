@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
+import TopBar from '../components/TopBar';
 import { useApi } from '../hooks/useApi';
 import { fmtDateTime, formatCost } from '../utils/fmt';
 
@@ -408,7 +409,7 @@ function BudgetsTab({ onChanged }) {
 const RANGES = ['24h', '7d', '30d', '90d'];
 
 // ── Page ──────────────────────────────────────────────────────
-export default function Finance() {
+export default function Finance({ darkMode, onToggleDarkMode }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'budgets' ? 'budgets' : 'balances');
   const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
@@ -435,19 +436,14 @@ export default function Finance() {
 
   return (
     <main className="obs-main obs-fade-in">
-      <div className="obs-header">
-        <div className="obs-page-title">{t('finance.title')}</div>
-        <div className="obs-divider-v" />
-        <div className="obs-range-picker">
-          {RANGES.map(r => (
-            <button
-              key={r}
-              className={`obs-range-btn${range === r ? ' active' : ''}`}
-              onClick={() => { setRange(r); localStorage.setItem('obs-range', r); }}
-            >{r}</button>
-          ))}
-        </div>
-      </div>
+      <TopBar
+        title={t('finance.title')}
+        ranges={RANGES}
+        range={range}
+        onRangeChange={(r) => { setRange(r); localStorage.setItem('obs-range', r); }}
+        darkMode={darkMode}
+        onToggleDarkMode={onToggleDarkMode}
+      />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         <FinanceOverview
