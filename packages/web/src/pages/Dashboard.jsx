@@ -453,7 +453,7 @@ export default function Dashboard() {
   const [reconciliation, setReconciliation] = useState([]);
   const [insights, setInsights] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
-  const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '3d');
+  const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '2d');
   // Client-side-only visual toggle for which models' bars/lines are shown in
   // the chart — unrelated to `disabledModels` above (that one is a server-side
   // filter sent as exclude_models, affecting KPIs/breakdowns too). Not
@@ -673,59 +673,6 @@ export default function Dashboard() {
       </div>
 
       <div className="obs-content dash-content">
-        <InsightsPanel insights={insights} loading={loading} range={range} onDismiss={handleDismissInsight} />
-
-        {/* KPI Cards */}
-        <div className="kpi-strip dash-kpi">
-          <KpiCard
-            label={t('activity.requestsCol')}
-            value={loading ? '—' : fmt(s?.total_requests ?? 0)}
-            delta={calcDelta(s?.total_requests, prev?.total_requests)}
-            sparkData={reqSpark}
-            accentColor="var(--text)"
-            active={activeMetric === 'requests'}
-            onClick={() => setActiveMetric('requests')}
-          />
-          <KpiCard
-            label={t('activity.tokensCol')}
-            value={loading ? '—' : fmt(s?.total_tokens ?? 0)}
-            delta={calcDelta(s?.total_tokens, prev?.total_tokens)}
-            sparkData={tokenSpark}
-            accentColor="var(--tokens-color)"
-            active={activeMetric === 'tokens'}
-            onClick={() => setActiveMetric('tokens')}
-          />
-          <KpiCard
-            label={t('dashboard.cost')}
-            value={loading ? '—' : formatCost(s?.total_cost_usd)}
-            delta={calcDelta(s?.total_cost_usd, prev?.total_cost_usd)}
-            inverse
-            sparkData={costSpark}
-            accentColor="var(--cost-color)"
-            active={activeMetric === 'cost'}
-            onClick={() => setActiveMetric('cost')}
-          />
-          <KpiCard
-            label={t('activity.avgLatencyCol')}
-            value={loading ? '—' : fmtLatency(s?.avg_latency_ms)}
-            delta={calcDelta(s?.avg_latency_ms, prev?.avg_latency_ms)}
-            inverse
-            accentColor="var(--latency-color)"
-            active={activeMetric === 'latency'}
-            onClick={() => setActiveMetric('latency')}
-          />
-          <KpiCard
-            label={t('dashboard.errorRate')}
-            value={loading ? '—' : errorRate}
-            delta={errorDelta}
-            inverse
-            accentColor="var(--error)"
-            highlight={!loading && errorCount > 0}
-            active={activeMetric === 'errorRate'}
-            onClick={() => setActiveMetric('errorRate')}
-          />
-        </div>
-
         {/* Chart spans the full content width; the toolbar is a vertical rail on
             its right edge (row-reverse in CSS — this stays the first DOM child
             so mobile, which switches to flex-direction:column, keeps it on top
@@ -783,6 +730,57 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* KPI Cards */}
+        <div className="kpi-strip dash-kpi">
+          <KpiCard
+            label={t('activity.requestsCol')}
+            value={loading ? '—' : fmt(s?.total_requests ?? 0)}
+            delta={calcDelta(s?.total_requests, prev?.total_requests)}
+            sparkData={reqSpark}
+            accentColor="var(--text)"
+            active={activeMetric === 'requests'}
+            onClick={() => setActiveMetric('requests')}
+          />
+          <KpiCard
+            label={t('activity.tokensCol')}
+            value={loading ? '—' : fmt(s?.total_tokens ?? 0)}
+            delta={calcDelta(s?.total_tokens, prev?.total_tokens)}
+            sparkData={tokenSpark}
+            accentColor="var(--tokens-color)"
+            active={activeMetric === 'tokens'}
+            onClick={() => setActiveMetric('tokens')}
+          />
+          <KpiCard
+            label={t('dashboard.cost')}
+            value={loading ? '—' : formatCost(s?.total_cost_usd)}
+            delta={calcDelta(s?.total_cost_usd, prev?.total_cost_usd)}
+            inverse
+            sparkData={costSpark}
+            accentColor="var(--cost-color)"
+            active={activeMetric === 'cost'}
+            onClick={() => setActiveMetric('cost')}
+          />
+          <KpiCard
+            label={t('activity.avgLatencyCol')}
+            value={loading ? '—' : fmtLatency(s?.avg_latency_ms)}
+            delta={calcDelta(s?.avg_latency_ms, prev?.avg_latency_ms)}
+            inverse
+            accentColor="var(--latency-color)"
+            active={activeMetric === 'latency'}
+            onClick={() => setActiveMetric('latency')}
+          />
+          <KpiCard
+            label={t('dashboard.errorRate')}
+            value={loading ? '—' : errorRate}
+            delta={errorDelta}
+            inverse
+            accentColor="var(--error)"
+            highlight={!loading && errorCount > 0}
+            active={activeMetric === 'errorRate'}
+            onClick={() => setActiveMetric('errorRate')}
+          />
+        </div>
+
         {/* Full-width band: the providers render side by side with dividers, so
             this one card reads better spanning the row than boxed in a column. */}
         <RangeSpend
@@ -830,6 +828,8 @@ export default function Dashboard() {
 
           <TagBreakdown range={range} />
         </div>
+
+        <InsightsPanel insights={insights} loading={loading} range={range} onDismiss={handleDismissInsight} />
       </div>
     </main>
   );
