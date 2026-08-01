@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, Grid, ContactShadows, Text, Billboard } from '@react-three/drei';
 import { useTranslation } from 'react-i18next';
 import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
@@ -52,6 +52,18 @@ const ZOOM_FACTOR_BY_RANGE = { '24h': 1, '7d': 1, '30d': 0.6, '90d': 0.36 };
 // closer, since their bars are thinner (isDense) and closer inspection is
 // what makes them individually readable/clickable.
 const MIN_CAMERA_DISTANCE_BY_RANGE = { '24h': MIN_CAMERA_DISTANCE, '7d': MIN_CAMERA_DISTANCE, '30d': 5.5, '90d': 3.5 };
+// cameraDistance/cameraYRatio are tuned against the desktop chart box, which
+// is wide and short (rail beside the plot). On mobile the box goes nearly
+// square (rail moves above the plot, height fixed at 340px) — with a fixed
+// vertical FOV, a narrower aspect ratio means a narrower horizontal FOV too,
+// so the same distance shows visibly less width and the scene reads as a
+// different size/zoom level between breakpoints. REFERENCE_ASPECT approximates
+// the desktop box's width/height ratio the constants above were tuned for;
+// below it we pull the camera back proportionally so the visible width stays
+// roughly consistent. Capped so extremely narrow phones don't zoom out so far
+// the bars become illegibly small.
+const REFERENCE_ASPECT = 2.2;
+const MAX_ASPECT_COMPENSATION = 1.6;
 // Idle time before the camera resumes auto-rotating after a drag/zoom/pan,
 // a bar hover, or a pinned tooltip — long enough to read a tooltip without
 // the scene drifting under it.
@@ -157,10 +169,27 @@ function pickLabelIndices(count) {
 // buildGrid trims leading/trailing empty buckets, every grid.hours index hi
 // must be offset by grid.labelOffset to land back on the right xLabels entry.
 // `?? ''` below is just a guard, not the real defense.
-function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCameraDistance, barSize, labelFontSize, controlsRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels }) {
+function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels }) {
   const { hours, models, values, max, labelOffset } = grid;
   const [autoRotate, setAutoRotate] = useState(true);
   const idleTimerRef = useRef(null);
+  const { size, camera } = useThree();
+  const aspect = size.width / Math.max(size.height, 1);
+  const aspectScale = aspect > 0 && aspect < REFERENCE_ASPECT
+    ? Math.min(REFERENCE_ASPECT / aspect, MAX_ASPECT_COMPENSATION)
+    : 1;
+  const effectiveCameraDistance = cameraDistance * aspectScale;
+
+  // Reframe whenever the aspect-compensated distance changes — container
+  // resize (breakpoint switch, sidebar collapse) or a range/zoom change.
+  // Doesn't fire on the user's own drag/zoom since those don't touch these
+  // deps, so it won't fight manual navigation.
+  useEffect(() => {
+    camera.position.set(effectiveCameraDistance * 0.7, effectiveCameraDistance * cameraYRatio, effectiveCameraDistance * 0.7);
+    camera.updateProjectionMatrix();
+    if (frameRef) frameRef.current = { distance: effectiveCameraDistance, yRatio: cameraYRatio };
+    controlsRef.current?.update();
+  }, [effectiveCameraDistance, cameraYRatio, camera, controlsRef, frameRef]);
 
   const pauseAutoRotate = () => {
     clearTimeout(idleTimerRef.current);
@@ -213,7 +242,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCa
           of a plain fill. Fog fades the grid/bars toward that same surface
           tone at distance, blending the geometry into the gradient instead
           of cutting off at a hard edge. */}
-      <fog attach="fog" args={[palette.surface, cameraDistance * 0.9, cameraDistance * 2.3]} />
+      <fog attach="fog" args={[palette.surface, effectiveCameraDistance * 0.9, effectiveCameraDistance * 2.3]} />
       <hemisphereLight args={[palette.text, palette.surface, 0.3]} />
       <ambientLight intensity={0.4} />
       <directionalLight position={[6, 10, 6]} intensity={0.75} />
@@ -223,7 +252,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCa
         position={[0, 0, 0]}
         cellColor={palette.gridLine}
         sectionColor={palette.gridLine}
-        fadeDistance={cameraDistance * 2}
+        fadeDistance={effectiveCameraDistance * 2}
         infiniteGrid={false}
       />
       <ContactShadows
@@ -297,8 +326,8 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, minCa
         autoRotateSpeed={AUTO_ROTATE_SPEED}
         onStart={pauseAutoRotate}
         onEnd={scheduleAutoRotate}
-        minDistance={Math.min(cameraDistance * 0.4, minCameraDistance)}
-        maxDistance={cameraDistance * 1.8}
+        minDistance={Math.min(effectiveCameraDistance * 0.4, minCameraDistance)}
+        maxDistance={effectiveCameraDistance * 1.8}
         maxPolarAngle={Math.PI / 2.1}
         target={[0, MAX_HEIGHT / 3, 0]}
         makeDefault
@@ -328,6 +357,11 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   const { t } = useTranslation();
   const palette = useThemePalette();
   const controlsRef = useRef();
+  // Populated by Scene with the live aspect-compensated framing (see
+  // REFERENCE_ASPECT above) — resetView reads it instead of the raw
+  // pre-aspect cameraDistance so the reset button reframes to what's actually
+  // on screen, not the desktop-tuned default.
+  const frameRef = useRef({ distance: 0, yRatio: 0.55 });
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
   const [hovered, setHovered] = useState(null);
   const [pinned, setPinned] = useState(null);
@@ -382,11 +416,14 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   // since mount (the Canvas persists across range switches, it doesn't
   // remount). Recomputing the intended position/target from the current
   // gridSpan/cameraDistance instead always reframes correctly for whatever
-  // range is showing right now.
+  // range is showing right now. Read from frameRef (Scene's aspect-compensated
+  // values) rather than the raw cameraDistance/cameraYRatio computed below —
+  // those are tuned for the desktop box and would under-frame a narrower one.
   const resetView = () => {
     const controls = controlsRef.current;
     if (!controls) return;
-    controls.object.position.set(cameraDistance * 0.7, cameraDistance * cameraYRatio, cameraDistance * 0.7);
+    const { distance, yRatio } = frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio };
+    controls.object.position.set(distance * 0.7, distance * yRatio, distance * 0.7);
     controls.target.set(0, MAX_HEIGHT / 3, 0);
     controls.update();
   };
@@ -408,9 +445,11 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
           gridSpan={gridSpan}
           labelFontSize={labelFontSize}
           cameraDistance={cameraDistance}
+          cameraYRatio={cameraYRatio}
           minCameraDistance={minCameraDistance}
           barSize={barSize}
           controlsRef={controlsRef}
+          frameRef={frameRef}
           hovered={hovered}
           pinned={pinned}
           onHoverChange={setHovered}
