@@ -98,6 +98,7 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
             dot={false}
             hide={hiddenModels.has(model)}
             activeDot={{ r: 4 }}
+            isAnimationActive={false}
           />
         ))}
         {prevSeries && (
@@ -110,6 +111,7 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
             strokeDasharray="5 4"
             dot={false}
             activeDot={{ r: 3 }}
+            isAnimationActive={false}
           />
         )}
       </LineChart>
