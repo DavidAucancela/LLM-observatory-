@@ -27,10 +27,10 @@ const MetricSchema = z.object({
   response_full:      z.string().max(20000).optional(),
   system_prompt:      z.string().max(4000).optional(),
   request_params:     z.object({
-    temperature: z.number().optional(),
-    max_tokens:  z.number().int().optional(),
-    top_p:       z.number().optional(),
-    stream:      z.boolean().optional(),
+    temperature: z.number().nullable().optional(),
+    max_tokens:  z.number().int().nullable().optional(),
+    top_p:       z.number().nullable().optional(),
+    stream:      z.boolean().nullable().optional(),
   }).optional().default({}),
   tool_calls:         z.array(z.object({
     name:      z.string(),
