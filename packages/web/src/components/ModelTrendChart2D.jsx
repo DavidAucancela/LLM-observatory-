@@ -22,19 +22,38 @@ function useThemePalette() {
   return palette;
 }
 
+// Custom dot: only draws a marker where the bucket has real requests, not on
+// every zero-filled bucket the line passes through — otherwise a sparse,
+// bursty series (a couple of real hours in a mostly-empty 24h window) reads
+// as a smooth "spike then decay" curve with no way to tell which points are
+// actual data vs. interpolated zero.
+function RealDataDot({ cx, cy, payload, dataKey, color }) {
+  const requests = payload?.[`${dataKey}__reqs`] || 0;
+  if (!requests || cx == null || cy == null) return null;
+  return <circle cx={cx} cy={cy} r={3} fill="var(--surface, #fff)" stroke={color} strokeWidth={2} />;
+}
+
 function CustomTooltip({ active, payload, label, metric }) {
   if (!active || !payload?.length) return null;
   const sorted = [...payload].sort((a, b) => b.value - a.value);
   return (
     <div className="chart2d-tooltip">
       <div className="chart2d-tooltip-label">{label}</div>
-      {sorted.map(entry => (
-        <div key={entry.dataKey} className="chart2d-tooltip-row">
-          <span className="chart2d-tooltip-dot" style={{ background: entry.color }} />
-          <span className="chart2d-tooltip-name">{entry.name || entry.dataKey}</span>
-          <span className="chart2d-tooltip-value">{formatMetricValue(entry.value, metric)}</span>
-        </div>
-      ))}
+      {sorted.map(entry => {
+        const requests = entry.payload?.[`${entry.dataKey}__reqs`] || 0;
+        return (
+          <div key={entry.dataKey} className="chart2d-tooltip-row">
+            <span className="chart2d-tooltip-dot" style={{ background: entry.color }} />
+            <span className="chart2d-tooltip-name">{entry.name || entry.dataKey}</span>
+            <span className="chart2d-tooltip-value">{formatMetricValue(entry.value, metric)}</span>
+            {entry.dataKey !== '__prev' && (
+              <span className="chart2d-tooltip-reqs">
+                {requests > 0 ? `${requests}×` : '—'}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -47,6 +66,16 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
   const palette = useThemePalette();
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
 
+  // Real request counts per (hour, model), independent of the selected
+  // metric — a metric value can legitimately be 0 on a real datapoint (e.g.
+  // errorRate), so "was this bucket real" has to come from requests, not
+  // from grid.values. Keyed the same way buildGrid's own cellMap is.
+  const requestsByCell = useMemo(() => {
+    const map = new Map();
+    for (const row of modelTimeSeries || []) map.set(`${row.hour}|${row.model}`, parseInt(row.requests || 0, 10));
+    return map;
+  }, [modelTimeSeries]);
+
   const totalActivity = grid.values.reduce((sum, row) => sum + row.reduce((a, b) => a + b, 0), 0);
   // >= 1, not > 1: buildGrid trims leading/trailing empty buckets, so a range
   // with a single real day of activity legitimately collapses to one column.
@@ -57,7 +86,10 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
   // grid.labelOffset must be added back to hi after trimming.
   const data = grid.hours.map((hour, hi) => {
     const row = { name: xLabels[grid.labelOffset + hi] ?? '' };
-    grid.models.forEach((model, mi) => { row[model] = grid.values[mi][hi]; });
+    grid.models.forEach((model, mi) => {
+      row[model] = grid.values[mi][hi];
+      row[`${model}__reqs`] = requestsByCell.get(`${hour}|${model}`) || 0;
+    });
     if (prevSeries) row.__prev = prevSeries[hi] ?? null;
     return row;
   });
@@ -88,19 +120,27 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
           tickFormatter={(v) => formatMetricValue(v, metric)}
         />
         <Tooltip content={<CustomTooltip metric={metric} />} cursor={{ stroke: palette.border }} />
-        {grid.models.map((model, mi) => (
-          <Line
-            key={model}
-            dataKey={model}
-            type="monotone"
-            stroke={colorForModelIndex(model === 'Other' ? -1 : mi)}
-            strokeWidth={2}
-            dot={false}
-            hide={hiddenModels.has(model)}
-            activeDot={{ r: 4 }}
-            isAnimationActive={false}
-          />
-        ))}
+        {grid.models.map((model, mi) => {
+          const color = colorForModelIndex(model === 'Other' ? -1 : mi);
+          return (
+            <Line
+              key={model}
+              dataKey={model}
+              // linear, not monotone: monotone smoothing can overshoot between
+              // two very different consecutive bucket values (e.g. a burst hour
+              // next to an empty one), exaggerating the shape of what's really
+              // just a couple of isolated datapoints — linear draws exactly
+              // what the buckets say, no more.
+              type="linear"
+              stroke={color}
+              strokeWidth={2}
+              dot={(props) => <RealDataDot key={`${model}-${props.payload?.name}`} {...props} color={color} />}
+              hide={hiddenModels.has(model)}
+              activeDot={{ r: 4 }}
+              isAnimationActive={false}
+            />
+          );
+        })}
         {prevSeries && (
           <Line
             dataKey="__prev"

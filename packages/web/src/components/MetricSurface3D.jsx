@@ -80,6 +80,62 @@ const DIMMED_OPACITY = 0.32;
 // mistaking them for a real (if small) value.
 const EMPTY_OPACITY = 0.22;
 
+// drei's <Text>/<Billboard> (axis labels) render glyphs via troika-three-text,
+// which needs ANGLE_instanced_arrays to generate its SDF font atlas. Some
+// browsers/GPUs (software rendering, hardware acceleration disabled, certain
+// driver combos) don't expose it — troika then throws an unhandled promise
+// rejection mid-render that leaves the WebGL context broken and the canvas
+// blank, with no visible error for the user. Probe for the same extension
+// troika checks *before* mounting the Canvas so we can show a real fallback
+// instead. Cached at module scope — the probe is cheap but there's no reason
+// to repeat it on every chart mount within the same page load.
+let webglTextSupport = null;
+function checkWebGLTextSupport() {
+  if (webglTextSupport !== null) return webglTextSupport;
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    webglTextSupport = !!(gl && gl.getExtension('ANGLE_instanced_arrays'));
+  } catch {
+    webglTextSupport = false;
+  }
+  return webglTextSupport;
+}
+
+// Defense in depth for the same failure mode: if the capability probe passes
+// but the Canvas subtree still throws for some other reason, degrade to the
+// fallback UI instead of leaving a half-crashed blank canvas on screen.
+class Canvas3DErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children;
+  }
+}
+
+function Unsupported3DFallback({ onSwitchTo2D, t }) {
+  return (
+    <div className="ms3d-fallback">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+      <p>{t('dashboard.chart3dUnsupported')}</p>
+      {onSwitchTo2D && (
+        <button type="button" className="obs-btn obs-btn-primary" onClick={onSwitchTo2D}>
+          {t('dashboard.chart3dSwitchTo2D')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Bar({ targetHeight, size, color, position, isActiveCell, dimmed, hasValue, revealDelay, revealStart, onHover, onUnhover, onClick }) {
   const meshRef = useRef();
   const materialRef = useRef();
@@ -353,9 +409,10 @@ function useThemePalette() {
   return palette;
 }
 
-export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set() }) {
+export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
+  const webglSupported = useMemo(() => checkWebGLTextSupport(), []);
   const controlsRef = useRef();
   // Populated by Scene with the live aspect-compensated framing (see
   // REFERENCE_ASPECT above) — resetView reads it instead of the raw
@@ -378,6 +435,10 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
 
   if (loading) {
     return <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />;
+  }
+
+  if (!webglSupported) {
+    return <Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />;
   }
 
   if (!hasEnoughData) {
@@ -430,34 +491,36 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
 
   return (
     <div className="ms3d-wrap">
-      <Canvas
-        resize={{ scroll: false, debounce: 0 }}
-        dpr={[1, 2]}
-        gl={{ alpha: true }}
-        camera={{ position: [cameraDistance * 0.7, cameraDistance * cameraYRatio, cameraDistance * 0.7], fov: 45 }}
-        onPointerMissed={() => setPinned(null)}
-      >
-        <Scene
-          grid={grid}
-          metric={metric}
-          xLabels={xLabels}
-          palette={palette}
-          gridSpan={gridSpan}
-          labelFontSize={labelFontSize}
-          cameraDistance={cameraDistance}
-          cameraYRatio={cameraYRatio}
-          minCameraDistance={minCameraDistance}
-          barSize={barSize}
-          controlsRef={controlsRef}
-          frameRef={frameRef}
-          hovered={hovered}
-          pinned={pinned}
-          onHoverChange={setHovered}
-          onUnhoverChange={(key) => setHovered(prev => (prev && prev.key === key ? null : prev))}
-          onPinToggle={handlePinToggle}
-          hiddenModels={hiddenModels}
-        />
-      </Canvas>
+      <Canvas3DErrorBoundary fallback={<Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />}>
+        <Canvas
+          resize={{ scroll: false, debounce: 0 }}
+          dpr={[1, 2]}
+          gl={{ alpha: true }}
+          camera={{ position: [cameraDistance * 0.7, cameraDistance * cameraYRatio, cameraDistance * 0.7], fov: 45 }}
+          onPointerMissed={() => setPinned(null)}
+        >
+          <Scene
+            grid={grid}
+            metric={metric}
+            xLabels={xLabels}
+            palette={palette}
+            gridSpan={gridSpan}
+            labelFontSize={labelFontSize}
+            cameraDistance={cameraDistance}
+            cameraYRatio={cameraYRatio}
+            minCameraDistance={minCameraDistance}
+            barSize={barSize}
+            controlsRef={controlsRef}
+            frameRef={frameRef}
+            hovered={hovered}
+            pinned={pinned}
+            onHoverChange={setHovered}
+            onUnhoverChange={(key) => setHovered(prev => (prev && prev.key === key ? null : prev))}
+            onPinToggle={handlePinToggle}
+            hiddenModels={hiddenModels}
+          />
+        </Canvas>
+      </Canvas3DErrorBoundary>
 
       <button
         type="button"

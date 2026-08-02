@@ -936,6 +936,21 @@ body {
 .ms3d-wrap canvas { cursor: grab; }
 .ms3d-wrap canvas:active { cursor: grabbing; }
 
+.ms3d-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.ms3d-fallback svg { color: var(--muted); opacity: 0.6; }
+.ms3d-fallback p { font-size: 12px; max-width: 320px; line-height: 1.5; margin: 0; }
+
 .ms3d-reset-btn {
   position: absolute;
   bottom: 8px;
@@ -1012,6 +1027,12 @@ body {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   margin-left: 10px;
+}
+.chart2d-tooltip-reqs {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
 }
 
 .kpi-card-clickable {
