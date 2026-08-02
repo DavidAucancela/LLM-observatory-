@@ -288,6 +288,8 @@
     "noKeysSub": "Go to Settings → Keys to get started",
     "addKeyButton": "Add API key",
     "notEnoughData": "Not enough data for this range",
+    "chart3dUnsupported": "3D view isn't supported on this browser/device (missing WebGL capability). Switch to the 2D chart instead.",
+    "chart3dSwitchTo2D": "Switch to 2D",
     "authError": "Auth error",
     "rateLimit": "Rate limit",
     "invalidRequest": "Invalid request",

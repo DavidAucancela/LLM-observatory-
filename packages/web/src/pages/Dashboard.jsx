@@ -635,6 +635,7 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
                   loading={loading}
                   range={range}
                   hiddenModels={hiddenModels}
+                  onSwitchTo2D={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
                 />
               ) : (
                 <ModelTrendChart2D
