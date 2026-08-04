@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Html, Grid, ContactShadows, Text, Billboard } from '@react-three/drei';
+import { OrbitControls, Html, Grid, ContactShadows } from '@react-three/drei';
 import { useTranslation } from 'react-i18next';
 import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
 import { buildGrid, formatMetricValue } from '../utils/metricGrid';
@@ -80,26 +80,27 @@ const DIMMED_OPACITY = 0.32;
 // mistaking them for a real (if small) value.
 const EMPTY_OPACITY = 0.22;
 
-// drei's <Text>/<Billboard> (axis labels) render glyphs via troika-three-text,
-// which needs ANGLE_instanced_arrays to generate its SDF font atlas. Some
-// browsers/GPUs (software rendering, hardware acceleration disabled, certain
-// driver combos) don't expose it — troika then throws an unhandled promise
-// rejection mid-render that leaves the WebGL context broken and the canvas
-// blank, with no visible error for the user. Probe for the same extension
-// troika checks *before* mounting the Canvas so we can show a real fallback
-// instead. Cached at module scope — the probe is cheap but there's no reason
-// to repeat it on every chart mount within the same page load.
-let webglTextSupport = null;
-function checkWebGLTextSupport() {
-  if (webglTextSupport !== null) return webglTextSupport;
+// Axis labels used to be drei's <Text>/<Billboard>, which render glyphs via
+// troika-three-text — that needs the ANGLE_instanced_arrays extension to
+// generate its SDF font atlas, and on browsers/GPUs without it (software
+// rendering, hardware acceleration disabled, some driver combos) troika threw
+// an unhandled promise rejection that broke the WebGL context and left the
+// canvas blank with no visible error. Labels are now plain canvas-texture
+// sprites (see CanvasTextSprite below) instead, which only need a working
+// WebGL context — no special extension — so this probe just checks that
+// *any* WebGL context can be created at all, the genuine floor below which
+// nothing in the scene (not just labels) can render. Cached at module scope
+// since the probe is cheap but there's no reason to repeat it on every mount.
+let webglSupported = null;
+function checkWebGLSupport() {
+  if (webglSupported !== null) return webglSupported;
   try {
     const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    webglTextSupport = !!(gl && gl.getExtension('ANGLE_instanced_arrays'));
+    webglSupported = !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
   } catch {
-    webglTextSupport = false;
+    webglSupported = false;
   }
-  return webglTextSupport;
+  return webglSupported;
 }
 
 // Defense in depth for the same failure mode: if the capability probe passes
@@ -203,6 +204,49 @@ function FocusRing({ x, z, color }) {
       <ringGeometry args={[0.4, 0.5, 32]} />
       <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} />
     </mesh>
+  );
+}
+
+// Renders text as a camera-facing sprite backed by a plain 2D canvas texture,
+// replacing drei's <Text>/<Billboard> (troika-three-text) — see
+// checkWebGLSupport above for why: troika's SDF glyph generation needs
+// ANGLE_instanced_arrays, which isn't universally available, while a canvas
+// texture only needs a working WebGL context to display, same as everything
+// else in this scene. THREE.Sprite is camera-facing by default, so this also
+// replaces <Billboard> — no separate wrapper needed. Canvas is rebuilt only
+// when text/color/fontSize actually change (useMemo), not every frame.
+const LABEL_CANVAS_SCALE = 72; // px per world unit of fontSize — tuned for crisp text at typical camera distances
+function CanvasTextSprite({ text, color, fontSize, position }) {
+  const { texture, aspect } = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const pxSize = fontSize * LABEL_CANVAS_SCALE;
+    const padding = pxSize * 0.25;
+    ctx.font = `600 ${pxSize}px Inter, sans-serif`;
+    const textWidth = ctx.measureText(text).width;
+    canvas.width = Math.max(1, Math.ceil(textWidth + padding * 2));
+    canvas.height = Math.ceil(pxSize + padding * 2);
+    // Resizing the canvas resets its 2D context state, so font/fill have to
+    // be re-applied after setting width/height above.
+    ctx.font = `600 ${pxSize}px Inter, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return { texture: tex, aspect: canvas.width / canvas.height };
+  }, [text, color, fontSize]);
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  const height = fontSize * 1.3;
+  const width = height * aspect;
+
+  return (
+    <sprite position={position} scale={[width, height, 1]}>
+      <spriteMaterial map={texture} transparent depthWrite={false} />
+    </sprite>
   );
 }
 
@@ -356,11 +400,13 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
         })
       ))}
       {labelIndices.map(hi => (
-        <Billboard key={hi} position={[offsetX + hi * SPACING, 0.05, labelZ]}>
-          <Text fontSize={labelFontSize} color={palette.text} anchorX="center" anchorY="middle">
-            {xLabels[labelOffset + hi] ?? ''}
-          </Text>
-        </Billboard>
+        <CanvasTextSprite
+          key={hi}
+          text={xLabels[labelOffset + hi] ?? ''}
+          color={palette.text}
+          fontSize={labelFontSize}
+          position={[offsetX + hi * SPACING, 0.05, labelZ]}
+        />
       ))}
       {active && <FocusRing x={active.x} z={active.z} color={active.color} />}
       {active && (
@@ -412,7 +458,7 @@ function useThemePalette() {
 export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
-  const webglSupported = useMemo(() => checkWebGLTextSupport(), []);
+  const webglOk = useMemo(() => checkWebGLSupport(), []);
   const controlsRef = useRef();
   // Populated by Scene with the live aspect-compensated framing (see
   // REFERENCE_ASPECT above) — resetView reads it instead of the raw
@@ -437,7 +483,7 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
     return <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />;
   }
 
-  if (!webglSupported) {
+  if (!webglOk) {
     return <Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />;
   }
 
