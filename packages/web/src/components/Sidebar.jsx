@@ -1,8 +1,19 @@
 import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 /* ── Nav icons ── */
+function IconDashboard() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+
 function IconActivity() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -74,13 +85,12 @@ function IconChevronRight() {
   );
 }
 
-// "Resumen" (Dashboard) isn't a list item anymore — it's reached via the
-// brand logo/link at the top of the sidebar instead, see the `obs-brand`
-// block below. Requests/Models/Keys/Sync used to be tabs inside single pages
-// (Activity, Settings); they're now their own top-level items with their own
-// routes. Account/language/logout live in the top bar's account menu now
-// (see TopBar.jsx), not in the sidebar.
+// Requests/Models/Keys/Sync used to be tabs inside single pages (Activity,
+// Settings); they're now their own top-level items with their own routes.
+// Account/language/logout live in the top bar's account menu now (see
+// TopBar.jsx), not in the sidebar.
 const navDefs = [
+  { to: '/dashboard', labelKey: 'nav.dashboard', descKey: 'nav.dashboard_desc', Icon: IconDashboard },
   { to: '/activity',  labelKey: 'nav.requests', descKey: 'nav.requests_desc', Icon: IconActivity },
   { to: '/models',    labelKey: 'nav.models',   descKey: 'nav.models_desc',   Icon: IconModels   },
   { to: '/finance',   labelKey: 'nav.finance',  descKey: 'nav.finance_desc',  Icon: IconFinance  },
@@ -95,13 +105,12 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse, 
 
   return (
     <aside className={`obs-sidebar${isOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
-      {/* Brand — doubles as the entry point to Resumen/Dashboard now that it's
-          no longer a regular nav item */}
+      {/* Brand — decorative only now; Dashboard is its own nav item below */}
       <div className="obs-brand">
-        <Link to="/dashboard" className="obs-brand-link" title={t('dashboard.title')} onClick={onClose}>
+        <span className="obs-brand-link">
           <img src={logoSrc} alt="Observatory" className="obs-brand-logo" />
           <span className="obs-brand-text">Observatory</span>
-        </Link>
+        </span>
         <button
           className="obs-sidebar-toggle"
           onClick={onToggleCollapse}
