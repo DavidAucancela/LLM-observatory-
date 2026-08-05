@@ -1,5 +1,7 @@
 {
   "nav": {
+    "dashboard": "Dashboard",
+    "dashboard_desc": "Overview of usage and cost",
     "requests": "Requests",
     "requests_desc": "Live request log and export",
     "models": "Models",

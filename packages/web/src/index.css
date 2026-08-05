@@ -127,37 +127,53 @@ body {
   flex: 0 0 64px;
 }
 
-.obs-sidebar.collapsed .obs-brand {
-  padding: 0 0 14px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
+/* Same padding as expanded (18px left) so the logo stays pinned at the
+   same x, matching how nav icons never re-center on collapse. The gap
+   that needs zeroing is on obs-brand-link (between the logo img and the
+   text span) — brand-text shrinks to 0 but that gap was still reserved. */
+.obs-sidebar.collapsed .obs-brand-link { gap: 0; }
 .obs-sidebar.collapsed .obs-brand-text { opacity: 0; max-width: 0; }
 
-/* ── Sidebar toggle button — sits inline inside the brand row when
-   expanded; stays inline (centered, below the logo) when collapsed instead
-   of floating outside the rail's edge. ── */
+/* ── Sidebar toggle button — always absolutely positioned (relative to
+   .obs-brand) so the collapse/expand move is an animatable `right`/size
+   change in step with the sidebar's own width transition, instead of a
+   `position: static <-> absolute` switch — that property can't transition,
+   so it used to snap to its final spot instantly while the rail was still
+   sliding, producing a jarring flash mid-animation. Expanded: sits inline
+   at the row's right padding (18px). Collapsed: floats over the rail's
+   right edge like a drag handle. ── */
 .obs-sidebar-toggle {
   display: flex; align-items: center; justify-content: center;
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
   width: 16px; height: 16px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-  flex-shrink: 0;
-  margin-left: auto;
+  z-index: 5;
+  transition: right 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              border-radius 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.1s, color 0.1s;
 }
 .obs-sidebar-toggle:hover { background: var(--hover); color: var(--text); }
 
 .obs-sidebar.collapsed .obs-sidebar-toggle {
-  margin-left: 0;
-  margin-top: 8px;
+  right: -12px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.2));
 }
 
 .obs-brand {
+  position: relative;
   padding: 0 18px 18px;
   display: flex;
   align-items: center;
@@ -176,6 +192,7 @@ body {
   flex: 1;
   color: inherit;
   text-decoration: none;
+  transition: gap 0.16s ease;
 }
 .obs-brand-link:hover .obs-brand-text { color: var(--accent); }
 
@@ -240,6 +257,17 @@ body {
    the nav icons, only hide the label/description next to them. */
 .obs-sidebar.collapsed .obs-nav-icon { width: 18px; height: 18px; }
 
+/* Drop the icon/body gap when collapsed — obs-nav-body shrinks to 0 width
+   but the flex gap still reserved 10px, overflowing the 64px rail and
+   making icons look unpinned/misaligned between items. */
+.obs-sidebar.collapsed .obs-nav-item { gap: 0; }
+
+/* obs-nav-body was never actually collapsed — only obs-brand-text was.
+   Without this, the label/desc just got squeezed by the flex row instead
+   of hiding, so text wrapped character-by-character and spilled outside
+   the 64px rail. */
+.obs-sidebar.collapsed .obs-nav-body { opacity: 0; max-width: 0; }
+
 .obs-nav-body {
   display: flex; flex-direction: column; gap: 1px;
   min-width: 0;
@@ -247,6 +275,14 @@ body {
   max-width: 160px;
   opacity: 1;
   transition: opacity 0.16s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Without nowrap, squeezing max-width to 0 wraps the label/desc text
+   character-by-character — invisible via opacity but still tall, which
+   inflates the collapsed row height and pushes icons apart vertically. */
+.obs-nav-label,
+.obs-nav-desc {
+  white-space: nowrap;
 }
 
 .obs-nav-desc {
@@ -1870,10 +1906,13 @@ body {
     flex: 0 0 220px;
   }
   .obs-sidebar.collapsed .obs-brand { padding: 0 18px 18px; flex-direction: row; justify-content: flex-start; }
+  .obs-sidebar.collapsed .obs-brand-link { gap: 9px; }
   .obs-sidebar.collapsed .obs-brand-text { opacity: 1; max-width: none; }
   .obs-sidebar.collapsed .obs-sidebar-toggle {
-    margin-left: auto;
-    margin-top: 0;
+    right: 18px;
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    box-shadow: none;
   }
 
   /* KPI strip: 2 columns on mobile */
