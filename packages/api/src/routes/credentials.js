@@ -14,7 +14,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 const CredentialSchema = z.object({
-  provider: z.enum(['anthropic', 'openai', 'gemini']),
+  provider: z.enum(['anthropic', 'openai', 'gemini', 'grok', 'kimi']),
   key_type: z.enum(['sdk', 'admin']),
   label:    z.string().min(1).max(100),
   value:    z.string().min(10),
@@ -69,7 +69,10 @@ router.post('/:id/ping', requireAdmin, async (req, res, next) => {
     if (!row.rows.length) return res.status(404).json({ error: 'Credencial no encontrada' });
 
     const { provider, key_hint } = row.rows[0];
-    const PING_MODEL = { anthropic: 'claude-haiku-4-5-20251001', gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini' };
+    const PING_MODEL = {
+      anthropic: 'claude-haiku-4-5-20251001', gemini: 'gemini-3.5-flash', openai: 'gpt-4o-mini',
+      grok: 'grok-4.6', kimi: 'kimi-k2.6',
+    };
     const model = PING_MODEL[provider];
 
     await pool.query(
@@ -147,6 +150,18 @@ router.post('/:id/test', requireAdmin, async (req, res, next) => {
       );
       valid = response.status === 200;
       if (!valid) errorMsg = `Gemini API respondió con ${response.status}`;
+    } else if (provider === 'grok') {
+      const response = await fetchWithTimeout('https://api.x.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      valid = response.status === 200;
+      if (!valid) errorMsg = `xAI API respondió con ${response.status}`;
+    } else if (provider === 'kimi') {
+      const response = await fetchWithTimeout('https://api.moonshot.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      valid = response.status === 200;
+      if (!valid) errorMsg = `Moonshot API respondió con ${response.status}`;
     }
 
     await pool.query(

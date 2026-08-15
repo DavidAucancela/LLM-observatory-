@@ -76,6 +76,30 @@ const GEMINI_PRICING = {
   'gemini-2.5-flash':       { input: 0.30, output:  2.50 },
 };
 
+// Cost per million tokens (USD) — August 2026, per docs.x.ai/docs/models. Standard
+// (<200k context) tier only; xAI doubles input/output rates at >=200k context,
+// not modeled here (same simplification as GEMINI_PRICING above). Cached-input
+// discount also not modeled — cache_read_tokens is tracked/displayed but billed
+// at the standard input rate, matching how Anthropic/OpenAI/Gemini already work here.
+const GROK_PRICING = {
+  'grok-4.6':                     { input: 2.00, output:  6.00 },
+  'grok-4.5':                     { input: 2.00, output:  6.00 },
+  'grok-4.3':                     { input: 1.25, output:  2.50 },
+  'grok-4.20-0309-reasoning':     { input: 1.25, output:  2.50 },
+  'grok-4.20-0309-non-reasoning': { input: 1.25, output:  2.50 },
+  'grok-4.20-multi-agent-0309':   { input: 1.25, output:  2.50 },
+  'grok-build-0.1':               { input: 1.00, output:  2.00 },
+};
+
+// Cost per million tokens (USD) — August 2026, per platform.kimi.ai/docs/pricing.
+// Cache-miss (standard) rate only — same simplification as GROK_PRICING above.
+const KIMI_PRICING = {
+  'kimi-k3':                   { input: 3.00, output: 15.00 },
+  'kimi-k2.6':                 { input: 0.95, output:  4.00 },
+  'kimi-k2.7-code':            { input: 0.95, output:  4.00 },
+  'kimi-k2.7-code-highspeed':  { input: 1.90, output:  8.00 },
+};
+
 async function _postMetric(url, data, token) {
   const body    = JSON.stringify(data);
   const headers = { 'Content-Type': 'application/json' };
@@ -257,6 +281,24 @@ function calculateGeminiCost(model, inputTokens, outputTokens) {
   const pricing = GEMINI_PRICING[model];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown Gemini model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+}
+
+function calculateGrokCost(model, inputTokens, outputTokens) {
+  const pricing = GROK_PRICING[model];
+  if (!pricing) {
+    console.warn(`[LLM Observatory] Unknown Grok model pricing: "${model}" — cost recorded as $0`);
+    return 0;
+  }
+  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+}
+
+function calculateKimiCost(model, inputTokens, outputTokens) {
+  const pricing = KIMI_PRICING[model];
+  if (!pricing) {
+    console.warn(`[LLM Observatory] Unknown Kimi model pricing: "${model}" — cost recorded as $0`);
     return 0;
   }
   return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
@@ -791,10 +833,182 @@ class MonitoredGemini {
   }
 }
 
+// ── Shared chat-completions handling for OpenAI-compatible providers ─────────
+// Grok (xAI) and Kimi (Moonshot) both expose an OpenAI-shaped chat.completions
+// API — same request/response shape, streamed the same way — so MonitoredGrok
+// and MonitoredKimi share this proxy instead of each re-implementing the
+// streaming/tool-call-fragment-accumulation logic that MonitoredOpenAI already
+// has above. MonitoredOpenAI itself is untouched: it also covers embeddings/
+// whisper/tts/responses, which don't apply to either of these providers.
+function extractCachedTokensNested(usage) {
+  return usage?.prompt_tokens_details?.cached_tokens || 0;
+}
+
+function extractCachedTokensFlat(usage) {
+  return usage?.cached_tokens || 0;
+}
+
+function buildOpenAICompatibleChatProxy(self, { provider, calculateCostFn, extractCacheReadTokens }) {
+  return {
+    create: async (params) => {
+      const startTime = Date.now();
+      const firstMsg = params.messages?.[0];
+      const promptPreview = typeof firstMsg?.content === 'string'
+        ? firstMsg.content.substring(0, 200)
+        : JSON.stringify(firstMsg?.content || '').substring(0, 200);
+      const tools = params.tools?.map(t => t.function?.name || t.name) || [];
+      const { promptFull, systemPrompt, requestParams } = extractOpenAIRequestDetails(params);
+
+      if (params.stream) {
+        let stream;
+        try {
+          const streamParams = { ...params, stream_options: { include_usage: true, ...params.stream_options } };
+          stream = await self.client.chat.completions.create(streamParams);
+        } catch (err) {
+          self._sendMetric({
+            provider, model: params.model, input_tokens: 0, output_tokens: 0,
+            total_tokens: 0, cost_usd: 0, latency_ms: Date.now() - startTime,
+            status_code: err.status || 500, tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+            api_key_hint: self.apiKeyHint, prompt_full: promptFull,
+            system_prompt: systemPrompt, request_params: requestParams,
+            ...classifyError(err),
+          }).catch(() => {});
+          throw err;
+        }
+
+        return wrapOpenAICompatibleStream(self, stream, startTime, params, tools, promptPreview,
+          { promptFull, systemPrompt, requestParams }, { provider, calculateCostFn, extractCacheReadTokens });
+      }
+
+      let response, statusCode = 200, error = null;
+      try {
+        response = await self.client.chat.completions.create(params);
+      } catch (err) {
+        statusCode = err.status || 500;
+        error = err;
+      }
+
+      const inputTokens     = response?.usage?.prompt_tokens     || 0;
+      const outputTokens    = response?.usage?.completion_tokens || 0;
+      const cacheReadTokens = response?.usage ? extractCacheReadTokens(response.usage) : 0;
+      const { responseFull, toolCalls, stopReason } = response
+        ? extractOpenAIResponseDetails(response)
+        : { responseFull: null, toolCalls: [], stopReason: null };
+
+      self._sendMetric({
+        provider, model: params.model,
+        input_tokens: inputTokens, output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cost_usd: calculateCostFn(params.model, inputTokens, outputTokens),
+        latency_ms: Date.now() - startTime, status_code: statusCode,
+        cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
+        error_message: error ? (error.message || null) : null,
+        tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+        api_key_hint: self.apiKeyHint, prompt_full: promptFull,
+        system_prompt: systemPrompt, request_params: requestParams,
+        response_full: responseFull, tool_calls: toolCalls, stop_reason: stopReason,
+        ...(error ? classifyError(error) : {}),
+      }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+
+      if (error) throw error;
+      return response;
+    },
+  };
+}
+
+async function* wrapOpenAICompatibleStream(self, stream, startTime, params, tools, promptPreview, requestDetails, { provider, calculateCostFn, extractCacheReadTokens }) {
+  let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0;
+  let responseText = '';
+  let stopReason = null;
+  const toolCallsMap = new Map();
+  try {
+    for await (const chunk of stream) {
+      if (chunk.usage) {
+        inputTokens     = chunk.usage.prompt_tokens     || 0;
+        outputTokens    = chunk.usage.completion_tokens || 0;
+        cacheReadTokens = extractCacheReadTokens(chunk.usage);
+      }
+      const choice = chunk.choices?.[0];
+      if (choice?.delta?.content) responseText += choice.delta.content;
+      if (choice?.delta?.tool_calls) {
+        for (const tc of choice.delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          const entry = toolCallsMap.get(idx) || { name: '', arguments: '' };
+          if (tc.function?.name) entry.name = tc.function.name;
+          if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+          toolCallsMap.set(idx, entry);
+        }
+      }
+      if (choice?.finish_reason) stopReason = choice.finish_reason;
+      yield chunk;
+    }
+  } finally {
+    const toolCalls = Array.from(toolCallsMap.values()).map(tc => ({
+      name: tc.name, arguments: safeJsonParse(tc.arguments),
+    }));
+    self._sendMetric({
+      provider, model: params.model,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+      cost_usd: calculateCostFn(params.model, inputTokens, outputTokens),
+      latency_ms: Date.now() - startTime, status_code: 200,
+      cache_read_tokens: cacheReadTokens, cache_write_tokens: 0,
+      tools_used: tools, prompt_preview: promptPreview, tags: self.tags,
+      api_key_hint: self.apiKeyHint, prompt_full: requestDetails.promptFull,
+      system_prompt: requestDetails.systemPrompt, request_params: requestDetails.requestParams,
+      response_full: truncate(responseText, 20000), tool_calls: toolCalls, stop_reason: stopReason,
+    }).catch(err => console.warn('[LLM Observatory] Failed to send metric:', err.message));
+  }
+}
+
+class MonitoredGrok {
+  constructor(options = {}) {
+    const { observatoryUrl = 'http://localhost:3001', observatoryToken, apiKey, tags = {}, ...grokOptions } = options;
+    this.observatoryUrl   = observatoryUrl;
+    this.observatoryToken = observatoryToken;
+    this.tags       = tags;
+    this.apiKeyHint = maskKey(apiKey || process.env.XAI_API_KEY);
+    const OpenAI = require('openai');
+    this.client = new OpenAI({ apiKey: apiKey || process.env.XAI_API_KEY, baseURL: 'https://api.x.ai/v1', ...grokOptions });
+    this.chat = {
+      completions: buildOpenAICompatibleChatProxy(this, {
+        provider: 'grok', calculateCostFn: calculateGrokCost, extractCacheReadTokens: extractCachedTokensNested,
+      }),
+    };
+  }
+
+  async _sendMetric(data) {
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data, this.observatoryToken);
+  }
+}
+
+class MonitoredKimi {
+  constructor(options = {}) {
+    const { observatoryUrl = 'http://localhost:3001', observatoryToken, apiKey, tags = {}, ...kimiOptions } = options;
+    this.observatoryUrl   = observatoryUrl;
+    this.observatoryToken = observatoryToken;
+    this.tags       = tags;
+    this.apiKeyHint = maskKey(apiKey || process.env.MOONSHOT_API_KEY);
+    const OpenAI = require('openai');
+    this.client = new OpenAI({ apiKey: apiKey || process.env.MOONSHOT_API_KEY, baseURL: 'https://api.moonshot.ai/v1', ...kimiOptions });
+    this.chat = {
+      completions: buildOpenAICompatibleChatProxy(this, {
+        provider: 'kimi', calculateCostFn: calculateKimiCost, extractCacheReadTokens: extractCachedTokensFlat,
+      }),
+    };
+  }
+
+  async _sendMetric(data) {
+    await _postMetric(`${this.observatoryUrl}/api/metrics`, data, this.observatoryToken);
+  }
+}
+
 module.exports = {
   MonitoredAnthropic,
   MonitoredOpenAI,
   MonitoredGemini,
+  MonitoredGrok,
+  MonitoredKimi,
   maskKey,
   classifyError,
   calculateCost,
@@ -803,10 +1017,14 @@ module.exports = {
   calculateWhisperCost,
   calculateTTSCost,
   calculateGeminiCost,
+  calculateGrokCost,
+  calculateKimiCost,
   ANTHROPIC_PRICING,
   OPENAI_PRICING,
   OPENAI_EMBEDDINGS_PRICING,
   OPENAI_WHISPER_PRICE_PER_MINUTE,
   OPENAI_TTS_PRICING,
   GEMINI_PRICING,
+  GROK_PRICING,
+  KIMI_PRICING,
 };

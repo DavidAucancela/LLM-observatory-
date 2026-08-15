@@ -91,6 +91,13 @@ function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
   );
 }
 
+// Providers with no admin/org-level key concept — sync happens only via the SDK's
+// real-time metric POSTs, never a historical org usage export (see credentials.js/
+// sync.js). Locking key_type to 'sdk' here matches the server: nothing stops an
+// 'admin' row for these being created via a raw API call, but there's no UI/test
+// path or sync route that would ever use one.
+const SDK_ONLY_PROVIDERS = ['gemini', 'grok', 'kimi'];
+
 function AddKeyForm({ onSaved, onCancel }) {
   const { apiFetch } = useApi();
   const { t } = useTranslation();
@@ -113,6 +120,8 @@ function AddKeyForm({ onSaved, onCancel }) {
 
   const phLabel = form.provider === 'anthropic' ? (form.key_type === 'admin' ? 'sk-ant-admin-…' : 'sk-ant-api03-…')
     : form.provider === 'gemini' ? 'AIza…'
+    : form.provider === 'grok' ? 'xai-…'
+    : form.provider === 'kimi' ? 'sk-…'
     : (form.key_type === 'admin' ? 'sk-admin-…' : 'sk-proj-…');
 
   return (
@@ -127,15 +136,17 @@ function AddKeyForm({ onSaved, onCancel }) {
           <div style={{ display: 'flex', gap: 6 }}>
             <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.provider} onChange={e => {
               const provider = e.target.value;
-              setForm(f => ({ ...f, provider, key_type: provider === 'gemini' ? 'sdk' : f.key_type }));
+              setForm(f => ({ ...f, provider, key_type: SDK_ONLY_PROVIDERS.includes(provider) ? 'sdk' : f.key_type }));
             }}>
               <option value="anthropic">Anthropic</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
+              <option value="grok">Grok</option>
+              <option value="kimi">Kimi</option>
             </select>
-            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.key_type} disabled={form.provider === 'gemini'} onChange={e => set('key_type', e.target.value)}>
+            <select className="obs-select" style={{ height: 36, flex: 1 }} value={form.key_type} disabled={SDK_ONLY_PROVIDERS.includes(form.provider)} onChange={e => set('key_type', e.target.value)}>
               <option value="sdk">{t('settings.keys.sdkType')}</option>
-              {form.provider !== 'gemini' && <option value="admin">{t('settings.keys.adminType')}</option>}
+              {!SDK_ONLY_PROVIDERS.includes(form.provider) && <option value="admin">{t('settings.keys.adminType')}</option>}
             </select>
           </div>
         </div>

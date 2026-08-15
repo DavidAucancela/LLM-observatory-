@@ -87,8 +87,8 @@ const METRIC_HEADER_KEYS = {
 
 // ── Provider breakdown with bars ──────────────────────────────────────────────
 
-const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)', gemini: 'var(--gemini)' };
-const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' };
+const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)', gemini: 'var(--gemini)', grok: 'var(--grok)', kimi: 'var(--kimi)' };
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
 
 function ReconciliationBadge({ run }) {
   const { t } = useTranslation();

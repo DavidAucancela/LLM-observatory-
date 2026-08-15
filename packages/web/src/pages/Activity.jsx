@@ -9,7 +9,7 @@ import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
 
-const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' };
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
 
 // ── Requests tab ──────────────────────────────────────────────
 function RequestsTab({ range, onRangeChange, configuredProviders }) {
