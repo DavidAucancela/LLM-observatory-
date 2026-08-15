@@ -4,7 +4,6 @@ import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
 import HBar from '../components/HBar';
 import ChartToolbar, { ChartHintBanner } from '../components/ChartToolbar';
-import InsightsPanel from '../components/InsightsPanel';
 import TopBar from '../components/TopBar';
 import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
@@ -390,7 +389,6 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   const [hasCredentials, setHasCredentials] = useState(true);
   const [configuredProviders, setConfiguredProviders] = useState([]);
   const [reconciliation, setReconciliation] = useState([]);
-  const [insights, setInsights] = useState([]);
   const [activeMetric, setActiveMetric] = useState('tokens');
   const [chartView, setChartView] = useState(() => localStorage.getItem('obs-chart-view') || '2d');
   // Client-side-only visual toggle for which models' bars/lines are shown in
@@ -415,11 +413,10 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumRes, credRes, reconRes, insightsRes] = await Promise.all([
+      const [sumRes, credRes, reconRes] = await Promise.all([
         apiFetch(`/api/metrics/summary?range=${range}`),
         apiFetch(`/api/credentials`),
         apiFetch(`/api/reconciliation/latest`),
-        apiFetch(`/api/insights/summary?range=${range}`),
       ]);
       const sum = await sumRes.json();
       setSummary(sum);
@@ -428,21 +425,9 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
       setHasCredentials(credList.length > 0);
       setConfiguredProviders([...new Set(credList.map(c => c.provider))]);
       setReconciliation((await reconRes.json()).latest || []);
-      setInsights((await insightsRes.json()).insights || []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, [range]);
-
-  const handleDismissInsight = async (insightKey) => {
-    setInsights(prev => prev.filter(i => i.insight_key !== insightKey));
-    try {
-      await apiFetch('/api/insights/dismiss', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ insight_key: insightKey }),
-      });
-    } catch (err) { console.error(err); }
-  };
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -750,8 +735,6 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
 
           <TagBreakdown range={range} />
         </div>
-
-        <InsightsPanel insights={insights} loading={loading} range={range} onDismiss={handleDismissInsight} />
       </div>
     </main>
   );

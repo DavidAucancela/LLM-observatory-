@@ -88,7 +88,7 @@
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "empty": "No notifications",
-    "viewAll": "View all in Settings → Alerts",
+    "muteInsight": "Mute 24h",
     "allProviders": "Total",
     "budgetAlertMsg": "Spend alert — {{provider}} went over {{threshold}} (current: {{current}})",
     "deliveryFailed": "· failed to notify Discord",

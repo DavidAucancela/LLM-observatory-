@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useApi } from '../hooks/useApi';
 import { fmtRelative, formatCost } from '../utils/fmt';
+import { SEVERITY_COLOR, severityLabel, titleAndDetail } from '../utils/insightFormat';
+import Sparkline from './Sparkline';
 
 function IconBell() {
   return (
@@ -13,7 +15,7 @@ function IconBell() {
   );
 }
 
-function TypeIcon({ type }) {
+function TypeIcon({ type, insightType }) {
   if (type === 'team_joined') {
     return (
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,9 +38,10 @@ function TypeIcon({ type }) {
   );
 }
 
-function severityColor(n) {
+function notifSeverityColor(n) {
   if (n.type === 'team_joined') return 'var(--success)';
   if (n.type === 'reconciliation') return n.data.status === 'error' ? 'var(--error)' : 'var(--warning)';
+  if (n.type === 'insight') return SEVERITY_COLOR[n.data.severity];
   return 'var(--warning)'; // budget_alert
 }
 
@@ -49,22 +52,53 @@ function messageFor(t, n) {
       const base = t('notifications.budgetAlertMsg', {
         provider, current: formatCost(n.data.currentValue), threshold: formatCost(n.data.thresholdUsd),
       });
-      return n.data.success ? base : `${base} ${t('notifications.deliveryFailed')}`;
+      return { text: n.data.success ? base : `${base} ${t('notifications.deliveryFailed')}` };
     }
     case 'reconciliation':
-      return t('notifications.reconciliationMsg', { provider: n.data.provider, pct: n.data.deviationPct.toFixed(1) });
+      return { text: t('notifications.reconciliationMsg', { provider: n.data.provider, pct: n.data.deviationPct.toFixed(1) }) };
     case 'team_joined':
-      return t('notifications.teamJoinedMsg', { email: n.data.email });
+      return { text: t('notifications.teamJoinedMsg', { email: n.data.email }) };
+    case 'insight':
+      return titleAndDetail(t, { type: n.insight_type, model: n.data.model, metrics: n.data.metrics });
     default:
-      return '';
+      return { text: '' };
   }
+}
+
+function navigateTargetFor(n) {
+  switch (n.type) {
+    case 'budget_alert':   return '/settings?tab=alerts';
+    case 'team_joined':    return '/settings?tab=team';
+    case 'reconciliation': return '/dashboard';
+    case 'insight':
+      if (n.insight_type === 'improvement') return '/models';
+      { const p = new URLSearchParams({ model: n.data.model });
+        if (n.insight_type === 'error_rate') p.set('status', 'error');
+        return `/activity?${p}`; }
+    default: return null;
+  }
+}
+
+function getSeenInsights() {
+  try {
+    return new Set(JSON.parse(sessionStorage.getItem('obs_seen_insights') || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function computeClientUnreadCount(serverUnreadCount, notifications) {
+  const seen = getSeenInsights();
+  const unseenInsights = notifications.filter(n => n.type === 'insight' && !seen.has(n.data.insight_key)).length;
+  return serverUnreadCount + unseenInsights;
 }
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [serverUnreadCount, setServerUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [mutingId, setMutingId] = useState(null);
   const ref = useRef(null);
   const { apiFetch } = useApi();
   const { t } = useTranslation();
@@ -75,7 +109,7 @@ export default function NotificationBell() {
       .then(r => r.json())
       .then(d => {
         setNotifications(d.notifications || []);
-        setUnreadCount(d.unread_count || 0);
+        setServerUnreadCount(d.unread_count || 0);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -92,10 +126,40 @@ export default function NotificationBell() {
   }, [open]);
 
   const handleMarkAllRead = async () => {
+    const insightKeys = notifications
+      .filter(n => n.type === 'insight')
+      .map(n => n.data.insight_key);
+    sessionStorage.setItem('obs_seen_insights', JSON.stringify(insightKeys));
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    setUnreadCount(0);
+    setServerUnreadCount(0);
     try { await apiFetch('/api/notifications/read-all', { method: 'POST' }); } catch {}
   };
+
+  const handleMuteInsight = async (e, n) => {
+    e.stopPropagation();
+    setMutingId(n.id);
+    try {
+      await apiFetch('/api/insights/dismiss', {
+        method: 'POST',
+        body: JSON.stringify({ insight_key: n.data.insight_key, hours: 24 }),
+      });
+      setNotifications(prev => prev.filter(notif => notif.id !== n.id));
+    } catch {
+      console.error('Failed to mute insight');
+    } finally {
+      setMutingId(null);
+    }
+  };
+
+  const handleRowClick = (n) => {
+    const target = navigateTargetFor(n);
+    if (target) {
+      setOpen(false);
+      navigate(target);
+    }
+  };
+
+  const unreadCount = computeClientUnreadCount(serverUnreadCount, notifications);
 
   return (
     <div className="obs-notif-bell-wrap" ref={ref}>
@@ -129,27 +193,49 @@ export default function NotificationBell() {
               </div>
             ) : notifications.length === 0 ? (
               <div className="obs-notif-empty">{t('notifications.empty')}</div>
-            ) : notifications.map(n => (
-              <div key={n.id} className={`obs-notif-item${n.read ? ' read' : ''}`}>
-                <span className="obs-notif-icon" style={{ color: severityColor(n) }}>
-                  <TypeIcon type={n.type} />
-                </span>
-                <div className="obs-notif-body">
-                  <div className="obs-notif-text">{messageFor(t, n)}</div>
-                  <div className="obs-notif-time">{fmtRelative(n.occurred_at, t)}</div>
+            ) : notifications.map(n => {
+              const seen = getSeenInsights();
+              const isRead = n.type === 'insight' ? seen.has(n.data.insight_key) : n.read;
+              const msg = messageFor(t, n);
+              return (
+                <div
+                  key={n.id}
+                  className={`obs-notif-item${isRead ? ' read' : ''}`}
+                  onClick={() => handleRowClick(n)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRowClick(n); }}
+                >
+                  <span className="obs-notif-icon" style={{ color: notifSeverityColor(n) }}>
+                    <TypeIcon type={n.type} insightType={n.insight_type} />
+                  </span>
+                  <div className="obs-notif-body">
+                    <div className="obs-notif-text">{msg.title || msg.text}</div>
+                    {msg.detail && <div className="obs-notif-detail">{msg.detail}</div>}
+                    {n.data?.spark?.length > 1 && (
+                      <div style={{ height: 18, marginTop: 6, marginBottom: 4 }}>
+                        <Sparkline data={n.data.spark} color={notifSeverityColor(n)} height={18} />
+                      </div>
+                    )}
+                    <div className="obs-notif-time">{fmtRelative(n.occurred_at, t)}</div>
+                  </div>
+                  {n.type === 'insight' && (
+                    <button
+                      type="button"
+                      className="obs-notif-mute-btn"
+                      onClick={(e) => handleMuteInsight(e, n)}
+                      disabled={mutingId === n.id}
+                      title={t('notifications.muteInsight')}
+                      aria-label={t('notifications.muteInsight')}
+                    >
+                      {mutingId === n.id ? '…' : '✕'}
+                    </button>
+                  )}
+                  {!isRead && <span className="obs-notif-dot" />}
                 </div>
-                {!n.read && <span className="obs-notif-dot" />}
-              </div>
-            ))}
+              );
+            })}
           </div>
-
-          <button
-            type="button"
-            className="obs-notif-panel-foot"
-            onClick={() => { setOpen(false); navigate('/settings?tab=alerts'); }}
-          >
-            {t('notifications.viewAll')}
-          </button>
         </div>
       )}
     </div>

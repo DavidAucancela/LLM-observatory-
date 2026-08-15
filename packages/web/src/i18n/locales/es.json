@@ -88,7 +88,7 @@
     "title": "Notificaciones",
     "markAllRead": "Marcar todo leído",
     "empty": "No hay notificaciones",
-    "viewAll": "Ver todo en Ajustes → Alertas",
+    "muteInsight": "Silenciar 24h",
     "allProviders": "Total",
     "budgetAlertMsg": "Alerta de gasto — {{provider}} superó {{threshold}} (actual: {{current}})",
     "deliveryFailed": "· no se pudo notificar a Discord",

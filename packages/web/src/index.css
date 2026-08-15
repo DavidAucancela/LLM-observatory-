@@ -667,23 +667,6 @@ body {
   margin-bottom: 22px;
 }
 
-/* ── Insights panel (auto-detected cost/error/latency anomalies) ── */
-.insight-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.insight-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--insight-sev, var(--border));
-  border-radius: 8px;
-  padding: 14px 15px 13px;
-  box-shadow: var(--shadow-sm);
-}
-
 /* ── Dashboard: scrolling single-column layout ────────────────────────────────
    This used to be pinned to one viewport (overflow:hidden + a 2.3fr/1fr grid),
    so every card added had to steal height from the others. It scrolls now:
@@ -1743,7 +1726,7 @@ body {
   position: absolute;
   top: 40px;
   right: 0;
-  width: 340px;
+  width: 390px;
   max-width: calc(100vw - 24px);
   max-height: 420px;
   background: var(--surface);
@@ -1781,10 +1764,13 @@ body {
 .obs-notif-item {
   display: flex;
   gap: 10px;
-  padding: 11px 14px;
+  padding: 11px 14px 11px 14px;
   border-bottom: 1px solid var(--border-soft);
   position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
+.obs-notif-item:hover { background: var(--hover); }
 .obs-notif-item:last-child { border-bottom: none; }
 .obs-notif-item.read { opacity: 0.6; }
 
@@ -1800,7 +1786,8 @@ body {
 }
 
 .obs-notif-body { flex: 1; min-width: 0; }
-.obs-notif-text { font-size: 11.5px; color: var(--text); line-height: 1.45; }
+.obs-notif-text { font-size: 11.5px; color: var(--text); line-height: 1.45; font-weight: 500; }
+.obs-notif-detail { font-size: 10.5px; color: var(--muted); line-height: 1.4; margin-top: 2px; }
 .obs-notif-time { font-size: 10px; color: var(--faint); margin-top: 3px; }
 
 .obs-notif-dot {
@@ -1812,6 +1799,25 @@ body {
   border-radius: 50%;
   background: var(--accent);
 }
+
+.obs-notif-mute-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.obs-notif-mute-btn:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.obs-notif-mute-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .obs-notif-empty {
   padding: 24px 14px;
