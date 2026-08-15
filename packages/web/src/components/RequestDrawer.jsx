@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ProviderBadge from './ProviderBadge';
 import { fmtDateTime, fmtLatency, formatCost } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../auth/AuthProvider';
 
 function CopyButton({ text, style }) {
   const [copied, setCopied] = useState(false);
@@ -29,6 +30,127 @@ function parseJsonField(value, fallback) {
   if (value == null) return fallback;
   if (typeof value === 'object') return value;
   try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function scoreColor(score) {
+  if (score >= 70) return 'var(--success)';
+  if (score >= 40) return 'var(--warning)';
+  return 'var(--error)';
+}
+
+function EvaluationSection({ apiCallId, hasResponse, isAdmin }) {
+  const { apiFetch } = useApi();
+  const { t } = useTranslation();
+  const [evaluations, setEvaluations] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [score, setScore]             = useState('');
+  const [reasoning, setReasoning]     = useState('');
+  const [saving, setSaving]           = useState(false);
+  const [judging, setJudging]         = useState(false);
+  const [error, setError]             = useState('');
+
+  useEffect(() => {
+    let stale = false;
+    setLoading(true);
+    apiFetch(`/api/evaluations?api_call_id=${apiCallId}`)
+      .then(r => r.json())
+      .then(d => { if (!stale) setEvaluations(d.evaluations || []); })
+      .finally(() => { if (!stale) setLoading(false); });
+    return () => { stale = true; };
+  }, [apiCallId]);
+
+  const handleSaveManual = async () => {
+    const numScore = parseFloat(score);
+    if (isNaN(numScore) || numScore < 0 || numScore > 100) return;
+    setSaving(true); setError('');
+    try {
+      const res = await apiFetch('/api/evaluations', {
+        method: 'POST',
+        body: JSON.stringify({ api_call_id: apiCallId, score: numScore, reasoning: reasoning.trim() || undefined }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(Array.isArray(d.error) ? d.error.map(e => e.message).join(', ') : (d.error || 'Error'));
+        return;
+      }
+      setEvaluations(evs => [d.data, ...evs]);
+      setScore(''); setReasoning('');
+    } catch { setError(t('drawer.evalSaveError')); } finally { setSaving(false); }
+  };
+
+  const handleJudge = async () => {
+    setJudging(true); setError('');
+    try {
+      const res = await apiFetch('/api/evaluations/judge', {
+        method: 'POST', body: JSON.stringify({ api_call_id: apiCallId }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setError(d.error || t('drawer.evalJudgeError')); return; }
+      setEvaluations(evs => [d.data, ...evs]);
+    } catch { setError(t('drawer.evalJudgeError')); } finally { setJudging(false); }
+  };
+
+  return (
+    <div className="obs-drawer-section">
+      <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('drawer.evaluations')}</div>
+
+      {loading ? (
+        <div className="obs-skeleton" style={{ height: 32, borderRadius: 4, marginBottom: 10 }} />
+      ) : evaluations.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{t('drawer.noEvaluations')}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+          {evaluations.map(ev => (
+            <div key={ev.id} style={{ background: 'var(--hover)', borderRadius: 4, padding: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: scoreColor(parseFloat(ev.score)) }}>
+                  {Math.round(parseFloat(ev.score))}
+                </span>
+                <span className="kchip">
+                  {ev.method === 'llm_judge' ? t('drawer.evalMethodJudge', { model: ev.evaluator_model }) : t('drawer.evalMethodHuman')}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--faint)', marginLeft: 'auto' }}>{fmtDateTime(ev.created_at)}</span>
+              </div>
+              {ev.reasoning && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.5 }}>{ev.reasoning}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 11, color: 'var(--error)', marginBottom: 8 }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', marginBottom: isAdmin ? 10 : 0 }}>
+        <input
+          type="number" min="0" max="100" className="obs-input"
+          placeholder={t('drawer.evalScorePlaceholder')}
+          value={score} onChange={e => setScore(e.target.value)}
+          style={{ width: 64 }}
+        />
+        <textarea
+          className="obs-input"
+          placeholder={t('drawer.evalReasoningPlaceholder')}
+          value={reasoning} onChange={e => setReasoning(e.target.value)}
+          rows={1} style={{ flex: 1, resize: 'vertical', fontFamily: 'inherit' }}
+        />
+        <button className="obs-btn obs-btn-sm" disabled={saving || score === ''} onClick={handleSaveManual}>
+          {saving ? '…' : t('common.save')}
+        </button>
+      </div>
+
+      {isAdmin && (
+        <button
+          className="obs-btn obs-btn-primary obs-btn-sm"
+          disabled={judging || !hasResponse}
+          title={!hasResponse ? t('drawer.evalNoResponseHint') : undefined}
+          onClick={handleJudge}
+        >
+          {judging ? t('drawer.evalJudging') : t('drawer.evalJudgeButton')}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ExpandableText({ text, emptyLabel, threshold = 500 }) {
@@ -69,6 +191,8 @@ export default function RequestDrawer({ requestId, onClose }) {
   const [loading, setLoading] = useState(true);
   const { apiFetch } = useApi();
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     if (!requestId) return;
@@ -295,6 +419,8 @@ export default function RequestDrawer({ requestId, onClose }) {
                 </div>
                 <ExpandableText text={responseText} emptyLabel={t('drawer.noResponse')} />
               </div>
+
+              <EvaluationSection apiCallId={data.id} hasResponse={!!data.response_full} isAdmin={isAdmin} />
             </>
           ) : (
             <div className="obs-empty">

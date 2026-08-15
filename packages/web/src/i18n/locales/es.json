@@ -227,7 +227,18 @@
     "noResponse": "(sin respuesta disponible)",
     "toolCallsInvoked": "Llamadas a herramientas",
     "showMore": "Mostrar más",
-    "showLess": "Mostrar menos"
+    "showLess": "Mostrar menos",
+    "evaluations": "Evaluaciones",
+    "noEvaluations": "Todavía no hay evaluaciones",
+    "evalMethodHuman": "Humano",
+    "evalMethodJudge": "Juez IA ({{model}})",
+    "evalScorePlaceholder": "0-100",
+    "evalReasoningPlaceholder": "Comentario (opcional)",
+    "evalSaveError": "No se pudo guardar el score",
+    "evalJudgeButton": "Evaluar con IA",
+    "evalJudging": "Evaluando…",
+    "evalJudgeError": "Falló la evaluación del juez",
+    "evalNoResponseHint": "Este request no tiene texto de respuesta capturado"
   },
   "dashboard": {
     "title": "Dashboard",

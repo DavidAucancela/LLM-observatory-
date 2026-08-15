@@ -27,11 +27,13 @@ src/
 │   ├── team.js         Team member management + email invitations
 │   ├── webhooks.js     Outbound webhook endpoints CRUD + test delivery
 │   ├── insights.js     GET /summary (computed insights) + POST /dismiss (org-scoped)
-│   └── notifications.js GET / (merged alert_history + reconciliation_runs + invitations) + POST /read-all
+│   ├── notifications.js GET / (merged alert_history + reconciliation_runs + invitations) + POST /read-all
+│   └── evaluations.js  Quality scores per api_calls row — human (any member) or LLM-as-judge (admin-only, POST /judge)
 ├── services/
 │   ├── email.js        Resend integration: activation, password reset, invitations
 │   ├── webhooks.js     deliverWebhooks() — HMAC-SHA256 signed POST, fire-and-forget
-│   └── insights.js     computeInsights() — rule-based detectors over api_calls, stateless (no cron, no snapshot table)
+│   ├── insights.js     computeInsights() — rule-based detectors over api_calls, stateless (no cron, no snapshot table)
+│   └── llmJudge.js     judgeApiCall(provider, apiKey, {promptText, responseText}) — scores one request via a second LLM call. Covers all 5 providers via 3 request shapes (Anthropic /v1/messages; OpenAI-shaped /v1/chat/completions for openai/grok/kimi; Gemini generateContent). Own small local pricing table for the default judge model per provider (same pattern as providerUsage.js's PRICING) — not imported from packages/sdk.
 ├── utils/
 │   └── dateRange.js    getRangeIntervals(range) — range → SQL INTERVAL strings, shared by metrics.js summary and services/insights.js
 └── jobs/
@@ -57,6 +59,7 @@ Tenant-scoped tables (existing, all have `org_id`):
 - `webhook_endpoints` — Outbound webhook URLs with HMAC secret. Columns: `org_id`, `name`, `url`, `secret` (plaintext, not hashed), `events` (TEXT[] default `{metric.created}`), `is_active`. Secret shown once on creation, never again. Partial index on `(org_id) WHERE is_active = true`.
 - `insight_dismissals` — Which auto-computed insight (`insight_key`, e.g. `cost_spike:openai:gpt-4o`) an org muted and until when. Columns: `org_id`, `insight_key`, `dismissed_until`, `dismissed_by`. Unique on `(org_id, insight_key)` — "Silenciar 24h" upserts this row. Insights themselves are never persisted; `services/insights.js`'s `computeInsights()` recomputes them from `api_calls` on every `GET /api/insights/summary` call (4 rule-based detectors: cost spike, error rate breach, latency regression per model, and an org-level cost-per-request improvement — thresholds documented as constants at the top of the file).
 - `notification_reads` — One row per user: `last_read_at` watermark for the in-app notification bell. Columns: `user_id` (PK), `last_read_at` (default `-infinity`, so everything is unread before the first "mark all read"). Notifications are never stored — `GET /api/notifications` assembles them live from `alert_history`, `reconciliation_runs` (`status IN ('alert','error')`), and `invitations.accepted_at`, all of which already have real timestamps.
+- `evaluations` — Quality score per `api_calls` row. Columns: `org_id`, `api_call_id` (FK, `ON DELETE CASCADE`), `name` (default `'quality'` — a named-metric slot for future scores like `'toxicity'`, unused otherwise), `method` (`human`|`llm_judge`), `score` (0-100 `DECIMAL`), `reasoning`, `evaluator_model` (NULL for `human`), `created_by` (NULL for `llm_judge`). LLM-judge scoring is **on-demand only** (`POST /api/evaluations/judge`, admin-only) — never automatic on ingest, so it can't silently double an org's LLM spend. The judge call itself is billable, so the route also inserts a normal `api_calls` row for it (`prompt_preview = 'eval:judge'`) via `services/llmJudge.js` — judge spend shows up on the dashboard like any other call. Judge picks whichever `key_type='sdk'` credential matches the original call's provider, falling back to any configured sdk credential; returns 400 if none exists or if the target call has no `response_full` captured.
 - `reconciliation_runs` — Daily comparison of client-reported `cost_usd` against the provider's real billed-dollar total (OpenAI `GET /v1/organization/costs`, Anthropic `GET /v1/organizations/cost_report` — genuine ground truth, both in `services/providerUsage.js`'s `fetch{OpenAI,Anthropic}RealCost`). Falls back to a token-usage-based estimate (`fetch{OpenAI,Anthropic}Usage` + local `PRICING`) if the real Costs API call fails — `source` column records which one produced the row (`provider_costs_api` | `token_estimate_fallback`). Other columns: `org_id`, `provider`, `period_start/end`, `provider_computed_usd`, `client_reported_usd`, `deviation_pct`, `status` (`ok`|`alert`|`error`). Populated by the `runReconciliation()` cron (`jobs/reconciliation.js`, daily at 03:30) for every `(org, provider)` with an admin credential configured. Read via `GET /api/reconciliation` and `GET /api/reconciliation/latest`. **Anthropic gotcha:** `cost_report`'s `amount` field is a decimal string in cents despite looking like dollars (their own docs example: `"123.45"` → `$1.23`) — must divide by 100; OpenAI's `amount.value` is already a plain USD float, no conversion.
 
 Auth tables:
@@ -85,7 +88,7 @@ Auth tables:
 
 **Time series logic:** `DATE_TRUNC('hour')` for ≤7d ranges, `DATE_TRUNC('day')` for >7d.
 
-**Alert debounce:** 6 hours per rule to prevent spam. Checker groups by `${org_id}:${metric}`.
+**Alert debounce:** `debounce_hours` per rule (default 6h) to prevent spam. Checker groups by `${org_id}:${metric}`.
 
 **Encryption format:** `v2:iv_hex:ciphertext_hex:tag_hex` (AES-256-GCM, 12-byte IV, 16-byte auth tag). Legacy CBC format `iv_hex:ciphertext_hex` still decrypts transparently — new writes always use GCM. No ENCRYPTION_KEY rotation needed.
 
@@ -150,6 +153,13 @@ Delivery is fire-and-forget with 1 retry after 1s. Failures are silent (metric a
 |-------|--------|------|-------------|
 | `/api/insights/summary` | GET | JWT | Computed insights for `?range=` (24h\|7d\|30d\|90d), excluding muted ones |
 | `/api/insights/dismiss` | POST | JWT | Mute an `insight_key` for `hours` (default 24, max 168) |
+
+### Evaluations (quality scores, org-scoped)
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/evaluations` | GET | JWT | List evaluations for `?api_call_id=` |
+| `/api/evaluations` | POST | JWT (not observatory token) | Submit a human score (0-100) |
+| `/api/evaluations/judge` | POST | JWT (admin) | Score via LLM-as-judge — billable, inserts a matching `api_calls` row too |
 
 ### Notifications (auto-assembled, user-scoped read state)
 | Route | Method | Auth | Description |
