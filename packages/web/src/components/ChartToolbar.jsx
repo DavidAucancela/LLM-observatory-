@@ -189,26 +189,34 @@ export default function ChartToolbar({
               </span>
             </button>
           ))}
+
+          {showCompare && (
+            <>
+              <div className="dash-chart-rail-legend-separator" />
+              <button
+                type="button"
+                className={`dash-chart-rail-legend-compare${comparePrev ? ' active' : ''}`}
+                title={t('dashboard.comparePrevToggle')}
+                tabIndex={collapsed ? -1 : 0}
+                onClick={onToggleCompare}
+              >
+                <span className="dash-chart-rail-legend-compare-check">
+                  {comparePrev ? '✓' : ''}
+                </span>
+                <span className="dash-chart-rail-legend-name">
+                  {t('dashboard.comparePrevToggle')}
+                </span>
+                {comparePrev && typeof compareDelta === 'number' && !isNaN(compareDelta) && (
+                  <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 600, color: compareDelta > 0 ? 'var(--error)' : 'var(--success)' }}>
+                    {compareDelta > 0 ? '↑' : '↓'} {Math.abs(compareDelta).toFixed(1)}%
+                  </span>
+                )}
+              </button>
+            </>
+          )}
         </div>
 
         <div className="dash-chart-rail-foot">
-          {showCompare && (
-            <button
-              type="button"
-              className={`obs-btn obs-btn-sm dash-chart-rail-compare${comparePrev ? ' obs-btn-active' : ''}`}
-              title={t('dashboard.comparePrevToggle')}
-              tabIndex={collapsed ? -1 : 0}
-              onClick={onToggleCompare}
-            >
-              {t('dashboard.comparePrevToggle')}
-              {comparePrev && typeof compareDelta === 'number' && !isNaN(compareDelta) && (
-                <span style={{ marginLeft: 5, fontWeight: 600, color: compareDelta > 0 ? 'var(--error)' : 'var(--success)' }}>
-                  {compareDelta > 0 ? '↑' : '↓'} {Math.abs(compareDelta).toFixed(1)}%
-                </span>
-              )}
-            </button>
-          )}
-
           <ViewToggle
             chartView={chartView}
             onSetChartView={onSetChartView}
