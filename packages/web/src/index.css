@@ -787,6 +787,25 @@ body {
   white-space: nowrap;
 }
 
+.dash-chart-rail-legend-separator {
+  height: 1px;
+  background: var(--border-soft);
+  margin: 6px 0;
+}
+
+.dash-chart-rail-view-toggle {
+  display: flex;
+  flex-shrink: 0;
+}
+.dash-chart-rail-view-toggle .obs-range-picker {
+  flex: 1;
+}
+.dash-chart-rail-view-toggle .obs-range-btn {
+  flex: 1;
+  font-size: 10px;
+  padding: 4px 6px;
+}
+
 .dash-chart-rail-foot {
   flex-shrink: 0;
   display: flex;
@@ -797,9 +816,6 @@ body {
 }
 
 .dash-chart-rail-compare { justify-content: center; }
-
-.dash-chart-rail-views { align-self: stretch; }
-.dash-chart-rail-views .obs-range-btn { flex: 1; text-align: center; }
 
 .dash-chart-rail-actions { display: flex; align-items: center; gap: 6px; }
 .dash-chart-rail-refresh { flex: 1; justify-content: center; }
@@ -828,19 +844,21 @@ body {
    plot, not the rail, and the rail can be far from the plot's center. */
 .dash-chart-hint-banner {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 14px;
   background: var(--surface-raised, var(--surface));
-  border-top: 1px solid var(--border);
+  border: 1px solid var(--border);
   padding: 8px 14px;
-  border-radius: 0 0 4px 4px;
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
   animation: dash-hint-slide-up 0.18s ease;
+  pointer-events: auto;
 }
 
 @keyframes dash-hint-slide-up {

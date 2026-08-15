@@ -189,6 +189,16 @@ export default function ChartToolbar({
               </span>
             </button>
           ))}
+
+          <div className="dash-chart-rail-legend-separator" />
+
+          <div className="dash-chart-rail-view-toggle">
+            <ViewToggle
+              chartView={chartView}
+              onSetChartView={onSetChartView}
+              tabIndex={collapsed ? -1 : 0}
+            />
+          </div>
         </div>
 
         <div className="dash-chart-rail-foot">
@@ -208,13 +218,6 @@ export default function ChartToolbar({
               )}
             </button>
           )}
-
-          <ViewToggle
-            chartView={chartView}
-            onSetChartView={onSetChartView}
-            className="dash-chart-rail-views"
-            tabIndex={collapsed ? -1 : 0}
-          />
 
           <div className="dash-chart-rail-actions">
             <button className="obs-btn dash-chart-rail-refresh" tabIndex={collapsed ? -1 : 0} onClick={onRefresh} disabled={syncing}>
