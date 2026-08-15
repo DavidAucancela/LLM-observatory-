@@ -353,3 +353,27 @@ CREATE TABLE IF NOT EXISTS notification_reads (
   user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   last_read_at  TIMESTAMPTZ NOT NULL DEFAULT '-infinity'
 );
+
+-- ── Evaluations — quality score per api_calls row, either a human opinion or
+--    an LLM-as-judge call triggered on demand (never automatic on ingest — that
+--    would silently double an org's spend on every request). score is 0-100 so
+--    a judge model can be nuanced instead of forced into a 1-5 bucket. `name`
+--    allows more than one named metric per call in the future (e.g. a separate
+--    "toxicity" score alongside "quality"); v1 only ever writes 'quality'.
+--    A judge call is itself billable, so routes/evaluations.js also inserts a
+--    normal api_calls row for it (prompt_preview='eval:judge') — judge spend
+--    must show up on the dashboard like any other call, not go untracked. ────
+CREATE TABLE IF NOT EXISTS evaluations (
+  id               SERIAL PRIMARY KEY,
+  org_id           INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  api_call_id      INTEGER NOT NULL REFERENCES api_calls(id) ON DELETE CASCADE,
+  name             VARCHAR(50) NOT NULL DEFAULT 'quality',
+  method           VARCHAR(20) NOT NULL, -- 'human' | 'llm_judge'
+  score            DECIMAL(5, 2) NOT NULL,
+  reasoning        TEXT,
+  evaluator_model  VARCHAR(100), -- NULL for method='human'
+  created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL, -- NULL for method='llm_judge'
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_evaluations_api_call ON evaluations(api_call_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_org      ON evaluations(org_id, created_at DESC);

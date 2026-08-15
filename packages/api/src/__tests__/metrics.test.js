@@ -65,6 +65,26 @@ describe('POST /api/metrics', () => {
     expect(res.body.data.provider).toBe('gemini');
   });
 
+  it('accepts provider: grok', async () => {
+    const { obsToken } = await createOrg('Grok Org');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'grok', model: 'grok-4.6' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.provider).toBe('grok');
+  });
+
+  it('accepts provider: kimi', async () => {
+    const { obsToken } = await createOrg('Kimi Org');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'kimi', model: 'kimi-k3' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.provider).toBe('kimi');
+  });
+
   it('rejects an unsupported provider', async () => {
     const { obsToken } = await createOrg('BadProvider Org');
     const res = await request(app)
@@ -237,7 +257,7 @@ describe('GET /api/metrics/summary — org scoping', () => {
     expect(parseFloat(res.body.summary.total_cost_usd)).toBe(0);
   });
 
-  it('time_series is zero-filled for gemini too, not just anthropic/openai', async () => {
+  it('time_series is zero-filled for gemini/grok/kimi too, not just anthropic/openai', async () => {
     const { obsToken, jwt } = await createOrg('Gemini TimeSeries Org');
     await request(app)
       .post('/api/metrics')
@@ -252,6 +272,8 @@ describe('GET /api/metrics/summary — org scoping', () => {
     expect(providers.has('gemini')).toBe(true);
     expect(providers.has('anthropic')).toBe(true);
     expect(providers.has('openai')).toBe(true);
+    expect(providers.has('grok')).toBe(true);
+    expect(providers.has('kimi')).toBe(true);
   });
 
   it('model_time_series is zero-filled across buckets and carries all 5 metrics', async () => {

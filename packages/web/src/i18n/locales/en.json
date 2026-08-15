@@ -88,7 +88,7 @@
     "title": "Notifications",
     "markAllRead": "Mark all read",
     "empty": "No notifications",
-    "viewAll": "View all in Settings → Alerts",
+    "muteInsight": "Mute 24h",
     "allProviders": "Total",
     "budgetAlertMsg": "Spend alert — {{provider}} went over {{threshold}} (current: {{current}})",
     "deliveryFailed": "· failed to notify Discord",
@@ -227,7 +227,18 @@
     "noResponse": "(no response available)",
     "toolCallsInvoked": "Tool calls",
     "showMore": "Show more",
-    "showLess": "Show less"
+    "showLess": "Show less",
+    "evaluations": "Evaluations",
+    "noEvaluations": "No evaluations yet",
+    "evalMethodHuman": "Human",
+    "evalMethodJudge": "AI judge ({{model}})",
+    "evalScorePlaceholder": "0-100",
+    "evalReasoningPlaceholder": "Comment (optional)",
+    "evalSaveError": "Couldn't save the score",
+    "evalJudgeButton": "Evaluate with AI",
+    "evalJudging": "Evaluating…",
+    "evalJudgeError": "Judge evaluation failed",
+    "evalNoResponseHint": "No response text was captured for this request"
   },
   "dashboard": {
     "title": "Dashboard",

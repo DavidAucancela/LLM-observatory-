@@ -1,6 +1,6 @@
 # @llm-observatory/sdk
 
-Drop-in Node.js wrapper for the Anthropic and OpenAI SDKs that streams usage metrics to your [LLM Observatory](https://github.com/DavidAucancela/llm-observatory) dashboard with **zero latency overhead**.
+Drop-in Node.js wrapper for the Anthropic, OpenAI, Gemini, Grok (xAI), and Kimi (Moonshot AI) SDKs that streams usage metrics to your [LLM Observatory](https://github.com/DavidAucancela/llm-observatory) dashboard with **zero latency overhead**.
 
 ## How it works
 
@@ -17,8 +17,10 @@ Your app ──► MonitoredAnthropic.messages.create()
 
 ```bash
 npm install @llm-observatory/sdk
-# If using OpenAI:
+# If using OpenAI, Grok, or Kimi (Grok/Kimi reuse the OpenAI SDK with a custom baseURL):
 npm install openai
+# If using Gemini:
+npm install @google/genai
 ```
 
 > If the package is not yet available on npm, install directly from GitHub:
@@ -64,11 +66,63 @@ const response = await client.chat.completions.create({
 });
 ```
 
+### Gemini
+
+```javascript
+const { MonitoredGemini } = require('@llm-observatory/sdk');
+
+const client = new MonitoredGemini({
+  apiKey: process.env.GEMINI_API_KEY,
+  observatoryUrl: 'http://localhost:3001',
+  observatoryToken: process.env.OBSERVATORY_TOKEN
+});
+
+const response = await client.models.generateContent({
+  model: 'gemini-3.5-flash',
+  contents: 'Hello!'
+});
+```
+
+### Grok (xAI)
+
+```javascript
+const { MonitoredGrok } = require('@llm-observatory/sdk');
+
+const client = new MonitoredGrok({
+  apiKey: process.env.XAI_API_KEY,
+  observatoryUrl: 'http://localhost:3001',
+  observatoryToken: process.env.OBSERVATORY_TOKEN
+});
+
+// Same shape as MonitoredOpenAI — xAI's API is OpenAI-compatible
+const response = await client.chat.completions.create({
+  model: 'grok-4.6',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
+### Kimi (Moonshot AI)
+
+```javascript
+const { MonitoredKimi } = require('@llm-observatory/sdk');
+
+const client = new MonitoredKimi({
+  apiKey: process.env.MOONSHOT_API_KEY,
+  observatoryUrl: 'http://localhost:3001',
+  observatoryToken: process.env.OBSERVATORY_TOKEN
+});
+
+const response = await client.chat.completions.create({
+  model: 'kimi-k3',
+  messages: [{ role: 'user', content: 'Hello!' }]
+});
+```
+
 ### Constructor options
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `apiKey` | Yes | Your provider API key (Anthropic or OpenAI) |
+| `apiKey` | Yes | Your provider API key (falls back to `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` / `XAI_API_KEY` / `MOONSHOT_API_KEY` env vars) |
 | `observatoryUrl` | Yes | Base URL of your Observatory API (e.g. `http://localhost:3001`) |
 | `observatoryToken` | Yes | `obs_sk_...` token created in Settings → Team → Observatory Tokens |
 
@@ -91,7 +145,7 @@ Each API call records:
 | Field | Description |
 |-------|-------------|
 | `model` | Model name |
-| `provider` | `anthropic` or `openai` |
+| `provider` | `anthropic`, `openai`, `gemini`, `grok`, or `kimi` |
 | `input_tokens` | Prompt tokens used |
 | `output_tokens` | Completion tokens used |
 | `cost_usd` | Estimated cost (USD) |
@@ -106,7 +160,13 @@ Each API call records:
 
 **OpenAI:** gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, o1, o1-mini, o3, o3-mini
 
-Unknown models are tracked with `cost_usd = 0` and a warning is logged.
+**Gemini:** gemini-3.1-pro-preview, gemini-3.5-flash, gemini-3-flash-preview, gemini-3.1-flash-lite, gemini-2.5-pro, gemini-2.5-flash
+
+**Grok (xAI):** grok-4.6, grok-4.5, grok-4.3, grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning, grok-4.20-multi-agent-0309, grok-build-0.1
+
+**Kimi (Moonshot AI):** kimi-k3, kimi-k2.6, kimi-k2.7-code, kimi-k2.7-code-highspeed
+
+Unknown models are tracked with `cost_usd = 0` and a warning is logged. Pricing tables use the standard (<200k context) tier where a provider charges more beyond that threshold — see `src/index.js` for the exact per-model rates.
 
 ## OpenAI extended support
 
@@ -115,6 +175,8 @@ Unknown models are tracked with `cost_usd = 0` and a warning is logged.
 - **Embeddings** — `client.embeddings.create()`
 - **Transcription** — `client.audio.transcriptions.create()` (Whisper)
 - **Text-to-speech** — `client.audio.speech.create()`
+
+`MonitoredGrok` and `MonitoredKimi` only instrument `chat.completions.create()` (streaming and non-streaming) — neither provider exposes an embeddings/audio API today.
 
 ## License
 

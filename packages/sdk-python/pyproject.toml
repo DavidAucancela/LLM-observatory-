@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "llm-observatory"
 version = "1.0.0"
-description = "Drop-in observability wrapper for Anthropic and OpenAI Python SDKs"
+description = "Drop-in observability wrapper for Anthropic, OpenAI, Grok (xAI), and Kimi (Moonshot AI) Python SDKs"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-keywords = ["llm", "observability", "anthropic", "openai", "monitoring", "claude"]
+keywords = ["llm", "observability", "anthropic", "openai", "grok", "xai", "kimi", "moonshot", "monitoring", "claude"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -27,6 +27,11 @@ dependencies = [
 
 [project.optional-dependencies]
 openai = ["openai>=1.0.0"]
+# Grok (xAI) and Kimi (Moonshot AI) both expose an OpenAI-compatible API, so
+# MonitoredGrok/MonitoredKimi reuse the openai package under a custom base_url —
+# these extras are aliases of the same dependency for clearer install intent.
+grok = ["openai>=1.0.0"]
+kimi = ["openai>=1.0.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

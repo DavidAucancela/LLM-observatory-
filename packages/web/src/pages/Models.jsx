@@ -8,7 +8,7 @@ import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
 
-const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669', gemini: '#4285F4' };
+const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669', gemini: '#4285F4', grok: '#3F3F46', kimi: '#0D9488' };
 
 function parseModel(m) {
   return {
@@ -26,7 +26,7 @@ function fmt(n) {
   return Math.round(n).toString();
 }
 
-const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' };
+const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
 
 // Cost per 1K tokens vs. avg latency, bubble sized by request volume — answers
 // "which model is actually worth using", which sorting-by-total-cost alone

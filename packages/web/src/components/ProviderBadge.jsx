@@ -1,12 +1,12 @@
 import React from 'react';
 
 const COLORS = {
-  anthropic: '#D97706', openai: '#059669', gemini: '#4285F4',
-  Anthropic: '#D97706', OpenAI: '#059669', Gemini: '#4285F4',
+  anthropic: '#D97706', openai: '#059669', gemini: '#4285F4', grok: '#3F3F46', kimi: '#0D9488',
+  Anthropic: '#D97706', OpenAI: '#059669', Gemini: '#4285F4', Grok: '#3F3F46', Kimi: '#0D9488',
 };
 const LABELS = {
-  anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini',
-  Anthropic: 'Anthropic', OpenAI: 'OpenAI', Gemini: 'Gemini',
+  anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi',
+  Anthropic: 'Anthropic', OpenAI: 'OpenAI', Gemini: 'Gemini', Grok: 'Grok', Kimi: 'Kimi',
 };
 
 export default function ProviderBadge({ provider, size = 'sm' }) {

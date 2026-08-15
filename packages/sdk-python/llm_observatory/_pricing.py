@@ -71,3 +71,51 @@ def calculate_openai_cost(model: str, input_tokens: int, output_tokens: int) -> 
         return 0.0
     return (input_tokens / 1_000_000) * pricing["input"] + \
            (output_tokens / 1_000_000) * pricing["output"]
+
+
+# Cost per million tokens (USD) — August 2026, per docs.x.ai/docs/models. Standard
+# (<200k context) tier only; xAI doubles input/output rates at >=200k context, not
+# modeled here (keep in sync with GROK_PRICING in packages/sdk/src/index.js).
+GROK_PRICING: dict[str, dict[str, float]] = {
+    "grok-4.6":                     {"input": 2.00, "output":  6.00},
+    "grok-4.5":                     {"input": 2.00, "output":  6.00},
+    "grok-4.3":                     {"input": 1.25, "output":  2.50},
+    "grok-4.20-0309-reasoning":     {"input": 1.25, "output":  2.50},
+    "grok-4.20-0309-non-reasoning": {"input": 1.25, "output":  2.50},
+    "grok-4.20-multi-agent-0309":   {"input": 1.25, "output":  2.50},
+    "grok-build-0.1":               {"input": 1.00, "output":  2.00},
+}
+
+# Cost per million tokens (USD) — August 2026, per platform.kimi.ai/docs/pricing.
+# Cache-miss (standard) rate only (keep in sync with KIMI_PRICING in
+# packages/sdk/src/index.js).
+KIMI_PRICING: dict[str, dict[str, float]] = {
+    "kimi-k3":                  {"input": 3.00, "output": 15.00},
+    "kimi-k2.6":                {"input": 0.95, "output":  4.00},
+    "kimi-k2.7-code":           {"input": 0.95, "output":  4.00},
+    "kimi-k2.7-code-highspeed": {"input": 1.90, "output":  8.00},
+}
+
+
+def calculate_grok_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = GROK_PRICING.get(model)
+    if not pricing:
+        warnings.warn(
+            f'[LLM Observatory] Unknown Grok model pricing: "{model}" — cost recorded as $0',
+            stacklevel=3,
+        )
+        return 0.0
+    return (input_tokens / 1_000_000) * pricing["input"] + \
+           (output_tokens / 1_000_000) * pricing["output"]
+
+
+def calculate_kimi_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = KIMI_PRICING.get(model)
+    if not pricing:
+        warnings.warn(
+            f'[LLM Observatory] Unknown Kimi model pricing: "{model}" — cost recorded as $0',
+            stacklevel=3,
+        )
+        return 0.0
+    return (input_tokens / 1_000_000) * pricing["input"] + \
+           (output_tokens / 1_000_000) * pricing["output"]

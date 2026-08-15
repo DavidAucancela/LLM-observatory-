@@ -1,19 +1,27 @@
 const express = require('express');
 const pool = require('../db/pool');
+const { computeInsights } = require('../services/insights');
 
 const router = express.Router();
 
 // Deliberately not a persisted notification feed — assembled on every GET
-// from tables that already carry a real event timestamp. See schema.sql's
-// comment on notification_reads for why "budget at 92%" isn't one of these
-// sources (it's live state, not a dated event).
+// from tables that already carry a real event timestamp (3 DB-backed types)
+// plus computed insights for the 4th type. See schema.sql's comment on
+// notification_reads for why "budget at 92%" isn't one of these sources
+// (it's live state, not a dated event).
+//
+// Insights use a fixed 24h range (no range selector on the bell like the
+// Dashboard has) to keep the notification feed focused on recent conditions.
+// Insights represent ongoing/active anomalies, not historical events, so
+// their occurred_at is always "now" at request time — this is correct
+// semantically (they float to the top of the list as the most recent items).
 const MAX_NOTIFICATIONS = 20;
 
 router.get('/', async (req, res) => {
   try {
     const { orgId, id: userId } = req.user;
 
-    const [alerts, reconciliations, joins, readRow] = await Promise.all([
+    const [alerts, reconciliations, joins, readRow, insights, dismissed] = await Promise.all([
       pool.query(
         `SELECT id, provider, current_value, threshold_usd, success, sent_at
          FROM alert_history WHERE org_id = $1 ORDER BY sent_at DESC LIMIT $2`,
@@ -33,9 +41,15 @@ router.get('/', async (req, res) => {
         [orgId, MAX_NOTIFICATIONS]
       ),
       pool.query(`SELECT last_read_at FROM notification_reads WHERE user_id = $1`, [userId]),
+      computeInsights(orgId, '24h'),
+      pool.query(
+        `SELECT insight_key FROM insight_dismissals WHERE org_id = $1 AND dismissed_until > NOW()`,
+        [orgId]
+      ),
     ]);
 
     const lastReadAt = readRow.rows[0]?.last_read_at ?? null;
+    const dismissedKeys = new Set(dismissed.rows.map(r => r.insight_key));
 
     const items = [
       ...alerts.rows.map(r => ({
@@ -65,15 +79,32 @@ router.get('/', async (req, res) => {
         occurred_at: r.accepted_at,
         data: { email: r.email },
       })),
+      ...insights
+        .filter(i => !dismissedKeys.has(i.insight_key))
+        .map(i => ({
+          id: `insight:${i.insight_key}`,
+          type: 'insight',
+          insight_type: i.type,
+          occurred_at: new Date().toISOString(),
+          data: {
+            severity: i.severity,
+            provider: i.provider,
+            model: i.model,
+            metrics: i.metrics,
+            spark: i.spark,
+            insight_key: i.insight_key,
+          },
+          read: false,
+        })),
     ];
 
     items.sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const top = items.slice(0, MAX_NOTIFICATIONS).map(n => ({
       ...n,
-      read: lastReadAt !== null && new Date(n.occurred_at) <= new Date(lastReadAt),
+      read: n.type === 'insight' ? false : (lastReadAt !== null && new Date(n.occurred_at) <= new Date(lastReadAt)),
     }));
 
-    res.json({ notifications: top, unread_count: top.filter(n => !n.read).length });
+    res.json({ notifications: top, unread_count: top.filter(n => !n.read && n.type !== 'insight').length });
   } catch (err) {
     console.error('GET /api/notifications error:', err.message);
     res.status(500).json({ error: 'Internal server error' });
