@@ -19,13 +19,13 @@ const PUBLIC_PATHS = [
 async function resolveObservatoryToken(raw) {
   const hash = crypto.createHash('sha256').update(raw).digest('hex');
   const result = await pool.query(
-    `SELECT org_id FROM observatory_tokens WHERE token_hash = $1 AND revoked_at IS NULL`,
+    `SELECT org_id, name FROM observatory_tokens WHERE token_hash = $1 AND revoked_at IS NULL`,
     [hash]
   );
   if (!result.rows.length) return null;
   pool.query('UPDATE observatory_tokens SET last_used_at = NOW() WHERE token_hash = $1', [hash])
     .catch(() => {});
-  return result.rows[0].org_id;
+  return { orgId: result.rows[0].org_id, tokenName: result.rows[0].name };
 }
 
 // Validates Bearer JWT or observatory token (obs_sk_*).
@@ -43,9 +43,9 @@ function authMiddleware(req, res, next) {
 
   if (token.startsWith(OBS_PREFIX)) {
     return resolveObservatoryToken(token)
-      .then(orgId => {
-        if (!orgId) return res.status(401).json({ error: 'Observatory token inválido o revocado' });
-        req.user = { orgId, isObservatoryToken: true };
+      .then(resolved => {
+        if (!resolved) return res.status(401).json({ error: 'Observatory token inválido o revocado' });
+        req.user = { orgId: resolved.orgId, tokenName: resolved.tokenName, isObservatoryToken: true };
         next();
       })
       .catch(() => res.status(500).json({ error: 'Internal server error' }));

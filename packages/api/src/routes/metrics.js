@@ -93,8 +93,8 @@ router.post('/', async (req, res) => {
           cost_usd, latency_ms, status_code, tools_used, prompt_preview, tags, api_key_hint,
           cache_read_tokens, cache_write_tokens, error_type, error_message,
           prompt_full, response_full, system_prompt, request_params, tool_calls, stop_reason,
-          cost_confidence, likely_retry_of)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING *`,
+          cost_confidence, likely_retry_of, token_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
       [
         orgId,
         data.provider, data.model,
@@ -116,6 +116,7 @@ router.post('/', async (req, res) => {
         data.stop_reason || null,
         data.cost_confidence,
         likelyRetryOf,
+        req.user.tokenName || null,
       ]
     );
     if (req.app.get('io')) req.app.get('io').emit('new-metric', result.rows[0]);
@@ -639,6 +640,31 @@ router.get('/tag-breakdown', async (req, res) => {
     res.json({ key, data: result.rows });
   } catch (err) {
     console.error('GET /api/metrics/tag-breakdown error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /project-breakdown — cost/requests grouped by observatory token name ──
+router.get('/project-breakdown', async (req, res) => {
+  try {
+    const { orgId } = req.user;
+    const range    = req.query.range || '7d';
+    const rangeMap = { '24h':'24 hours', '7d':'7 days', '30d':'30 days', '60d':'60 days', '90d':'90 days' };
+    const interval = rangeMap[range] || '7 days';
+    const result = await pool.query(
+      `SELECT token_name as value,
+              COUNT(*) as requests,
+              COALESCE(SUM(cost_usd), 0) as total_cost,
+              COALESCE(SUM(total_tokens), 0) as total_tokens
+       FROM api_calls
+       WHERE org_id = $1 AND token_name IS NOT NULL
+         AND timestamp > NOW() - INTERVAL '${interval}'
+       GROUP BY value ORDER BY total_cost DESC LIMIT 20`,
+      [orgId]
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    console.error('GET /api/metrics/project-breakdown error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

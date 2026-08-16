@@ -376,4 +376,10 @@ CREATE TABLE IF NOT EXISTS evaluations (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_evaluations_api_call ON evaluations(api_call_id);
+
+-- ── token_name — snapshot of the observatory_tokens.name that authenticated
+--    this call at ingest time, so project breakdowns don't depend on clients
+--    consistently setting a free-text `project` tag. Survives token renames
+--    (frozen at insert) but not deletes (no FK — token rows can be revoked). ─
+ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS token_name VARCHAR(100);
 CREATE INDEX IF NOT EXISTS idx_evaluations_org      ON evaluations(org_id, created_at DESC);
