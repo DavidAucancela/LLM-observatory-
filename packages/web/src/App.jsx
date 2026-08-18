@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
 import Sidebar from './components/Sidebar';
 import CommandPalette from './components/CommandPalette';
+import { SidebarProvider } from './contexts/SidebarContext';
 import Dashboard from './pages/Dashboard';
 import Activity from './pages/Activity';
 import Models from './pages/Models';
@@ -62,47 +63,40 @@ function AppShell() {
   return (
     <div className={darkMode ? 'theme-dark' : 'theme-light'} style={{ width: '100%', height: '100%' }}>
       <CommandPalette />
-      {/* Mobile header — only visible on small screens */}
-      <div className="obs-mobile-header">
-        <button className="obs-mobile-hamburger" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <div className="obs-brand" style={{ padding: 0, border: 'none' }}>
-          <div className="obs-brand-mark">◐</div>
-          <span>Observatory</span>
+      {/* No standalone mobile header/branding bar — the hamburger that opens
+          the sidebar on small screens lives inside each page's own TopBar
+          (title + range + icons), via SidebarProvider, so mobile shows a
+          single header instead of two stacked bars. */}
+      <SidebarProvider openSidebar={() => setSidebarOpen(true)}>
+        <div className="obs-root">
+          {/* Overlay for mobile sidebar */}
+          {sidebarOpen && (
+            <div className="obs-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+          )}
+          <Sidebar
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebarCollapse}
+            darkMode={darkMode}
+          />
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/activity"  element={<Activity darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/models"    element={<Models darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/keys"      element={<Keys darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/sync"      element={<Sync darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/finance"   element={<Finance darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            <Route path="/settings"  element={<Settings darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
+            {/* Legacy redirects */}
+            <Route path="/"          element={<Navigate to="/dashboard" replace />} />
+            <Route path="/requests"  element={<Navigate to="/activity" replace />} />
+            <Route path="/account"   element={<Navigate to="/settings?tab=account" replace />} />
+            <Route path="/providers" element={<Navigate to="/finance" replace />} />
+            <Route path="/budgets"   element={<Navigate to="/finance?tab=budgets" replace />} />
+          </Routes>
         </div>
-      </div>
-
-      <div className="obs-root">
-        {/* Overlay for mobile sidebar */}
-        {sidebarOpen && (
-          <div className="obs-sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-        )}
-        <Sidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={toggleSidebarCollapse}
-          darkMode={darkMode}
-        />
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/activity"  element={<Activity darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/models"    element={<Models darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/keys"      element={<Keys darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/sync"      element={<Sync darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/finance"   element={<Finance darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          <Route path="/settings"  element={<Settings darkMode={darkMode} onToggleDarkMode={toggleDarkMode} />} />
-          {/* Legacy redirects */}
-          <Route path="/"          element={<Navigate to="/dashboard" replace />} />
-          <Route path="/requests"  element={<Navigate to="/activity" replace />} />
-          <Route path="/account"   element={<Navigate to="/settings?tab=account" replace />} />
-          <Route path="/providers" element={<Navigate to="/finance" replace />} />
-          <Route path="/budgets"   element={<Navigate to="/finance?tab=budgets" replace />} />
-        </Routes>
-      </div>
+      </SidebarProvider>
     </div>
   );
 }
