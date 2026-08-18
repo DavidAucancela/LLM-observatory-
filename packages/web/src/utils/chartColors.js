@@ -35,13 +35,17 @@ export function readChartPalette() {
   };
 }
 
-// Distinct, stable per-model colors for the 3D surface's Z-axis rows — cycles
-// through a fixed palette by index so a model keeps its color across re-renders.
-const MODEL_PALETTE = [
-  '#06B6D4', '#7C3AED', '#F59E0B', '#10B981', '#EC4899', '#3B82F6',
-];
+// Per-model color, shaded from its provider's hue (see utils/providerColors.js)
+// instead of an arbitrary cyclic palette — keeps the chart's series colors
+// visually grouped by provider, consistent with the spend/provider cards.
+// `provider` null/undefined (the synthetic "Other" bucket) falls back to a
+// fixed neutral slate. `forThreeJs` picks the literal-hex variant three.js
+// needs (MetricSurface3D) vs. the color-mix() CSS string used by 2D/DOM
+// contexts (Recharts lines, legend dots).
+import { shadeForModelRGB, shadeForModelCSS } from './providerColors';
 
-export function colorForModelIndex(index) {
-  if (index === -1) return '#64748B'; // "Other" bucket — neutral slate
-  return MODEL_PALETTE[index % MODEL_PALETTE.length];
+export function colorForModel(provider, indexWithinProvider, { forThreeJs = false } = {}) {
+  return forThreeJs
+    ? shadeForModelRGB(provider, indexWithinProvider)
+    : shadeForModelCSS(provider, indexWithinProvider);
 }

@@ -44,10 +44,12 @@ Password: Demo1234!
 - **Observatory Tokens** — `obs_sk_` tokens authenticate SDK metric ingestion and link calls to your org.
 - **Authentication** — Self-registration with email activation, password reset, and JWT sessions.
 - **Dark Mode** — Full dark/light theme toggle.
-- **OpenAI Support** — Full parity with `MonitoredOpenAI` wrapper for multi-provider monitoring.
+- **Multi-Provider** — Anthropic, OpenAI, Gemini, Grok (xAI), and Kimi (Moonshot AI) all tracked side by side.
 - **Outbound Webhooks** — HMAC-signed `POST` to your own endpoints on every metric event.
 - **Cache Hit Tracking** — Anthropic prompt cache read/write tokens tracked per request.
 - **Error Classification** — Captures `error_type` and `error_message` for failed API calls.
+- **Evaluations** — Score request quality 0–100, either manually or via LLM-as-judge, to spot regressions per model.
+- **Unified Notifications** — In-app notification center surfaces budget alerts, reconciliation deviations, team activity, and usage insights in one place.
 
 ---
 
@@ -65,7 +67,7 @@ Cost per request is calculated from token usage using this table (USD per millio
 | `claude-3-opus-20240229` | 15.00 | 75.00 |
 | `claude-3-haiku-20240307` | 0.25 | 1.25 |
 
-An unrecognized model logs a warning and records cost as `$0` — add new models to the pricing tables in both SDKs when Anthropic releases them.
+An unrecognized model logs a warning and records cost as `$0` — add new models to the pricing tables in both SDKs (`ANTHROPIC_PRICING` / `OPENAI_PRICING` / `GEMINI_PRICING` in `packages/sdk/src/index.js`) as providers release them.
 
 ---
 
@@ -90,9 +92,10 @@ An unrecognized model logs a warning and records cost as `$0` — add new models
 | Multi-tenant with team roles | ✅ | ✅ | ✅ |
 | CSV export | ✅ | ✅ | ✅ |
 | Usage-based cloud pricing | ❌ (self-host = free) | ✅ | ✅ |
-| LLM evals / tracing spans | ❌ | ⚠️ limited | ✅ |
+| LLM evals (manual + LLM-as-judge scoring) | ✅ | ⚠️ limited | ✅ |
+| Tracing spans | ❌ | ⚠️ limited | ✅ |
 
-> **When to choose LLM Observatory:** you want a self-hosted, zero-overhead cost dashboard with real-time updates and no per-request cloud fees. **When to choose Langfuse:** you need deep LLM evaluation pipelines and tracing spans. **When to choose Helicone:** you want a managed cloud with minimal setup.
+> **When to choose LLM Observatory:** you want a self-hosted, zero-overhead cost dashboard with real-time updates, basic evals, and no per-request cloud fees. **When to choose Langfuse:** you need deep evaluation pipelines and full tracing spans. **When to choose Helicone:** you want a managed cloud with minimal setup.
 
 ---
 
