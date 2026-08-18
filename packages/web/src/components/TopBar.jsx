@@ -2,8 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
-import i18n from '../i18n';
 import NotificationBell from './NotificationBell';
+import { useSidebar } from '../contexts/SidebarContext';
+
+function IconHamburger() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
 
 function IconGlobe() {
   return (
@@ -65,12 +73,20 @@ function IconMoon() {
 
 // Account dropdown — mirrors the sidebar's user-menu pattern (same
 // obs-user-menu-item classes) so both dropdowns look and behave identically.
+// Language toggle lives here too (not as its own header icon) — one fewer
+// button competing for space in the header, especially on mobile.
 function AccountMenu({ darkMode, onToggleDarkMode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+
+  const toggleLanguage = () => {
+    const next = i18n.language === 'en' ? 'es' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('lang', next);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +128,10 @@ function AccountMenu({ darkMode, onToggleDarkMode }) {
             {darkMode ? <IconSun /> : <IconMoon />}
             <span>{darkMode ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}</span>
           </button>
+          <button className="obs-user-menu-item" onClick={toggleLanguage}>
+            <IconGlobe />
+            <span>{t('sidebar.language')} · {i18n.language === 'en' ? 'Español' : 'English'}</span>
+          </button>
           <div className="obs-user-menu-sep" />
           <button className="obs-user-menu-item obs-user-menu-item--danger" onClick={() => { setOpen(false); logout(); }}>
             <IconLogout />
@@ -124,19 +144,22 @@ function AccountMenu({ darkMode, onToggleDarkMode }) {
 }
 
 // Unified top bar rendered by every page: section title, optional date range
-// filter, language, notifications and account — replaces the old mix of a
-// per-page header plus globally fixed theme toggle / notification bell.
+// filter, notifications and account (language now lives inside the account
+// menu, see AccountMenu) — replaces the old mix of a per-page header plus
+// globally fixed theme toggle / notification bell.
 export default function TopBar({ title, ranges, range, onRangeChange, darkMode, onToggleDarkMode }) {
-  const { t } = useTranslation();
-
-  const toggleLanguage = () => {
-    const next = i18n.language === 'en' ? 'es' : 'en';
-    i18n.changeLanguage(next);
-    localStorage.setItem('lang', next);
-  };
+  const { openSidebar } = useSidebar();
 
   return (
     <div className="obs-header">
+      <button
+        type="button"
+        className="obs-topbar-hamburger"
+        onClick={openSidebar}
+        aria-label="Open menu"
+      >
+        <IconHamburger />
+      </button>
       <div className="obs-page-title">{title}</div>
 
       {ranges && (
@@ -155,15 +178,6 @@ export default function TopBar({ title, ranges, range, onRangeChange, darkMode, 
       )}
 
       <div className="obs-header-right">
-        <button
-          type="button"
-          className="obs-topbar-btn obs-topbar-lang"
-          onClick={toggleLanguage}
-          title={i18n.language === 'en' ? 'Español' : 'English'}
-        >
-          <IconGlobe />
-          <span>{i18n.language.toUpperCase()}</span>
-        </button>
         <NotificationBell />
         <AccountMenu darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
       </div>

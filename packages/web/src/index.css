@@ -529,15 +529,6 @@ body {
 }
 .obs-topbar-btn:hover { background: var(--hover); border-color: var(--border-strong, var(--border)); }
 
-.obs-topbar-lang {
-  width: auto;
-  padding: 0 9px;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-}
-
 .obs-account-wrap { position: relative; }
 
 .obs-account-panel {
@@ -557,10 +548,6 @@ body {
 .obs-account-panel-head {
   padding: 8px 10px 6px;
   display: flex; flex-direction: column; gap: 3px;
-}
-
-@media (max-width: 767px) {
-  .obs-topbar-lang span { display: none; }
 }
 
 /* ── Buttons ── */
@@ -640,6 +627,11 @@ body {
   font-weight: 500;
   border-bottom-color: var(--text);
 }
+
+/* Dashboard's mobile-only section tabs — desktop always shows every card via
+   .dash-cards-grid's auto-fit reflow, so the tabbar itself is only relevant
+   below the mobile breakpoint (re-enabled there, see the mobile media query). */
+.dash-mobile-tabbar { display: none; }
 
 /* ── Section label ── */
 .obs-section-label {
@@ -1787,6 +1779,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  z-index: 200;
 }
 
 .obs-notif-panel-head {
@@ -1895,28 +1888,20 @@ body {
   .obs-notif-bell { width: 30px; height: 30px; }
 }
 
-/* ── Mobile header (hidden on desktop) ── */
-.obs-mobile-header {
+/* ── Hamburger inside TopBar — hidden on desktop, shown on mobile inline
+      with the page title, so mobile has one header bar, not two ── */
+.obs-topbar-hamburger {
   display: none;
-  align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.obs-mobile-hamburger {
   background: transparent;
   border: none;
   color: var(--text);
   cursor: pointer;
   padding: 4px;
-  display: flex; align-items: center; justify-content: center;
+  align-items: center; justify-content: center;
   border-radius: 4px;
+  flex-shrink: 0;
 }
-.obs-mobile-hamburger:hover { background: var(--hover); }
+.obs-topbar-hamburger:hover { background: var(--hover); }
 
 /* Sidebar overlay (mobile) */
 .obs-sidebar-overlay {
@@ -1928,7 +1913,7 @@ body {
 
 /* ── Mobile responsive ── */
 @media (max-width: 767px) {
-  .obs-mobile-header { display: flex; }
+  .obs-topbar-hamburger { display: flex; }
   .obs-sidebar-overlay { display: block; }
 
   /* Outer theme wrapper becomes flex column */
@@ -1973,6 +1958,12 @@ body {
     border-radius: 4px;
     box-shadow: none;
   }
+  /* Nav items must also stay expanded — otherwise labels hide (collapsed
+     rules further down still apply) while the sidebar itself stays full
+     width, leaving a broken half-collapsed look. */
+  .obs-sidebar.collapsed .obs-nav-item { gap: 10px; }
+  .obs-sidebar.collapsed .obs-nav-icon { width: 18px; height: 18px; }
+  .obs-sidebar.collapsed .obs-nav-body { opacity: 1; max-width: none; }
 
   /* KPI strip: 2 columns on mobile */
   .kpi-strip {
@@ -2042,6 +2033,16 @@ body {
     overflow-y: hidden;
   }
   .dash-chart-rail-legend-item { width: auto; flex-shrink: 0; border-color: var(--border); }
+  /* The item itself is pinned to content width above, but its name span still
+     has min-width:0 from the desktop rule and would keep shrinking/ellipsing
+     inside this horizontally-scrolling legend without this — the parent's
+     overflow-x:auto only helps if children stop shrinking too. */
+  .dash-chart-rail-legend-name { flex-shrink: 0; }
+
+  /* Dashboard: mobile-only section tabs (hidden entirely on desktop, where
+     .dash-cards-grid's auto-fit already reflows every card into view). */
+  .dash-mobile-tabbar { display: flex; }
+  .dash-mobile-tab-hidden { display: none; }
   .dash-chart-rail-foot {
     flex: 1 1 100%;
     flex-direction: row;
@@ -2051,17 +2052,42 @@ body {
   }
   .dash-chart-hint-banner { padding: 8px 12px; gap: 4px 10px; }
   .dash-chart-body {
-    height: 340px;
+    /* Override the base rule's `flex: 1` (flex-basis: 0%) — in this column
+       layout .dash-chart-card is height:auto, so flex-basis wins over the
+       height below and collapses the chart to ~0px without this reset. */
+    flex: none;
+    height: 420px;
     padding: 12px 14px;
   }
 
-  /* Header: allow wrapping */
+  /* Header: single row on mobile too — hamburger, range picker and the
+     notifications/account icons all stay on one line instead of wrapping to
+     a second row. The title and its divider are dropped rather than shrunk:
+     they're pure decoration once you're in the app (the hamburger already
+     signals that, and the sidebar it opens names the current page) —
+     freeing that ~80px, plus moving the language toggle into the account
+     menu (see AccountMenu in TopBar.jsx), is what lets the rest fit on one
+     line on every phone width without needing a scroll fallback. overflow
+     is clipped rather than scrollable on the rare screen narrower than that
+     — a scrollable header risks a real usability bug: browsers/trackpads
+     can read a click-with-a-hint-of-drag inside an overflow:auto container
+     as a scroll gesture and swallow the click, which is exactly what broke
+     the notification/account buttons here before this was narrowed down. */
   .obs-header {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     height: auto;
     min-height: 52px;
     padding: 10px 16px;
     gap: 8px;
+    overflow: hidden;
+  }
+  .obs-page-title,
+  .obs-divider-v {
+    display: none;
+  }
+  .obs-range-picker,
+  .obs-header-right {
+    flex-shrink: 0;
   }
 
   /* Content: less padding on mobile */

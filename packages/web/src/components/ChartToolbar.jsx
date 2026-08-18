@@ -1,6 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { colorForModelIndex } from '../utils/chartColors';
+import { colorForModel } from '../utils/chartColors';
+import { modelProviderIndices } from '../utils/providerColors';
+import { shortModelName } from '../utils/modelAlias';
 
 function IconHelp() {
   return (
@@ -57,7 +59,7 @@ export function IconExpand() {
 // this inside .dash-chart-body, not the rail) since the hints describe how to
 // interact with the plot — anchoring them there beats a popover tucked in the
 // rail, which can end up far from the chart when the rail sits on the right.
-export function ChartHintBanner({ chartView, open }) {
+export function ChartHintBanner({ chartView, open, modelCount = 0 }) {
   const { t } = useTranslation();
   if (!open) return null;
 
@@ -71,6 +73,15 @@ export function ChartHintBanner({ chartView, open }) {
         </svg>
         {t('dashboard.legendClickHint')}
       </div>
+      {modelCount > 4 && (
+        <div className="dash-chart-hint-banner-row">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+          {t('dashboard.legendIsolateHint')}
+        </div>
+      )}
       {chartView === '3d' && (
         <>
           <div className="dash-chart-hint-banner-row">
@@ -144,13 +155,18 @@ function ViewToggle({ chartView, onSetChartView, className, tabIndex }) {
 // used) fades in opposite the rail and carries a compact 2D/3D toggle plus the
 // expand button, so switching chart view doesn't require reopening the rail.
 export default function ChartToolbar({
-  title, models, hiddenModels, onToggleModel,
+  title, models, hiddenModels, onToggleModel, onIsolateModel,
   chartView, onSetChartView, onRefresh, syncing,
   collapsed, onToggleCollapsed,
   hintOpen, onToggleHint,
   showCompare, comparePrev, onToggleCompare, compareDelta,
+  modelToProvider = {},
 }) {
   const { t } = useTranslation();
+  const providerIndices = React.useMemo(
+    () => modelProviderIndices(models, modelToProvider),
+    [models, modelToProvider]
+  );
 
   return (
     <>
@@ -179,13 +195,14 @@ export default function ChartToolbar({
               title={model === 'Other' ? t('dashboard.other') : model}
               tabIndex={collapsed ? -1 : 0}
               onClick={() => onToggleModel(model)}
+              onDoubleClick={() => onIsolateModel?.(model)}
             >
               <span
                 className="dash-chart-rail-legend-dot"
-                style={{ background: colorForModelIndex(model === 'Other' ? -1 : mi) }}
+                style={{ background: colorForModel(providerIndices[mi].provider, providerIndices[mi].index) }}
               />
               <span className="dash-chart-rail-legend-name">
-                {model === 'Other' ? t('dashboard.other') : model}
+                {model === 'Other' ? t('dashboard.other') : shortModelName(model)}
               </span>
             </button>
           ))}

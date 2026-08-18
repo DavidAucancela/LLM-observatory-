@@ -4,7 +4,8 @@ import {
   CartesianGrid, Tooltip,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
+import { readChartPalette, colorForModel } from '../utils/chartColors';
+import { modelProviderIndices } from '../utils/providerColors';
 import { buildGrid, formatMetricValue } from '../utils/metricGrid';
 
 // Same live-theme-follow behavior as MetricSurface3D's useThemePalette — duplicated
@@ -61,10 +62,11 @@ function CustomTooltip({ active, payload, label, metric }) {
 // `prevSeries`, when given, must already be aligned index-for-index with the
 // trimmed grid (see Dashboard.jsx — it slices by grid.labelOffset/hours.length
 // before passing down), so this component never needs to know about trimming.
-export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading, hiddenModels = new Set(), prevSeries = null }) {
+export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, loading, hiddenModels = new Set(), prevSeries = null, modelToProvider = {} }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
+  const providerIndices = useMemo(() => modelProviderIndices(grid.models, modelToProvider), [grid.models, modelToProvider]);
 
   // Real request counts per (hour, model), independent of the selected
   // metric — a metric value can legitimately be 0 on a real datapoint (e.g.
@@ -121,7 +123,8 @@ export default function ModelTrendChart2D({ modelTimeSeries, metric, xLabels, lo
         />
         <Tooltip content={<CustomTooltip metric={metric} />} cursor={{ stroke: palette.border }} />
         {grid.models.map((model, mi) => {
-          const color = colorForModelIndex(model === 'Other' ? -1 : mi);
+          const { provider, index } = providerIndices[mi];
+          const color = colorForModel(provider, index);
           return (
             <Line
               key={model}

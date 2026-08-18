@@ -9,6 +9,9 @@ import { useSocket } from '../hooks/useSocket';
 import { useApi } from '../hooks/useApi';
 import { formatCost, fmtLatency } from '../utils/fmt';
 import { buildGrid } from '../utils/metricGrid';
+import { PROVIDER_COLORS } from '../utils/providerColors';
+import { shortModelName } from '../utils/modelAlias';
+import { errorRateSeverity, severityColor } from '../utils/severity';
 
 // three.js + @react-three/fiber/drei add ~800KB minified — lazy-load so the
 // bundle for every other route stays light; only the Dashboard route pays for it.
@@ -86,9 +89,6 @@ const METRIC_HEADER_KEYS = {
 
 // ── Provider breakdown with bars ──────────────────────────────────────────────
 
-const PROVIDER_COLORS = { anthropic: 'var(--anthropic)', openai: 'var(--openai)', gemini: 'var(--gemini)', grok: 'var(--grok)', kimi: 'var(--kimi)' };
-const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
-
 function ReconciliationBadge({ run }) {
   const { t } = useTranslation();
   if (!run) return null;
@@ -119,14 +119,17 @@ function ProviderBreakdown({ byProvider, loading, reconciliation }) {
     <div style={{ fontSize: 12, color: 'var(--muted)', padding: '16px 0' }}>—</div>
   );
 
-  const totalCost = byProvider.reduce((s, p) => s + parseFloat(p.total_cost || 0), 0);
+  // Bar/percent track request share, not cost share — RangeSpend already
+  // covers the $ breakdown, so this card's job is the volume view instead
+  // of duplicating the same $+% figures.
+  const totalRequests = byProvider.reduce((s, p) => s + parseInt(p.requests || 0, 10), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {byProvider.map(p => {
         const cost = parseFloat(p.total_cost || 0);
         const reqs = parseInt(p.requests || 0);
-        const pct  = totalCost > 0 ? (cost / totalCost) * 100 : 0;
+        const pct  = totalRequests > 0 ? (reqs / totalRequests) * 100 : 0;
         const color = PROVIDER_COLORS[p.provider] || 'var(--accent)';
         const run   = (reconciliation || []).find(r => r.provider === p.provider);
         return (
@@ -139,10 +142,10 @@ function ProviderBreakdown({ byProvider, loading, reconciliation }) {
                 <ProviderBadge provider={p.provider} />
                 <ReconciliationBadge run={run} />
               </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                <span style={{ color: 'var(--text)', fontWeight: 500, textAlign: 'right', display: 'inline-block' }}>{formatCost(cost)}</span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                <span style={{ fontSize: 10, textAlign: 'right', display: 'inline-block' }}>{formatCost(cost)}</span>
                 <span style={{ width: 32, textAlign: 'right', display: 'inline-block' }}>{pct.toFixed(0)}%</span>
-                <span style={{ width: 58, textAlign: 'right', display: 'inline-block' }}>{reqs.toLocaleString()} req</span>
+                <span style={{ color: 'var(--text)', fontWeight: 500, width: 58, textAlign: 'right', display: 'inline-block' }}>{reqs.toLocaleString()} req</span>
               </div>
             </div>
             <div className="iprog-bar" style={{ height: 5, borderRadius: 3 }}>
@@ -183,7 +186,7 @@ function TopModels({ byModel, loading }) {
               fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)',
               flex: '2 1 0', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }} title={m.model}>
-              {m.model}
+              {shortModelName(m.model)}
             </div>
             <div className="iprog-bar" style={{ flex: '1 1 0', minWidth: 24, height: 5, borderRadius: 3 }}>
               <div style={{
@@ -242,7 +245,7 @@ function ErrorBreakdown({ breakdown, loading }) {
 
 // ── Tag breakdown ─────────────────────────────────────────────────────────────
 
-function TagBreakdown({ range }) {
+function TagBreakdown({ range, className = '' }) {
   const [tagKeys, setTagKeys]   = useState([]);
   const [tagKey, setTagKey]     = useState('');
   const [data, setData]         = useState([]);
@@ -275,7 +278,7 @@ function TagBreakdown({ range }) {
   const maxCost = Math.max(...data.map(d => parseFloat(d.total_cost || 0)), 0.0001);
 
   return (
-    <div className="obs-card dash-sub-card">
+    <div className={`obs-card dash-sub-card${className ? ` ${className}` : ''}`}>
       <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div className="obs-section-label">{t('dashboard.tagBreakdown')}</div>
         <select
@@ -320,7 +323,7 @@ const RANGE_LABEL_KEY = {
   '90d': 'dashboard.rangeLabel90d',
 };
 
-function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredProviders, loading }) {
+function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredProviders, loading, className = '' }) {
   const { t } = useTranslation();
   if (loading) return <div className="obs-skeleton" style={{ height: 120, borderRadius: 6 }} />;
 
@@ -331,7 +334,7 @@ function RangeSpend({ byProvider, totalCost, prevTotalCost, range, configuredPro
   const rangeLabelKey = RANGE_LABEL_KEY[range] || RANGE_LABEL_KEY['7d'];
 
   return (
-    <div className="obs-card dash-sub-card dash-range-spend">
+    <div className={`obs-card dash-sub-card dash-range-spend${className ? ` ${className}` : ''}`}>
       <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="obs-section-label">{t('dashboard.spentThisRange')}</div>
         <Delta value={calcDelta(totalCost, prevTotalCost)} inverse />
@@ -395,6 +398,10 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   // the chart. Not persisted: it's meant to be a lightweight, session-only declutter, same
   // as the toggle recharts' own <Legend> used to provide for the 2D view only.
   const [hiddenModels, setHiddenModels] = useState(() => new Set());
+  // Mobile-only section tabs (below the 767px breakpoint) — desktop ignores
+  // this entirely and keeps showing every card via .dash-cards-grid. Session
+  // only, no localStorage: it's a scroll-depth aid, not a durable preference.
+  const [mobileTab, setMobileTab] = useState('overview');
   const [toolbarCollapsed, setToolbarCollapsed] = useState(
     () => localStorage.getItem('obs-chart-toolbar-collapsed') === 'true'
   );
@@ -482,10 +489,28 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   const modelTimeSeries = summary?.model_time_series || [];
   const grid = useMemo(() => buildGrid(modelTimeSeries, activeMetric), [modelTimeSeries, activeMetric]);
 
+  // byModel (summary.by_model) carries `.provider` per model and is
+  // guaranteed to cover every model in grid.models — both come from the same
+  // top-5-by-request-count query server-side — so no backend change or
+  // naming heuristic is needed to color chart series by their provider's hue.
+  const modelToProvider = useMemo(
+    () => Object.fromEntries(byModel.map(m => [m.model, m.provider])),
+    [byModel]
+  );
+
   const toggleHiddenModel = (model) => setHiddenModels(prev => {
     const next = new Set(prev);
     next.has(model) ? next.delete(model) : next.add(model);
     return next;
+  });
+
+  // Isolating a model shows only that one (hides every other). A second
+  // isolate on the same already-isolated model restores "show all" — reuses
+  // the same hiddenModels Set the click-to-toggle legend already drives.
+  const isolateModel = (model) => setHiddenModels(prev => {
+    const allButThis = new Set(grid.models.filter(m => m !== model));
+    const isAlreadyIsolated = prev.size === grid.models.length - 1 && !prev.has(model);
+    return isAlreadyIsolated ? new Set() : allButThis;
   });
 
   const toggleToolbarCollapsed = () => setToolbarCollapsed(prev => {
@@ -542,6 +567,7 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   const totalReqs  = parseInt(s?.total_requests || 0);
   const errorPct   = totalReqs > 0 ? (errorCount / totalReqs) * 100 : 0;
   const errorRate  = `${errorPct.toFixed(1)}% (${errorCount})`;
+  const errSeverity = errorRateSeverity(errorPct);
 
   const prevErrorCount = parseInt(prev?.error_count || 0);
   const prevTotalReqs  = parseInt(prev?.total_requests || 0);
@@ -597,6 +623,8 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
             models={grid.models}
             hiddenModels={hiddenModels}
             onToggleModel={toggleHiddenModel}
+            onIsolateModel={isolateModel}
+            modelToProvider={modelToProvider}
             chartView={chartView}
             onSetChartView={(v) => { setChartView(v); localStorage.setItem('obs-chart-view', v); }}
             onRefresh={async () => { setSyncing(true); await fetchAll(); setSyncing(false); }}
@@ -620,6 +648,7 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
                   loading={loading}
                   range={range}
                   hiddenModels={hiddenModels}
+                  modelToProvider={modelToProvider}
                   onSwitchTo2D={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
                 />
               ) : (
@@ -629,11 +658,12 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
                   xLabels={xLabels}
                   loading={loading}
                   hiddenModels={hiddenModels}
+                  modelToProvider={modelToProvider}
                   prevSeries={compareSupported && comparePrev ? prevMetricSeries : null}
                 />
               )}
             </Suspense>
-            <ChartHintBanner chartView={chartView} open={chartHintOpen} />
+            <ChartHintBanner chartView={chartView} open={chartHintOpen} modelCount={grid.models.length} />
           </div>
         </div>
 
@@ -681,11 +711,34 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
             value={loading ? '—' : errorRate}
             delta={errorDelta}
             inverse
-            accentColor="var(--error)"
-            highlight={!loading && errorCount > 0}
+            accentColor={severityColor(errSeverity)}
+            highlight={!loading && errSeverity !== 'ok'}
             active={activeMetric === 'errorRate'}
             onClick={() => setActiveMetric('errorRate')}
           />
+        </div>
+
+        {/* Mobile-only section tabs — hidden entirely on desktop (see
+            .dash-mobile-tabbar in index.css), where every section below
+            already renders via .dash-cards-grid's auto-fit reflow. On mobile
+            they cut the "everything stacked, infinite scroll" density down
+            to one section at a time. */}
+        <div className="obs-tabbar dash-mobile-tabbar">
+          <button
+            type="button"
+            className={`obs-tab${mobileTab === 'overview' ? ' active' : ''}`}
+            onClick={() => setMobileTab('overview')}
+          >{t('dashboard.mobileTabOverview')}</button>
+          <button
+            type="button"
+            className={`obs-tab${mobileTab === 'costs' ? ' active' : ''}`}
+            onClick={() => setMobileTab('costs')}
+          >{t('dashboard.mobileTabCosts')}</button>
+          <button
+            type="button"
+            className={`obs-tab${mobileTab === 'more' ? ' active' : ''}`}
+            onClick={() => setMobileTab('more')}
+          >{t('dashboard.mobileTabMore')}</button>
         </div>
 
         {/* Full-width band: the providers render side by side with dividers, so
@@ -697,20 +750,25 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
           range={range}
           configuredProviders={configuredProviders}
           loading={loading}
+          className={mobileTab === 'overview' ? '' : 'dash-mobile-tab-hidden'}
         />
 
         {/* Breakdown cards — auto-fit grid, so adding a card here reflows the
             row instead of needing a hand-tuned column split. Provider
-            breakdown leads the row, then the rest of the info cards. */}
+            breakdown leads the row, then the rest of the info cards. Each
+            card stays a direct grid child (no extra wrapper) so desktop's
+            auto-fit layout is untouched — only the mobile-tab-hidden class,
+            scoped inside the mobile media query, gates visibility per tab. */}
         <div className="dash-cards-grid">
-          <div className="obs-card dash-sub-card">
+          <div className={`obs-card dash-sub-card${mobileTab === 'costs' ? '' : ' dash-mobile-tab-hidden'}`}>
             <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.byProvider')}</div>
+            <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: -10, marginBottom: 14 }}>{t('dashboard.byProviderSub')}</div>
             <div className="dash-scroll">
               <ProviderBreakdown byProvider={byProvider} loading={loading} reconciliation={reconciliation} />
             </div>
           </div>
 
-          <div className="obs-card dash-sub-card">
+          <div className={`obs-card dash-sub-card${mobileTab === 'costs' ? '' : ' dash-mobile-tab-hidden'}`}>
             <div className="dash-card-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div>
                 <div className="obs-section-label">{t('dashboard.topModels')}</div>
@@ -726,14 +784,14 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
             </div>
           </div>
 
-          <div className="obs-card dash-sub-card">
+          <div className={`obs-card dash-sub-card${mobileTab === 'more' ? '' : ' dash-mobile-tab-hidden'}`}>
             <div className="obs-section-label dash-card-head" style={{ marginBottom: 14 }}>{t('dashboard.errorsByType')}</div>
             <div className="dash-scroll">
               <ErrorBreakdown breakdown={errorBreakdown} loading={loading} />
             </div>
           </div>
 
-          <TagBreakdown range={range} />
+          <TagBreakdown range={range} className={mobileTab === 'more' ? '' : 'dash-mobile-tab-hidden'} />
         </div>
       </div>
     </main>

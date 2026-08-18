@@ -2,7 +2,8 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, Grid, ContactShadows } from '@react-three/drei';
 import { useTranslation } from 'react-i18next';
-import { readChartPalette, colorForModelIndex } from '../utils/chartColors';
+import { readChartPalette, colorForModel } from '../utils/chartColors';
+import { modelProviderIndices } from '../utils/providerColors';
 import { buildGrid, formatMetricValue } from '../utils/metricGrid';
 import * as THREE from 'three';
 
@@ -269,7 +270,7 @@ function pickLabelIndices(count) {
 // buildGrid trims leading/trailing empty buckets, every grid.hours index hi
 // must be offset by grid.labelOffset to land back on the right xLabels entry.
 // `?? ''` below is just a guard, not the real defense.
-function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels }) {
+function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels, providerIndices }) {
   const { hours, models, values, max, labelOffset } = grid;
   const [autoRotate, setAutoRotate] = useState(true);
   const idleTimerRef = useRef(null);
@@ -375,7 +376,8 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
           // toward the scene surface color, so magnitude reads through color
           // as well as height. Zero-value cells fade much further — they're a
           // placeholder marker, not a real (if small) data point.
-          const barColor = new THREE.Color(colorForModelIndex(model === 'Other' ? -1 : mi))
+          const { provider, index } = providerIndices[mi];
+          const barColor = new THREE.Color(colorForModel(provider, index, { forThreeJs: true }))
             .lerp(new THREE.Color(palette.surface), hasValue ? (1 - ratio) * 0.45 : 0.78);
           const cellInfo = { key, model, hour: xLabels[labelOffset + hi] ?? '', value, x, z, height, color: barColor };
           const isActiveCell = !!active && active.key === key;
@@ -455,7 +457,7 @@ function useThemePalette() {
   return palette;
 }
 
-export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D }) {
+export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D, modelToProvider = {} }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const webglOk = useMemo(() => checkWebGLSupport(), []);
@@ -466,6 +468,7 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   // on screen, not the desktop-tuned default.
   const frameRef = useRef({ distance: 0, yRatio: 0.55 });
   const grid = useMemo(() => buildGrid(modelTimeSeries || [], metric), [modelTimeSeries, metric]);
+  const providerIndices = useMemo(() => modelProviderIndices(grid.models, modelToProvider), [grid.models, modelToProvider]);
   const [hovered, setHovered] = useState(null);
   const [pinned, setPinned] = useState(null);
 
@@ -564,6 +567,7 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
             onUnhoverChange={(key) => setHovered(prev => (prev && prev.key === key ? null : prev))}
             onPinToggle={handlePinToggle}
             hiddenModels={hiddenModels}
+            providerIndices={providerIndices}
           />
         </Canvas>
       </Canvas3DErrorBoundary>
