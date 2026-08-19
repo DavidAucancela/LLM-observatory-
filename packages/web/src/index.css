@@ -2067,19 +2067,20 @@ body {
      signals that, and the sidebar it opens names the current page) —
      freeing that ~80px, plus moving the language toggle into the account
      menu (see AccountMenu in TopBar.jsx), is what lets the rest fit on one
-     line on every phone width without needing a scroll fallback. overflow
-     is clipped rather than scrollable on the rare screen narrower than that
-     — a scrollable header risks a real usability bug: browsers/trackpads
-     can read a click-with-a-hint-of-drag inside an overflow:auto container
-     as a scroll gesture and swallow the click, which is exactly what broke
-     the notification/account buttons here before this was narrowed down. */
+     line on every real phone width without needing any overflow handling.
+     Deliberately NOT overflow:hidden/auto here — .obs-notif-panel and
+     .obs-account-panel are position:absolute dropdowns anchored below this
+     bar (top: calc(100% + 8px)), and any overflow value on this ancestor
+     clips them to invisible even though the click that opens them still
+     fires. overflow-x:auto has the same problem plus its own: a
+     trackpad/mouse click with a hint of drag inside a scrollable container
+     can get read as a scroll gesture and swallow the click entirely. */
   .obs-header {
     flex-wrap: nowrap;
     height: auto;
     min-height: 52px;
     padding: 10px 16px;
     gap: 8px;
-    overflow: hidden;
   }
   .obs-page-title,
   .obs-divider-v {
