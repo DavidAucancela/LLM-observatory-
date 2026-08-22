@@ -271,7 +271,7 @@ function pickLabelIndices(count) {
 // must be offset by grid.labelOffset to land back on the right xLabels entry.
 // `?? ''` below is just a guard, not the real defense.
 function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels, providerIndices }) {
-  const { hours, models, values, max, labelOffset } = grid;
+  const { hours, models, values, rawValues, max, labelOffset } = grid;
   const [autoRotate, setAutoRotate] = useState(true);
   const idleTimerRef = useRef(null);
   const { size, camera } = useThree();
@@ -291,6 +291,50 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
     if (frameRef) frameRef.current = { distance: effectiveCameraDistance, yRatio: cameraYRatio };
     controlsRef.current?.update();
   }, [effectiveCameraDistance, cameraYRatio, camera, controlsRef, frameRef]);
+
+  // Dollies the camera in toward a pinned bar so it reads as "brought to the
+  // foreground" instead of just growing a tooltip in place. This only runs
+  // for a short settle window right after pin/unpin (dollyUntilRef), not on
+  // every frame — otherwise it would fight the user's own OrbitControls drag
+  // once they start orbiting the now-focused bar (or the scene generally,
+  // after unpinning). Distance shrinks to roughly a third of the default
+  // framing, floored at minCameraDistance so dense (30d/90d) ranges don't
+  // overshoot into the bar.
+  const DOLLY_SETTLE_MS = 700;
+  const dollyUntilRef = useRef(0);
+  const dollyGoalRef = useRef({ position: new THREE.Vector3(), target: new THREE.Vector3() });
+  const prevPinnedKeyRef = useRef(null);
+  const pinnedKey = pinned?.key ?? null;
+  if (pinnedKey !== prevPinnedKeyRef.current) {
+    prevPinnedKeyRef.current = pinnedKey;
+    dollyUntilRef.current = performance.now() + DOLLY_SETTLE_MS;
+    if (pinned) {
+      const focusDistance = Math.max(effectiveCameraDistance / 3, minCameraDistance);
+      const dir = new THREE.Vector3(0.7, cameraYRatio, 0.7).normalize();
+      dollyGoalRef.current.target.set(pinned.x, pinned.height / 2, pinned.z);
+      dollyGoalRef.current.position.copy(dollyGoalRef.current.target).addScaledVector(dir, focusDistance);
+    } else {
+      dollyGoalRef.current.target.set(0, MAX_HEIGHT / 3, 0);
+      dollyGoalRef.current.position.set(effectiveCameraDistance * 0.7, effectiveCameraDistance * cameraYRatio, effectiveCameraDistance * 0.7);
+    }
+  }
+  useFrame((_, delta) => {
+    if (performance.now() > dollyUntilRef.current) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const { position: wantPosition, target: wantTarget } = dollyGoalRef.current;
+    camera.position.set(
+      THREE.MathUtils.damp(camera.position.x, wantPosition.x, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(camera.position.y, wantPosition.y, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(camera.position.z, wantPosition.z, DAMP_LAMBDA, delta),
+    );
+    controls.target.set(
+      THREE.MathUtils.damp(controls.target.x, wantTarget.x, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(controls.target.y, wantTarget.y, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(controls.target.z, wantTarget.z, DAMP_LAMBDA, delta),
+    );
+    controls.update();
+  });
 
   const pauseAutoRotate = () => {
     clearTimeout(idleTimerRef.current);
@@ -379,7 +423,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
           const { provider, index } = providerIndices[mi];
           const barColor = new THREE.Color(colorForModel(provider, index, { forThreeJs: true }))
             .lerp(new THREE.Color(palette.surface), hasValue ? (1 - ratio) * 0.45 : 0.78);
-          const cellInfo = { key, model, hour: xLabels[labelOffset + hi] ?? '', value, x, z, height, color: barColor };
+          const cellInfo = { key, model, provider, hour: xLabels[labelOffset + hi] ?? '', value, x, z, height, color: barColor, raw: rawValues[mi][hi] };
           const isActiveCell = !!active && active.key === key;
           const isActiveRow = !!active && active.model === model;
           return (
@@ -530,6 +574,7 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   // values) rather than the raw cameraDistance/cameraYRatio computed below —
   // those are tuned for the desktop box and would under-frame a narrower one.
   const resetView = () => {
+    setPinned(null);
     const controls = controlsRef.current;
     if (!controls) return;
     const { distance, yRatio } = frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio };
@@ -571,6 +616,52 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
           />
         </Canvas>
       </Canvas3DErrorBoundary>
+
+      {pinned && (
+        // Docked in screen space (outside the Canvas), not floating in 3D
+        // like the hover tooltip — the camera dollies the pinned bar toward
+        // this corner (see Scene's dolly effect) so the card reads as the
+        // foreground detail panel for whatever the camera just moved to.
+        <div className="ms3d-summary-card">
+          <button
+            type="button"
+            className="ms3d-summary-close"
+            aria-label={t('dashboard.cellSummaryClose')}
+            onClick={() => setPinned(null)}
+          >
+            ×
+          </button>
+          <div className="ms3d-summary-header">
+            <span className="ms3d-summary-swatch" style={{ background: `#${pinned.color.getHexString()}` }} />
+            <div>
+              <div className="ms3d-summary-model">{pinned.model}</div>
+              <div className="ms3d-summary-bucket">{pinned.hour}</div>
+            </div>
+          </div>
+          <div className="ms3d-summary-grid">
+            <div className="ms3d-summary-row">
+              <span>{t('dashboard.cellSummaryRequests')}</span>
+              <strong>{formatMetricValue(pinned.raw.requests, 'requests')}</strong>
+            </div>
+            <div className="ms3d-summary-row">
+              <span>{t('dashboard.cellSummaryTokens')}</span>
+              <strong>{formatMetricValue(pinned.raw.tokens, 'tokens')}</strong>
+            </div>
+            <div className="ms3d-summary-row">
+              <span>{t('dashboard.cellSummaryCost')}</span>
+              <strong>{formatMetricValue(pinned.raw.cost, 'cost')}</strong>
+            </div>
+            <div className="ms3d-summary-row">
+              <span>{t('dashboard.cellSummaryLatency')}</span>
+              <strong>{formatMetricValue(pinned.raw.latency, 'latency')}</strong>
+            </div>
+            <div className="ms3d-summary-row">
+              <span>{t('dashboard.cellSummaryErrorRate')}</span>
+              <strong>{formatMetricValue(pinned.raw.errorRate, 'errorRate')}</strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         type="button"

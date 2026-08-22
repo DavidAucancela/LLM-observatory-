@@ -1059,6 +1059,80 @@ body {
   margin-top: 2px;
 }
 
+/* Docked detail panel for a pinned (clicked) bar — screen-space, not 3D, so
+   it stays readable and stationary while the camera dollies the bar itself
+   toward the foreground (see MetricSurface3D's Scene dolly effect). */
+.ms3d-summary-card {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 190px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  padding: 12px;
+  animation: ms3d-summary-in 0.22s ease-out;
+}
+@keyframes ms3d-summary-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ms3d-summary-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+}
+.ms3d-summary-close:hover { color: var(--text); }
+.ms3d-summary-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-right: 14px;
+}
+.ms3d-summary-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+.ms3d-summary-model {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.ms3d-summary-bucket {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 1px;
+}
+.ms3d-summary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.ms3d-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.ms3d-summary-row span { color: var(--muted); }
+.ms3d-summary-row strong { color: var(--text); font-weight: 600; }
+
 .chart2d-tooltip {
   background: var(--surface-raised, var(--surface));
   border: 1px solid var(--border);

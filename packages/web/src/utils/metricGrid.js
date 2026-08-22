@@ -48,8 +48,24 @@ export function buildGrid(modelTimeSeries, metric) {
   for (const row of modelTimeSeries) cellMap.set(`${row.hour}|${row.model}`, row);
 
   let max = 0;
-  const values = models.map(model =>
+  // rawValues mirrors `values`' [model][hour] shape but keeps every metric
+  // (not just the one currently selected for bar height) — the pinned-cell
+  // summary card shows all of them at once, so it needs the full row even
+  // though the bars themselves only encode `metric`.
+  const rawValues = models.map(model =>
     hours.map(hour => {
+      const row = cellMap.get(`${hour}|${model}`);
+      return {
+        requests: extractMetric(row, 'requests'),
+        tokens: extractMetric(row, 'tokens'),
+        cost: extractMetric(row, 'cost'),
+        latency: extractMetric(row, 'latency'),
+        errorRate: extractMetric(row, 'errorRate'),
+      };
+    })
+  );
+  const values = models.map((model) =>
+    hours.map((hour) => {
       const v = extractMetric(cellMap.get(`${hour}|${model}`), metric);
       if (v > max) max = v;
       return v;
@@ -74,6 +90,7 @@ export function buildGrid(modelTimeSeries, metric) {
 
   const trimmedHours  = hours.slice(trimStart, trimEnd);
   const trimmedValues = values.map(row => row.slice(trimStart, trimEnd));
+  const trimmedRawValues = rawValues.map(row => row.slice(trimStart, trimEnd));
 
-  return { hours: trimmedHours, models, values: trimmedValues, max: max || 1, labelOffset: trimStart };
+  return { hours: trimmedHours, models, values: trimmedValues, rawValues: trimmedRawValues, max: max || 1, labelOffset: trimStart };
 }
