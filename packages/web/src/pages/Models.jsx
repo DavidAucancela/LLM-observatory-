@@ -147,17 +147,16 @@ export default function Models({ darkMode, onToggleDarkMode }) {
 
   return (
     <main className="obs-main obs-fade-in">
-      <TopBar title={t('activity.modelsTab')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+      <TopBar
+        title={t('activity.modelsTab')}
+        ranges={RANGES}
+        range={range}
+        onRangeChange={handleRangeChange}
+        darkMode={darkMode}
+        onToggleDarkMode={onToggleDarkMode}
+      />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-          <div className="obs-range-picker">
-            {RANGES.map(r => (
-              <button key={r} className={`obs-range-btn${range === r ? ' active' : ''}`} onClick={() => handleRangeChange(r)}>{r}</button>
-            ))}
-          </div>
-        </div>
-
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {Array.from({ length: 6 }).map((_, i) => (
