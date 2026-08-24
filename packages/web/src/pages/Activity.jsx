@@ -12,7 +12,7 @@ const RANGES = ['24h', '7d', '30d', '90d'];
 const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
 
 // ── Requests tab ──────────────────────────────────────────────
-function RequestsTab({ range, onRangeChange, configuredProviders }) {
+function RequestsTab({ range, configuredProviders }) {
   // Deep-link support: insight cards on the Dashboard link here with
   // ?model=<model>&status=error to jump straight to the offending rows.
   const [searchParams] = useSearchParams();
@@ -66,6 +66,8 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
   }, [page, range, provider, status, model, search, sortBy, sortDir, tagKey, tagValue]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => { setPage(1); }, [range]);
 
   useEffect(() => {
     const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 350);
@@ -173,12 +175,6 @@ function RequestsTab({ range, onRangeChange, configuredProviders }) {
             {tagValues.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         )}
-
-        <div className="obs-range-picker">
-          {RANGES.map(r => (
-            <button key={r} className={`obs-range-btn${range === r ? ' active' : ''}`} onClick={() => { onRangeChange(r); setPage(1); }}>{r}</button>
-          ))}
-        </div>
 
         <button className="obs-btn" style={{ marginLeft: 'auto' }} onClick={handleExport}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -298,10 +294,17 @@ export default function Activity({ darkMode, onToggleDarkMode }) {
 
   return (
     <main className="obs-main obs-fade-in">
-      <TopBar title={t('activity.requestsTab')} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+      <TopBar
+        title={t('activity.requestsTab')}
+        ranges={RANGES}
+        range={range}
+        onRangeChange={handleRangeChange}
+        darkMode={darkMode}
+        onToggleDarkMode={onToggleDarkMode}
+      />
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
-        <RequestsTab range={range} onRangeChange={handleRangeChange} configuredProviders={configuredProviders} />
+        <RequestsTab range={range} configuredProviders={configuredProviders} />
       </div>
     </main>
   );
