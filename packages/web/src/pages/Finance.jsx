@@ -162,7 +162,7 @@ function BalancesTab({ range, configuredProviders, onChanged }) {
         const isOver = pct >= 100;
         const fillCls = isOver ? 'error' : isWarn ? 'warning' : '';
         return (
-          <div key={p.provider} style={{
+          <div key={p.provider} className="obs-row-grid" style={{
             display: 'grid',
             gridTemplateColumns: '160px 160px 1fr 200px 110px',
             gap: 18, alignItems: 'center',
@@ -374,7 +374,7 @@ function BudgetsTab({ onChanged }) {
         const isWarn  = pct >= 75 && pct < 100;
         const fillCls = isOver ? 'error' : isWarn ? 'warning' : '';
         return (
-          <div key={b.id} style={{
+          <div key={b.id} className="obs-row-grid" style={{
             display: 'grid',
             gridTemplateColumns: '2fr 80px 120px 120px 1fr 80px',
             gap: 16, alignItems: 'center',

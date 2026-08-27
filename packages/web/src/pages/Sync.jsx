@@ -50,7 +50,7 @@ export default function Sync({ darkMode, onToggleDarkMode }) {
 
       <div className="obs-content" style={{ paddingTop: 0 }}>
         {['anthropic', 'openai'].map(p => (
-          <div key={p} style={{
+          <div key={p} className="obs-row-grid" style={{
             display: 'grid',
             gridTemplateColumns: '140px 1fr auto auto',
             gap: 14, alignItems: 'center',
@@ -63,7 +63,7 @@ export default function Sync({ darkMode, onToggleDarkMode }) {
                 <>{t('settings.sync.lastSync')}{' '}<span style={{ color: 'var(--text)' }}>{fmtDateTime(logs.find(l => l.provider === p).started_at)}</span></>
               ) : t('settings.sync.neverSynced')}
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               {isAdmin && (
                 <>
                   <select className="obs-select" style={{ height: 30 }} value={syncDays} onChange={e => setSyncDays(e.target.value)}>
@@ -94,7 +94,7 @@ export default function Sync({ darkMode, onToggleDarkMode }) {
           <div style={{ marginTop: 24 }}>
             <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('settings.sync.logTitle')}</div>
             {logs.slice(0, 10).map(l => (
-              <div key={l.id} style={{
+              <div key={l.id} className="obs-row-grid" style={{
                 display: 'grid', gridTemplateColumns: '14px 120px 1fr 80px 90px',
                 gap: 12, alignItems: 'center', padding: '8px 0',
                 fontSize: 12, borderBottom: '1px solid var(--border-soft)'

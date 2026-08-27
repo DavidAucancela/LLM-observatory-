@@ -346,7 +346,7 @@ function AlertsTab() {
 
       {showForm && (
         <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div className="obs-row-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <div className="obs-field">
               <label>{t('settings.alerts.providerLabel')}</label>
               <select className="obs-select" value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
@@ -392,7 +392,7 @@ function AlertsTab() {
           <div className="obs-empty-sub">{t('settings.alerts.rulesHint')}</div>
         </div>
       ) : rules.map(rule => (
-        <div key={rule.id} style={{
+        <div key={rule.id} className="obs-row-grid" style={{
           display: 'grid',
           gridTemplateColumns: '140px 140px 80px 1fr 28px 64px 64px',
           gap: 12, alignItems: 'center',
@@ -445,7 +445,7 @@ function AlertsTab() {
             {t('settings.alerts.recentAlerts')} ({history.length})
           </summary>
           {history.slice(0, 10).map(h => (
-            <div key={h.id} style={{
+            <div key={h.id} className="obs-row-grid" style={{
               display: 'grid', gridTemplateColumns: '14px 70px 120px 1fr',
               gap: 12, alignItems: 'center', padding: '8px 0',
               fontSize: 12, borderBottom: '1px solid var(--border-soft)'
@@ -561,7 +561,7 @@ function WebhooksTab() {
 
       {showForm && (
         <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
+          <div className="obs-row-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
             <div className="obs-field">
               <label>{t('settings.webhooks.nameLabel')}</label>
               <input
@@ -599,7 +599,7 @@ function WebhooksTab() {
           {t('settings.webhooks.noWebhooks')}
         </div>
       ) : items.map(wh => (
-        <div key={wh.id} style={{
+        <div key={wh.id} className="obs-row-grid" style={{
           display: 'grid', gridTemplateColumns: '140px 1fr 80px auto auto',
           gap: 12, alignItems: 'center', padding: '11px 0',
           borderBottom: '1px solid var(--border-soft)',
@@ -719,7 +719,7 @@ function TeamTab() {
       {isAdmin && (
         <div style={{ marginBottom: 24 }}>
           <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('settings.team.inviteLabel')}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input
               className="obs-input"
               type="email"
@@ -747,7 +747,7 @@ function TeamTab() {
       {loading ? (
         <div className="obs-skeleton" style={{ height: 40, borderRadius: 4 }} />
       ) : members.map(m => (
-        <div key={m.id} style={{
+        <div key={m.id} className="obs-row-grid" style={{
           display: 'grid', gridTemplateColumns: '1fr 80px 130px auto',
           gap: 12, alignItems: 'center',
           padding: '10px 0', borderBottom: '1px solid var(--border-soft)',
@@ -777,7 +777,7 @@ function TeamTab() {
         <div style={{ marginTop: 28 }}>
           <div className="obs-section-label" style={{ marginBottom: 10 }}>{t('settings.team.invitationsLabel')} ({invitesTotal})</div>
           {invites.map(inv => (
-            <div key={inv.id} style={{
+            <div key={inv.id} className="obs-row-grid" style={{
               display: 'grid', gridTemplateColumns: '1fr 80px 130px auto',
               gap: 12, alignItems: 'center',
               padding: '10px 0', borderBottom: '1px solid var(--border-soft)',

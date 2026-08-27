@@ -1329,6 +1329,7 @@ body {
 /* ── Provider badge ── */
 .pbadge {
   display: inline-flex; align-items: center; gap: 6px;
+  width: fit-content;
   font-size: 12px;
   color: var(--text);
   white-space: nowrap;
@@ -1368,6 +1369,8 @@ body {
 
 /* ── Key chip ── */
 .kchip {
+  display: inline-block;
+  width: fit-content;
   font-family: var(--font-mono);
   font-size: 11px;
   padding: 2px 7px;
@@ -1381,6 +1384,7 @@ body {
 /* ── Validity badge ── */
 .vbadge {
   display: inline-flex; align-items: center; gap: 5px;
+  width: fit-content;
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 3px;
@@ -1628,6 +1632,8 @@ body {
 
 /* ── Period badge ── */
 .period-badge {
+  display: inline-block;
+  width: fit-content;
   font-size: 11px;
   color: var(--muted);
   border: 1px solid var(--border);
@@ -1797,6 +1803,21 @@ body {
 .obs-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ── Shared row-grid pattern (mobile) ──────────────────────────────────────
+   Many pages (Sync, Claves, Ajustes, Finanzas) lay out list rows as a CSS
+   grid with fixed pixel columns set inline per-row (desktop widths vary
+   per page, so they stay inline). This single class is the mobile escape
+   hatch for all of them: collapse every such row to one column so nothing
+   can overflow the viewport, instead of each page needing its own
+   breakpoint. Add `.obs-row-grid` alongside the inline gridTemplateColumns
+   style on any row that should follow this pattern. */
+@media (max-width: 767px) {
+  .obs-row-grid {
+    grid-template-columns: 1fr !important;
+    row-gap: 8px !important;
+  }
 }
 
 /* ── Notification bell — laid out inline in the top bar's obs-header-right,
