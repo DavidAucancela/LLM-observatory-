@@ -73,6 +73,31 @@ def calculate_openai_cost(model: str, input_tokens: int, output_tokens: int) -> 
            (output_tokens / 1_000_000) * pricing["output"]
 
 
+# Cost per million tokens (USD) — July 2026. Standard (<=200k context) tier only;
+# gemini-*-pro models roughly double past 200k context, not modeled here (keep in
+# sync with GEMINI_PRICING in packages/sdk/src/index.js).
+GEMINI_PRICING: dict[str, dict[str, float]] = {
+    "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},
+    "gemini-3.5-flash":       {"input": 1.50, "output":  9.00},
+    "gemini-3-flash-preview": {"input": 0.50, "output":  3.00},
+    "gemini-3.1-flash-lite":  {"input": 0.25, "output":  1.50},
+    "gemini-2.5-pro":         {"input": 1.25, "output": 10.00},
+    "gemini-2.5-flash":       {"input": 0.30, "output":  2.50},
+}
+
+
+def calculate_gemini_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = GEMINI_PRICING.get(model)
+    if not pricing:
+        warnings.warn(
+            f'[LLM Observatory] Unknown Gemini model pricing: "{model}" — cost recorded as $0',
+            stacklevel=3,
+        )
+        return 0.0
+    return (input_tokens / 1_000_000) * pricing["input"] + \
+           (output_tokens / 1_000_000) * pricing["output"]
+
+
 # Cost per million tokens (USD) — August 2026, per docs.x.ai/docs/models. Standard
 # (<200k context) tier only; xAI doubles input/output rates at >=200k context, not
 # modeled here (keep in sync with GROK_PRICING in packages/sdk/src/index.js).

@@ -414,6 +414,10 @@ export default function Finance({ darkMode, onToggleDarkMode }) {
   const [tab, setTab] = useState(searchParams.get('tab') === 'budgets' ? 'budgets' : 'balances');
   const [range, setRange] = useState(() => localStorage.getItem('obs-range') || '7d');
   const [configuredProviders, setConfiguredProviders] = useState([]);
+  // Balance tracking (GET/POST /api/balances) only supports anthropic/openai —
+  // no admin-key concept exists for gemini/grok/kimi — so the "add balance"
+  // dropdown must never offer them even if the org has a credential for them.
+  const balanceProviders = configuredProviders.filter(p => ['anthropic', 'openai'].includes(p));
   const [refreshTick, setRefreshTick] = useState(0);
   const bumpRefresh = () => setRefreshTick(n => n + 1);
   const { apiFetch } = useApi();
@@ -463,7 +467,7 @@ export default function Finance({ darkMode, onToggleDarkMode }) {
           </button>
         </div>
 
-        {tab === 'balances' && <BalancesTab range={range} configuredProviders={configuredProviders} onChanged={bumpRefresh} />}
+        {tab === 'balances' && <BalancesTab range={range} configuredProviders={balanceProviders} onChanged={bumpRefresh} />}
         {tab === 'budgets'  && <BudgetsTab onChanged={bumpRefresh} />}
       </div>
     </main>

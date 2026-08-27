@@ -24,9 +24,12 @@ const ALIAS_RULES = [
   [/^o3-mini(-.*)?$/i, 'o3-mini'],
   [/^o3(-.*)?$/i, 'o3'],
   // Gemini
-  [/^gemini-1\.5-pro(-.*)?$/i, 'gemini-1.5-pro'],
-  [/^gemini-1\.5-flash(-.*)?$/i, 'gemini-1.5-flash'],
-  [/^gemini-2\.0-flash(-.*)?$/i, 'gemini-2.0-flash'],
+  [/^gemini-3\.1-pro-preview(-.*)?$/i, 'gemini-3.1-pro'],
+  [/^gemini-3\.5-flash(-.*)?$/i, 'gemini-3.5-flash'],
+  [/^gemini-3-flash-preview(-.*)?$/i, 'gemini-3-flash'],
+  [/^gemini-3\.1-flash-lite(-.*)?$/i, 'gemini-3.1-flash-lite'],
+  [/^gemini-2\.5-pro(-.*)?$/i, 'gemini-2.5-pro'],
+  [/^gemini-2\.5-flash(-.*)?$/i, 'gemini-2.5-flash'],
   // Grok / Kimi
   [/^grok-2(-.*)?$/i, 'grok-2'],
   [/^grok-3(-.*)?$/i, 'grok-3'],

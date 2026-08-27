@@ -2,10 +2,12 @@ import pytest
 from llm_observatory._pricing import (
     ANTHROPIC_PRICING,
     OPENAI_PRICING,
+    GEMINI_PRICING,
     GROK_PRICING,
     KIMI_PRICING,
     calculate_cost,
     calculate_openai_cost,
+    calculate_gemini_cost,
     calculate_grok_cost,
     calculate_kimi_cost,
 )
@@ -56,6 +58,23 @@ class TestCalculateOpenAICost:
 
     def test_all_openai_models_have_valid_pricing(self):
         for model, pricing in OPENAI_PRICING.items():
+            assert pricing["input"] >= 0, f"{model} input price must be >= 0"
+            assert pricing["output"] >= 0, f"{model} output price must be >= 0"
+
+
+class TestCalculateGeminiCost:
+    def test_gemini_2_5_flash_cost(self):
+        # (1M input * $0.30) + (1M output * $2.50) = $2.80
+        assert calculate_gemini_cost("gemini-2.5-flash", 1_000_000, 1_000_000) == pytest.approx(2.80)
+
+    def test_zero_tokens(self):
+        assert calculate_gemini_cost("gemini-2.5-flash", 0, 0) == 0.0
+
+    def test_unknown_model_returns_zero(self):
+        assert calculate_gemini_cost("unknown-model-xyz", 1_000_000, 1_000_000) == 0.0
+
+    def test_all_gemini_models_have_valid_pricing(self):
+        for model, pricing in GEMINI_PRICING.items():
             assert pricing["input"] >= 0, f"{model} input price must be >= 0"
             assert pricing["output"] >= 0, f"{model} output price must be >= 0"
 

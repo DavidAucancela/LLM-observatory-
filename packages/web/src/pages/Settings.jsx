@@ -353,6 +353,9 @@ function AlertsTab() {
                 <option value="all">{t('settings.alerts.allProviders')}</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI</option>
+                <option value="gemini">Gemini</option>
+                <option value="grok">Grok</option>
+                <option value="kimi">Kimi</option>
               </select>
             </div>
             <div className="obs-field">
