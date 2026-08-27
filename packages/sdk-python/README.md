@@ -9,6 +9,9 @@ pip install llm-observatory
 
 # With OpenAI support
 pip install "llm-observatory[openai]"
+
+# With Gemini support
+pip install "llm-observatory[gemini]"
 ```
 
 > If the package is not yet available on PyPI, install directly from GitHub:
@@ -60,6 +63,26 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 print(response.choices[0].message.content)
+```
+
+### Gemini
+
+```python
+# Before
+from google import genai
+client = genai.Client()
+
+# After
+from llm_observatory import MonitoredGemini
+client = MonitoredGemini(
+    observatory_url="https://your-observatory.railway.app"
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Hello!",
+)
+print(response.text)
 ```
 
 ## Streaming

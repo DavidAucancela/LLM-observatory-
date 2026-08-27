@@ -44,7 +44,7 @@ No lint/typecheck/formatter scripts exist. No TypeScript.
 
 ## Monorepo structure
 
-4 packages under `npm workspaces`: `packages/api`, `packages/web`, `packages/sdk`, `packages/sdk-python`. Web has no tests. SDKs wrap Anthropic, OpenAI, and Gemini (Gemini is Node-only for now — no Python SDK wrapper, no admin-key sync, no Settings UI credential row).
+4 packages under `npm workspaces`: `packages/api`, `packages/web`, `packages/sdk`, `packages/sdk-python`. Web has no tests. SDKs wrap Anthropic, OpenAI, Gemini, Grok, and Kimi across both Node and Python (Gemini/Grok/Kimi have no admin-key sync or Costs-API reconciliation — see `packages/sdk/CLAUDE.md`).
 
 ## API tests
 

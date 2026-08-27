@@ -16,7 +16,8 @@ def mask_key(key: str | None) -> str | None:
 
 
 def classify_error(exc: Exception) -> dict[str, Any]:
-    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    # google.genai.errors.APIError (Gemini) exposes .code (int) instead of .status_code
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None) or getattr(exc, "status", None)
     msg = (str(exc) or "")[:500]
     if status in (401, 403):
         error_type = "auth_error"
@@ -135,6 +136,67 @@ def extract_anthropic_response_details(message: Any) -> dict[str, Any]:
         stop_reason = None
     return {
         "response_full": truncate("\n".join(text_parts), 20000),
+        "tool_calls":    tool_calls,
+        "stop_reason":   stop_reason,
+    }
+
+
+def extract_gemini_prompt_preview(contents: Any) -> str:
+    if isinstance(contents, str):
+        return contents[:200]
+    first = contents[0] if isinstance(contents, list) and contents else contents
+    parts = first.get("parts") if isinstance(first, dict) else getattr(first, "parts", None)
+    if parts:
+        text = " ".join(
+            (p.get("text") if isinstance(p, dict) else getattr(p, "text", None)) or ""
+            for p in parts
+        ).strip()
+        if text:
+            return text[:200]
+    return json.dumps(first if first is not None else "")[:200]
+
+
+def extract_gemini_request_details(params: dict) -> dict[str, Any]:
+    contents = params.get("contents")
+    prompt_full = truncate(contents if isinstance(contents, str) else json.dumps(contents or ""), 20000)
+    config = params.get("config")
+    system_instruction = getattr(config, "system_instruction", None) if config is not None else None
+    system_prompt = (
+        truncate(system_instruction if isinstance(system_instruction, str) else json.dumps(system_instruction), 4000)
+        if system_instruction else None
+    )
+    request_params = {
+        "temperature": getattr(config, "temperature", None) if config is not None else None,
+        "max_tokens":  getattr(config, "max_output_tokens", None) if config is not None else None,
+        "top_p":       getattr(config, "top_p", None) if config is not None else None,
+    }
+    return {"prompt_full": prompt_full, "system_prompt": system_prompt, "request_params": request_params}
+
+
+def extract_gemini_tool_names(params: dict) -> list[str]:
+    config = params.get("config")
+    tools = getattr(config, "tools", None) if config is not None else None
+    names = []
+    for t in (tools or []):
+        declarations = getattr(t, "function_declarations", None) or []
+        for fd in declarations:
+            name = getattr(fd, "name", None)
+            if name:
+                names.append(name)
+    return names
+
+
+def extract_gemini_response_details(response: Any) -> dict[str, Any]:
+    text = getattr(response, "text", None)
+    function_calls = getattr(response, "function_calls", None) or []
+    tool_calls = [
+        {"name": getattr(fc, "name", None), "arguments": getattr(fc, "args", None)}
+        for fc in function_calls
+    ]
+    candidates = getattr(response, "candidates", None) or []
+    stop_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    return {
+        "response_full": truncate(text or "", 20000),
         "tool_calls":    tool_calls,
         "stop_reason":   stop_reason,
     }

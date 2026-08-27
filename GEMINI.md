@@ -6,14 +6,14 @@ Welcome to the **LLM Observatory** codebase. This document serves as the reposit
 
 ## 1. Project Overview
 
-**LLM Observatory** is a production-grade, multi-tenant SaaS observability platform designed to monitor LLM usage (specifically Anthropic Claude, OpenAI, and Google Gemini API calls) in real-time. It provides real-time spend/token tracking, latency monitoring, cost projection, budgeting alerts, outbound webhooks, CSV exports, Discord notifications, and a WebSocket-driven interactive dashboard.
+**LLM Observatory** is a production-grade, multi-tenant SaaS observability platform designed to monitor LLM usage (Anthropic Claude, OpenAI, Google Gemini, xAI Grok, and Moonshot AI Kimi API calls) in real-time. It provides real-time spend/token tracking, latency monitoring, cost projection, budgeting alerts, outbound webhooks, CSV exports, Discord notifications, and a WebSocket-driven interactive dashboard.
 
 ### 1.1 Architecture & Flow
 ```
 User Application
-  └─► MonitoredAnthropic / MonitoredOpenAI / MonitoredGemini  (SDK — Node.js or Python)
+  └─► MonitoredAnthropic / MonitoredOpenAI / MonitoredGemini / MonitoredGrok / MonitoredKimi  (SDK — Node.js or Python)
       │   Authorization: Bearer obs_sk_xxx   ← Observatory token (org identity)
-      ├─► Claude / OpenAI / Gemini API      (real request, awaited)
+      ├─► Claude / OpenAI / Gemini / Grok / Kimi API   (real request, awaited)
       └─► Observatory API                   (async metric POST, fire & forget)
           ├─► org_id resolution             (token hash → org)
           ├─► PostgreSQL                    (persisting metrics scoped by org_id)
@@ -25,8 +25,8 @@ User Application
 ### 1.2 Core Packages (Monorepo)
 *   **`packages/api`**: Node.js, Express, and PostgreSQL backend with Socket.io real-time notifications.
 *   **`packages/web`**: React, Vite, Tailwind CSS, and Three.js frontend web dashboard.
-*   **`packages/sdk`**: Drop-in wrapper SDK for Node.js (intercepts Anthropic, OpenAI, and Gemini SDKs).
-*   **`packages/sdk-python`**: Drop-in wrapper SDK for Python (intercepts Anthropic and OpenAI SDKs).
+*   **`packages/sdk`**: Drop-in wrapper SDK for Node.js (intercepts Anthropic, OpenAI, Gemini, Grok, and Kimi SDKs).
+*   **`packages/sdk-python`**: Drop-in wrapper SDK for Python (intercepts Anthropic, OpenAI, Gemini, Grok, and Kimi SDKs).
 
 ---
 
@@ -94,7 +94,8 @@ npm test          # Runs 39 unit/integration tests
 cd packages/sdk-python
 pip install -e .               # Install basic package
 pip install -e ".[openai]"     # Install with optional OpenAI support
-pytest tests/ -v               # Run 38 unit/integration tests
+pip install -e ".[gemini]"     # Install with optional Gemini support
+pytest tests/ -v               # Run unit/integration tests
 ```
 
 ### 2.3 Docker & Multi-container Compose
@@ -146,7 +147,7 @@ After successfully writing an LLM metric:
     *   Webhooks are signed using HMAC-SHA256 of the event body against the endpoint secret, and sent as the `X-Observatory-Signature` header (prefixed with `sha256=`).
 
 ### 3.4 Ingestion & SDK Rules
-*   **Proxy Pattern**: SDKs act as lightweight wrappers around Anthropic, OpenAI, or Gemini. They intercept completion calls, record timestamps, analyze token usages, calculate pricing, and return the provider's completion response immediately.
+*   **Proxy Pattern**: SDKs act as lightweight wrappers around Anthropic, OpenAI, Gemini, Grok, or Kimi. They intercept completion calls, record timestamps, analyze token usages, calculate pricing, and return the provider's completion response immediately.
 *   **Asynchronous Ingestion**: Metric POSTs to `/api/metrics` are always fired in a non-blocking/asynchronous manner (daemons, thread pools, or event loop executor tasks). The client request must never wait for the metrics post to finish.
 *   **Key Hint Linkage**: Every metric payload MUST send `api_key_hint` computed using the constructor's masked API key. This is the critical linkage between `api_calls` and credentials stored in the DB.
 
@@ -166,8 +167,8 @@ After successfully writing an LLM metric:
     *   Both views must use the shared formatting and grouping helpers exported by `MetricSurface3D` to ensure absolute parity of values.
 
 ### 3.6 Testing & CI Standards
-*   **Node SDK (39 tests)**: pricing, anthropic/openai wrappers, helpers. Run `npm test` inside `packages/sdk`.
-*   **Python SDK (38 tests)**: Run `pytest tests/ -v` inside `packages/sdk-python`.
+*   **Node SDK**: pricing, provider wrappers (Anthropic/OpenAI/Gemini/Grok/Kimi), helpers. Run `npm test` inside `packages/sdk`.
+*   **Python SDK**: same provider coverage. Run `pytest tests/ -v` inside `packages/sdk-python`.
 *   **API Integrations (42 tests)**: Scoping, auth, rate-limiting, and webhook routing. Run test scripts inside `packages/api` (requires active PostgreSQL on `:5432` pointing to test database URL).
 *   **CI Configuration**: `.github/workflows/test.yml` automatically executes jobs in parallel for each package upon PR commits.
 
