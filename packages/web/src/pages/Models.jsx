@@ -186,32 +186,34 @@ export default function Models({ darkMode, onToggleDarkMode }) {
             )}
 
             <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('activity.allModels')}</div>
-            <table className="obs-table">
-              <thead>
-                <tr>
-                  <th>{t('activity.modelColumn')}</th>
-                  <th>{t('activity.providerColumn')}</th>
-                  <th className="col-num">{t('activity.requestsCol')}</th>
-                  <th className="col-num">{t('activity.tokensCol')}</th>
-                  <th className="col-num">{t('activity.totalCostCol')}</th>
-                  <th className="col-num">{t('activity.avgLatencyCol')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allModels.length === 0 ? (
-                  <tr><td colSpan={6}><div className="obs-empty"><div className="obs-empty-title">{t('common.noData')}</div></div></td></tr>
-                ) : [...allModels].sort((a, b) => b.requests - a.requests).map(m => (
-                  <tr key={`${m.provider}-${m.model}`} style={{ cursor: 'default' }}>
-                    <td className="col-mono">{m.model}</td>
-                    <td><ProviderBadge provider={m.provider} /></td>
-                    <td className="col-num">{m.requests.toLocaleString()}</td>
-                    <td className="col-num">{fmt(m.total_tokens)}</td>
-                    <td className="col-num">{formatCost(m.total_cost, { small: true })}</td>
-                    <td className="col-num col-muted">{fmtLatency(m.avg_latency)}</td>
+            <div className="obs-table-wrap">
+              <table className="obs-table">
+                <thead>
+                  <tr>
+                    <th>{t('activity.modelColumn')}</th>
+                    <th>{t('activity.providerColumn')}</th>
+                    <th className="col-num">{t('activity.requestsCol')}</th>
+                    <th className="col-num">{t('activity.tokensCol')}</th>
+                    <th className="col-num">{t('activity.totalCostCol')}</th>
+                    <th className="col-num">{t('activity.avgLatencyCol')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {allModels.length === 0 ? (
+                    <tr><td colSpan={6}><div className="obs-empty"><div className="obs-empty-title">{t('common.noData')}</div></div></td></tr>
+                  ) : [...allModels].sort((a, b) => b.requests - a.requests).map(m => (
+                    <tr key={`${m.provider}-${m.model}`} style={{ cursor: 'default' }}>
+                      <td className="col-mono">{m.model}</td>
+                      <td><ProviderBadge provider={m.provider} /></td>
+                      <td className="col-num">{m.requests.toLocaleString()}</td>
+                      <td className="col-num">{fmt(m.total_tokens)}</td>
+                      <td className="col-num">{formatCost(m.total_cost, { small: true })}</td>
+                      <td className="col-num col-muted">{fmtLatency(m.avg_latency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>

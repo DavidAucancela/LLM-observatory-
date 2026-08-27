@@ -54,7 +54,7 @@ function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
   const tested  = !!cred.last_tested_at;
 
   return (
-    <div style={{
+    <div className="obs-row-grid" style={{
       display: 'grid',
       gridTemplateColumns: '1fr 110px 170px 100px auto',
       gap: 14, alignItems: 'center',
@@ -71,7 +71,7 @@ function KeyRow({ cred, onDeleted, onTested, isAdmin }) {
         <span className="dot" style={{ background: !tested ? 'var(--faint)' : isValid ? 'var(--success)' : 'var(--error)', width: 5, height: 5 }} />
         {!tested ? t('settings.keys.untested') : isValid ? t('settings.keys.valid') : t('settings.keys.invalid')}
       </span>
-      <div style={{ display: 'flex', gap: 5 }}>
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {cred.key_type === 'sdk' && (
           <button className="obs-btn obs-btn-sm" disabled={syncing} onClick={handleSync}>
             {syncing ? '…' : t('settings.keys.syncButton')}
@@ -126,7 +126,7 @@ function AddKeyForm({ onSaved, onCancel }) {
 
   return (
     <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto auto', gap: 10, alignItems: 'flex-end' }}>
+      <div className="obs-row-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto auto', gap: 10, alignItems: 'flex-end' }}>
         <div className="obs-field">
           <label>{t('settings.keys.labelField')}</label>
           <input className="obs-input obs-input-lg" placeholder={t('settings.keys.labelPlaceholder')} value={form.label} onChange={e => set('label', e.target.value)} />
@@ -262,7 +262,7 @@ function ObservatoryTokensSection() {
       ) : tokens.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--muted)', padding: '8px 0' }}>{t('settings.keys.noTokens')}</div>
       ) : tokens.map(tok => (
-        <div key={tok.id} style={{
+        <div key={tok.id} className="obs-row-grid" style={{
           display: 'grid', gridTemplateColumns: '1fr 140px 110px auto',
           gap: 12, alignItems: 'center',
           padding: '10px 0', borderBottom: '1px solid var(--border-soft)',
