@@ -61,9 +61,31 @@ export function buildGrid(modelTimeSeries, metric) {
         cost: extractMetric(row, 'cost'),
         latency: extractMetric(row, 'latency'),
         errorRate: extractMetric(row, 'errorRate'),
+        // Extra per-cell detail surfaced only in the pinned 3D summary card —
+        // read straight off the row (metrics.js model_time_series SELECTs these
+        // as SUMs); absent on older API responses, hence the `|| 0`.
+        inputTokens: parseFloat(row?.input_tokens || 0),
+        outputTokens: parseFloat(row?.output_tokens || 0),
+        cacheReadTokens: parseFloat(row?.cache_read_tokens || 0),
+        cacheWriteTokens: parseFloat(row?.cache_write_tokens || 0),
       };
     })
   );
+  // Per-bucket totals across every model in the grid (not just top-5 + Other —
+  // but the API's "Other" row already rolls in the long tail, so summing the
+  // grid's rows is the full bucket total). Lets the pinned card show a cell's
+  // share of its time bucket. Indexed by the pre-trim `hours` array; trimmed
+  // in lockstep with the value grids below.
+  const columnTotals = hours.map((hour) => {
+    let requests = 0, tokens = 0, cost = 0;
+    for (const model of models) {
+      const row = cellMap.get(`${hour}|${model}`);
+      requests += extractMetric(row, 'requests');
+      tokens += extractMetric(row, 'tokens');
+      cost += extractMetric(row, 'cost');
+    }
+    return { requests, tokens, cost };
+  });
   const values = models.map((model) =>
     hours.map((hour) => {
       const v = extractMetric(cellMap.get(`${hour}|${model}`), metric);
@@ -91,6 +113,7 @@ export function buildGrid(modelTimeSeries, metric) {
   const trimmedHours  = hours.slice(trimStart, trimEnd);
   const trimmedValues = values.map(row => row.slice(trimStart, trimEnd));
   const trimmedRawValues = rawValues.map(row => row.slice(trimStart, trimEnd));
+  const trimmedColumnTotals = columnTotals.slice(trimStart, trimEnd);
 
-  return { hours: trimmedHours, models, values: trimmedValues, rawValues: trimmedRawValues, max: max || 1, labelOffset: trimStart };
+  return { hours: trimmedHours, models, values: trimmedValues, rawValues: trimmedRawValues, columnTotals: trimmedColumnTotals, max: max || 1, labelOffset: trimStart };
 }

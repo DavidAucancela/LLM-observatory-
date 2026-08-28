@@ -100,7 +100,53 @@ const KIMI_PRICING = {
   'kimi-k2.7-code-highspeed':  { input: 1.90, output:  8.00 },
 };
 
+// Chat/text pricing tables keyed by provider — used to normalize the model id
+// and to decide cost_confidence. Embeddings/Whisper/TTS have their own tables
+// and are handled by the cost_usd===0 guard in finalizeMetricPricing.
+const PROVIDER_PRICING = {
+  anthropic: ANTHROPIC_PRICING,
+  openai:    OPENAI_PRICING,
+  gemini:    GEMINI_PRICING,
+  grok:      GROK_PRICING,
+  kimi:      KIMI_PRICING,
+};
+
+const MODEL_SNAPSHOT_SUFFIX_RE = /-(\d{8}|\d{4}-\d{2}-\d{2})$/;
+
+// Best-effort canonicalization of a raw model id before a pricing lookup:
+// strips a `models/` prefix (Gemini accepts both forms) and a trailing
+// -YYYYMMDD / -YYYY-MM-DD snapshot suffix — but only when the stripped id is
+// actually present in `pricingTable`, so unknown/future ids pass through
+// untouched. Mirrors packages/web/src/utils/modelAlias.js's suffix handling.
+function normalizeModelId(model, pricingTable) {
+  if (!model || typeof model !== 'string') return model;
+  let m = model.startsWith('models/') ? model.slice(7) : model;
+  if (pricingTable && pricingTable[m]) return m;
+  const stripped = m.replace(MODEL_SNAPSHOT_SUFFIX_RE, '');
+  if (pricingTable && pricingTable[stripped]) return stripped;
+  return m;
+}
+
+// Mutates the outgoing metric payload: canonicalizes `data.model` and stamps
+// `cost_confidence: 'unknown'` when the model has no entry in its provider's
+// pricing table AND the call clearly used tokens but still priced at $0 (i.e.
+// the SDK failed to price it, not a genuine free call). Never overrides a
+// cost_confidence the caller set explicitly.
+function finalizeMetricPricing(data) {
+  if (!data || typeof data !== 'object') return;
+  const table = PROVIDER_PRICING[data.provider];
+  if (!table || !data.model) return;
+  data.model = normalizeModelId(data.model, table);
+  if (data.cost_confidence) return;
+  const usedTokens =
+    (data.input_tokens || 0) + (data.output_tokens || 0) + (data.total_tokens || 0) > 0;
+  if (!table[data.model] && Number(data.cost_usd) === 0 && usedTokens) {
+    data.cost_confidence = 'unknown';
+  }
+}
+
 async function _postMetric(url, data, token) {
+  finalizeMetricPricing(data);
   const body    = JSON.stringify(data);
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -238,7 +284,7 @@ function extractGeminiResponseDetails(response) {
 }
 
 function calculateCost(model, inputTokens, outputTokens) {
-  const pricing = ANTHROPIC_PRICING[model];
+  const pricing = ANTHROPIC_PRICING[normalizeModelId(model, ANTHROPIC_PRICING)];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown Anthropic model pricing: "${model}" — cost recorded as $0`);
     return 0;
@@ -247,7 +293,7 @@ function calculateCost(model, inputTokens, outputTokens) {
 }
 
 function calculateOpenAICost(model, inputTokens, outputTokens) {
-  const pricing = OPENAI_PRICING[model];
+  const pricing = OPENAI_PRICING[normalizeModelId(model, OPENAI_PRICING)];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown OpenAI model pricing: "${model}" — cost recorded as $0`);
     return 0;
@@ -278,7 +324,7 @@ function calculateTTSCost(model, characterCount) {
 }
 
 function calculateGeminiCost(model, inputTokens, outputTokens) {
-  const pricing = GEMINI_PRICING[model];
+  const pricing = GEMINI_PRICING[normalizeModelId(model, GEMINI_PRICING)];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown Gemini model pricing: "${model}" — cost recorded as $0`);
     return 0;
@@ -287,7 +333,7 @@ function calculateGeminiCost(model, inputTokens, outputTokens) {
 }
 
 function calculateGrokCost(model, inputTokens, outputTokens) {
-  const pricing = GROK_PRICING[model];
+  const pricing = GROK_PRICING[normalizeModelId(model, GROK_PRICING)];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown Grok model pricing: "${model}" — cost recorded as $0`);
     return 0;
@@ -296,7 +342,7 @@ function calculateGrokCost(model, inputTokens, outputTokens) {
 }
 
 function calculateKimiCost(model, inputTokens, outputTokens) {
-  const pricing = KIMI_PRICING[model];
+  const pricing = KIMI_PRICING[normalizeModelId(model, KIMI_PRICING)];
   if (!pricing) {
     console.warn(`[LLM Observatory] Unknown Kimi model pricing: "${model}" — cost recorded as $0`);
     return 0;
@@ -1019,6 +1065,8 @@ module.exports = {
   calculateGeminiCost,
   calculateGrokCost,
   calculateKimiCost,
+  normalizeModelId,
+  finalizeMetricPricing,
   ANTHROPIC_PRICING,
   OPENAI_PRICING,
   OPENAI_EMBEDDINGS_PRICING,

@@ -63,8 +63,8 @@ async function importBuckets(buckets, provider, orgId) {
 
       await pool.query(
         `INSERT INTO api_calls
-           (org_id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, prompt_preview)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 200, $9)`,
+           (org_id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, cost_usd, latency_ms, status_code, prompt_preview, api_key_hint)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, 200, $9, $9)`,
         [orgId, timestamp, provider, model, inputTokens, outputTokens, totalTokens, costUsd, tag]
       );
       imported++;

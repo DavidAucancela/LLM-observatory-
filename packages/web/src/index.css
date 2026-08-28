@@ -1033,6 +1033,52 @@ body {
 }
 .ms3d-reset-btn:hover { color: var(--text); background: var(--hover); }
 
+/* On-canvas navigation cluster — preset viewpoints, step zoom, 45° rotate,
+   orbit lock and auto-rotate toggles. Bottom-left so it clears the reset
+   button (bottom-right) and the pinned summary card (top-right). */
+.ms3d-nav {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+.ms3d-nav-views,
+.ms3d-nav-row {
+  display: flex;
+  gap: 3px;
+}
+.ms3d-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.ms3d-nav-views button { flex: 1; }
+.ms3d-nav button:hover { color: var(--text); background: var(--hover); }
+.ms3d-nav button.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .ms3d-tooltip {
   background: var(--surface-raised, var(--surface));
   border: 1px solid var(--border);
@@ -1132,6 +1178,58 @@ body {
 }
 .ms3d-summary-row span { color: var(--muted); }
 .ms3d-summary-row strong { color: var(--text); font-weight: 600; }
+/* Secondary rows (token split, cache, share) — one notch quieter than the
+   five headline metrics above them. */
+.ms3d-summary-row--sub { font-size: 10px; }
+.ms3d-summary-row--sub:first-of-type { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
+.ms3d-summary-row--sub strong { font-weight: 500; }
+
+.ms3d-summary-other {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.ms3d-summary-other-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  cursor: help;
+}
+.ms3d-summary-other-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ms3d-summary-other-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+}
+.ms3d-summary-other-list li span {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms3d-summary-other-list li em {
+  color: var(--muted);
+  font-style: normal;
+  flex-shrink: 0;
+}
+.ms3d-summary-other-more {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
 
 .chart2d-tooltip {
   background: var(--surface-raised, var(--surface));

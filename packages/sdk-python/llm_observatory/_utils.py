@@ -37,6 +37,9 @@ def classify_error(exc: Exception) -> dict[str, Any]:
 
 
 def _post_metric(url: str, data: dict[str, Any], token: str | None = None) -> None:
+    from ._pricing import finalize_metric_pricing
+
+    finalize_metric_pricing(data)
     body = json.dumps(data).encode()
     headers = {"Content-Type": "application/json"}
     if token:

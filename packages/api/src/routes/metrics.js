@@ -355,11 +355,15 @@ router.get('/summary', async (req, res) => {
       pool.query(
         `WITH top_models AS MATERIALIZED (
            SELECT model FROM api_calls ac WHERE ${tsJoinFilter}
-           GROUP BY model ORDER BY COUNT(*) DESC LIMIT 5
+           GROUP BY model ORDER BY COUNT(*) DESC, model ASC LIMIT 5
          )
          SELECT bs.bucket AS hour,
                 series_model.model AS model,
                 COALESCE(SUM(ac.total_tokens), 0)  AS total_tokens,
+                COALESCE(SUM(ac.input_tokens), 0)  AS input_tokens,
+                COALESCE(SUM(ac.output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(ac.cache_read_tokens), 0)  AS cache_read_tokens,
+                COALESCE(SUM(ac.cache_write_tokens), 0) AS cache_write_tokens,
                 COALESCE(SUM(ac.cost_usd), 0)       AS cost_usd,
                 COUNT(ac.id)                        AS requests,
                 COALESCE(AVG(ac.latency_ms) FILTER (WHERE ac.id IS NOT NULL), 0) AS avg_latency_ms,

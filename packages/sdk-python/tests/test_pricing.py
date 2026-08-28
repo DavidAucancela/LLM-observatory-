@@ -10,6 +10,8 @@ from llm_observatory._pricing import (
     calculate_gemini_cost,
     calculate_grok_cost,
     calculate_kimi_cost,
+    normalize_model_id,
+    finalize_metric_pricing,
 )
 
 
@@ -111,3 +113,88 @@ class TestCalculateKimiCost:
         for model, pricing in KIMI_PRICING.items():
             assert pricing["input"] >= 0, f"{model} input price must be >= 0"
             assert pricing["output"] >= 0, f"{model} output price must be >= 0"
+
+
+class TestNormalizeModelId:
+    def test_strips_models_prefix(self):
+        assert normalize_model_id("models/gemini-2.5-flash", GEMINI_PRICING) == "gemini-2.5-flash"
+
+    def test_strips_dated_snapshot_suffix(self):
+        assert normalize_model_id("claude-sonnet-5-20250930", ANTHROPIC_PRICING) == "claude-sonnet-5"
+        assert normalize_model_id("gpt-4o-2024-11-20", OPENAI_PRICING) == "gpt-4o"
+
+    def test_unknown_id_passes_through(self):
+        assert normalize_model_id("brand-new-model-20990101", OPENAI_PRICING) == "brand-new-model-20990101"
+
+    def test_does_not_break_a_real_priced_id(self):
+        assert normalize_model_id("grok-4.20-0309-reasoning", GROK_PRICING) == "grok-4.20-0309-reasoning"
+
+
+class TestCalculateCostNonCanonical:
+    def test_dated_anthropic_snapshot(self):
+        assert calculate_cost("claude-sonnet-5-20250930", 1_000_000, 1_000_000) == pytest.approx(18.0)
+
+    def test_models_prefixed_gemini(self):
+        p = GEMINI_PRICING["gemini-2.5-flash"]
+        assert calculate_gemini_cost("models/gemini-2.5-flash", 1_000_000, 1_000_000) == pytest.approx(
+            p["input"] + p["output"]
+        )
+
+
+class TestFinalizeMetricPricing:
+    def test_flags_unknown_when_token_call_priced_zero(self):
+        data = {"provider": "openai", "model": "gpt-9-future", "input_tokens": 100, "output_tokens": 50, "cost_usd": 0}
+        finalize_metric_pricing(data)
+        assert data["cost_confidence"] == "unknown"
+
+    def test_priced_model_left_unset(self):
+        data = {"provider": "openai", "model": "gpt-4o", "input_tokens": 100, "cost_usd": 1.23}
+        finalize_metric_pricing(data)
+        assert "cost_confidence" not in data
+
+    def test_canonicalizes_model_in_place(self):
+        data = {"provider": "anthropic", "model": "claude-sonnet-5-20250930", "total_tokens": 10, "cost_usd": 1}
+        finalize_metric_pricing(data)
+        assert data["model"] == "claude-sonnet-5"
+
+    def test_does_not_override_explicit_confidence(self):
+        data = {"provider": "openai", "model": "gpt-9-future", "input_tokens": 100, "cost_usd": 0, "cost_confidence": "known"}
+        finalize_metric_pricing(data)
+        assert data["cost_confidence"] == "known"
+
+    def test_ignores_genuine_zero_token_call(self):
+        data = {"provider": "openai", "model": "gpt-9-future", "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0}
+        finalize_metric_pricing(data)
+        assert "cost_confidence" not in data
+
+
+class TestNodePythonPricingParity:
+    """The two SDK pricing tables must stay identical (see packages/sdk/CLAUDE.md)."""
+
+    def _load_node_tables(self):
+        import pathlib
+        import re
+
+        src = pathlib.Path(__file__).parents[2] / "sdk" / "src" / "index.js"
+        text = src.read_text()
+        tables = {}
+        for name in ("ANTHROPIC_PRICING", "OPENAI_PRICING", "GEMINI_PRICING", "GROK_PRICING", "KIMI_PRICING"):
+            m = re.search(name + r"\s*=\s*\{(.*?)\n\};", text, re.S)
+            assert m, f"could not find {name} in Node SDK"
+            entries = re.findall(
+                r"'([^']+)':\s*\{\s*input:\s*([\d.]+),\s*output:\s*([\d.]+)\s*\}", m.group(1)
+            )
+            tables[name] = {k: {"input": float(i), "output": float(o)} for k, i, o in entries}
+        return tables
+
+    def test_tables_match(self):
+        node = self._load_node_tables()
+        py = {
+            "ANTHROPIC_PRICING": ANTHROPIC_PRICING,
+            "OPENAI_PRICING": OPENAI_PRICING,
+            "GEMINI_PRICING": GEMINI_PRICING,
+            "GROK_PRICING": GROK_PRICING,
+            "KIMI_PRICING": KIMI_PRICING,
+        }
+        for name, py_table in py.items():
+            assert node[name] == py_table, f"{name} diverged between Node and Python SDKs"
