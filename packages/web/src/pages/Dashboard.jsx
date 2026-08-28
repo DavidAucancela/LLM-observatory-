@@ -498,6 +498,16 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
     [byModel]
   );
 
+  // Which real models the synthetic "Other" 3D bar rolls up: every model in
+  // summary.all_models (whole-range counts) that isn't one of the charted
+  // top-5. Feeds the pinned summary card when the "Other" bar is selected.
+  const otherModels = useMemo(() => {
+    const charted = new Set(grid.models.filter(m => m !== 'Other'));
+    return (summary?.all_models || [])
+      .filter(m => !charted.has(m.model))
+      .map(m => ({ model: m.model, provider: m.provider, requests: Number(m.requests || 0) }));
+  }, [summary, grid.models]);
+
   const toggleHiddenModel = (model) => setHiddenModels(prev => {
     const next = new Set(prev);
     next.has(model) ? next.delete(model) : next.add(model);
@@ -649,6 +659,7 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
                   range={range}
                   hiddenModels={hiddenModels}
                   modelToProvider={modelToProvider}
+                  otherModels={otherModels}
                   onSwitchTo2D={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
                 />
               ) : (

@@ -1,4 +1,50 @@
+import re
 import warnings
+from typing import Any
+
+_MODEL_SNAPSHOT_SUFFIX_RE = re.compile(r"-(\d{8}|\d{4}-\d{2}-\d{2})$")
+
+
+def normalize_model_id(model: str | None, pricing_table: dict | None) -> str | None:
+    """Canonicalize a raw model id before a pricing lookup: strip a ``models/``
+    prefix (Gemini accepts both forms) and a trailing ``-YYYYMMDD`` /
+    ``-YYYY-MM-DD`` snapshot suffix, but only when the stripped id is actually
+    in ``pricing_table`` so unknown/future ids pass through untouched. Mirrors
+    packages/web/src/utils/modelAlias.js and the Node SDK."""
+    if not model or not isinstance(model, str):
+        return model
+    m = model[len("models/"):] if model.startswith("models/") else model
+    if pricing_table and m in pricing_table:
+        return m
+    stripped = _MODEL_SNAPSHOT_SUFFIX_RE.sub("", m)
+    if pricing_table and stripped in pricing_table:
+        return stripped
+    return m
+
+
+def finalize_metric_pricing(data: dict[str, Any]) -> None:
+    """Mutate the outgoing metric payload: canonicalize ``data['model']`` and
+    stamp ``cost_confidence='unknown'`` when the model has no entry in its
+    provider's pricing table AND the call clearly used tokens but still priced
+    at $0 (the SDK failed to price it, not a genuine free call). Never
+    overrides a cost_confidence the caller set explicitly."""
+    if not isinstance(data, dict):
+        return
+    table = _PROVIDER_PRICING.get(data.get("provider"))
+    model = data.get("model")
+    if not table or not model:
+        return
+    data["model"] = normalize_model_id(model, table)
+    if data.get("cost_confidence"):
+        return
+    used_tokens = (
+        (data.get("input_tokens") or 0)
+        + (data.get("output_tokens") or 0)
+        + (data.get("total_tokens") or 0)
+    ) > 0
+    if data["model"] not in table and float(data.get("cost_usd") or 0) == 0 and used_tokens:
+        data["cost_confidence"] = "unknown"
+
 
 # Cost per million tokens (USD) — July 2026
 ANTHROPIC_PRICING: dict[str, dict[str, float]] = {
@@ -50,7 +96,7 @@ OPENAI_PRICING: dict[str, dict[str, float]] = {
 
 
 def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = ANTHROPIC_PRICING.get(model)
+    pricing = ANTHROPIC_PRICING.get(normalize_model_id(model, ANTHROPIC_PRICING))
     if not pricing:
         warnings.warn(
             f'[LLM Observatory] Unknown Anthropic model pricing: "{model}" — cost recorded as $0',
@@ -62,7 +108,7 @@ def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 def calculate_openai_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = OPENAI_PRICING.get(model)
+    pricing = OPENAI_PRICING.get(normalize_model_id(model, OPENAI_PRICING))
     if not pricing:
         warnings.warn(
             f'[LLM Observatory] Unknown OpenAI model pricing: "{model}" — cost recorded as $0',
@@ -87,7 +133,7 @@ GEMINI_PRICING: dict[str, dict[str, float]] = {
 
 
 def calculate_gemini_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = GEMINI_PRICING.get(model)
+    pricing = GEMINI_PRICING.get(normalize_model_id(model, GEMINI_PRICING))
     if not pricing:
         warnings.warn(
             f'[LLM Observatory] Unknown Gemini model pricing: "{model}" — cost recorded as $0',
@@ -123,7 +169,7 @@ KIMI_PRICING: dict[str, dict[str, float]] = {
 
 
 def calculate_grok_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = GROK_PRICING.get(model)
+    pricing = GROK_PRICING.get(normalize_model_id(model, GROK_PRICING))
     if not pricing:
         warnings.warn(
             f'[LLM Observatory] Unknown Grok model pricing: "{model}" — cost recorded as $0',
@@ -134,8 +180,21 @@ def calculate_grok_cost(model: str, input_tokens: int, output_tokens: int) -> fl
            (output_tokens / 1_000_000) * pricing["output"]
 
 
+# Chat/text pricing tables keyed by provider — used by normalize_model_id and
+# finalize_metric_pricing (defined at the top of this module; referenced here
+# once every table exists). Embeddings/Whisper/TTS have their own tables and
+# are covered by finalize_metric_pricing's cost_usd == 0 guard.
+_PROVIDER_PRICING: dict[str, dict] = {
+    "anthropic": ANTHROPIC_PRICING,
+    "openai":    OPENAI_PRICING,
+    "gemini":    GEMINI_PRICING,
+    "grok":      GROK_PRICING,
+    "kimi":      KIMI_PRICING,
+}
+
+
 def calculate_kimi_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    pricing = KIMI_PRICING.get(model)
+    pricing = KIMI_PRICING.get(normalize_model_id(model, KIMI_PRICING))
     if not pricing:
         warnings.warn(
             f'[LLM Observatory] Unknown Kimi model pricing: "{model}" — cost recorded as $0',

@@ -1,8 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const {
-  calculateCost, calculateOpenAICost, calculateGrokCost, calculateKimiCost,
-  ANTHROPIC_PRICING, OPENAI_PRICING, GROK_PRICING, KIMI_PRICING,
+  calculateCost, calculateOpenAICost, calculateGeminiCost, calculateGrokCost, calculateKimiCost,
+  normalizeModelId, finalizeMetricPricing,
+  ANTHROPIC_PRICING, OPENAI_PRICING, GEMINI_PRICING, GROK_PRICING, KIMI_PRICING,
 } = require('../index.js');
 
 describe('calculateCost (Anthropic)', () => {
@@ -88,5 +89,69 @@ describe('calculateKimiCost', () => {
       assert.ok(pricing.input >= 0, `${model} input price should be >= 0`);
       assert.ok(pricing.output >= 0, `${model} output price should be >= 0`);
     }
+  });
+});
+
+describe('normalizeModelId', () => {
+  it('strips a models/ prefix when the bare id is priced', () => {
+    assert.strictEqual(normalizeModelId('models/gemini-2.5-flash', GEMINI_PRICING), 'gemini-2.5-flash');
+  });
+
+  it('strips a -YYYYMMDD snapshot suffix when the base id is priced', () => {
+    assert.strictEqual(normalizeModelId('claude-sonnet-5-20250930', ANTHROPIC_PRICING), 'claude-sonnet-5');
+    assert.strictEqual(normalizeModelId('gpt-4o-2024-11-20', OPENAI_PRICING), 'gpt-4o');
+  });
+
+  it('leaves an unknown id untouched (degrade safely)', () => {
+    assert.strictEqual(normalizeModelId('brand-new-model-20990101', OPENAI_PRICING), 'brand-new-model-20990101');
+  });
+
+  it('does not strip a suffix that is part of a real priced id', () => {
+    assert.strictEqual(normalizeModelId('grok-4.20-0309-reasoning', GROK_PRICING), 'grok-4.20-0309-reasoning');
+  });
+});
+
+describe('calculate*Cost with non-canonical model ids', () => {
+  it('prices a dated Anthropic snapshot via the base rate', () => {
+    assert.strictEqual(calculateCost('claude-sonnet-5-20250930', 1_000_000, 1_000_000), 18.0);
+  });
+
+  it('prices a models/-prefixed Gemini id', () => {
+    assert.strictEqual(
+      calculateGeminiCost('models/gemini-2.5-flash', 1_000_000, 1_000_000),
+      GEMINI_PRICING['gemini-2.5-flash'].input + GEMINI_PRICING['gemini-2.5-flash'].output
+    );
+  });
+});
+
+describe('finalizeMetricPricing', () => {
+  it('flags cost_confidence unknown when a token-using call priced at $0', () => {
+    const data = { provider: 'openai', model: 'gpt-9-future', input_tokens: 100, output_tokens: 50, cost_usd: 0 };
+    finalizeMetricPricing(data);
+    assert.strictEqual(data.cost_confidence, 'unknown');
+  });
+
+  it('leaves cost_confidence unset for a priced model', () => {
+    const data = { provider: 'openai', model: 'gpt-4o', input_tokens: 100, output_tokens: 50, cost_usd: 1.23 };
+    finalizeMetricPricing(data);
+    assert.strictEqual(data.cost_confidence, undefined);
+  });
+
+  it('canonicalizes data.model in place', () => {
+    const data = { provider: 'anthropic', model: 'claude-sonnet-5-20250930', total_tokens: 10, cost_usd: 1 };
+    finalizeMetricPricing(data);
+    assert.strictEqual(data.model, 'claude-sonnet-5');
+  });
+
+  it('does not override an explicit cost_confidence', () => {
+    const data = { provider: 'openai', model: 'gpt-9-future', input_tokens: 100, cost_usd: 0, cost_confidence: 'known' };
+    finalizeMetricPricing(data);
+    assert.strictEqual(data.cost_confidence, 'known');
+  });
+
+  it('does not flag a genuine zero-token call', () => {
+    const data = { provider: 'openai', model: 'gpt-9-future', input_tokens: 0, output_tokens: 0, total_tokens: 0, cost_usd: 0 };
+    finalizeMetricPricing(data);
+    assert.strictEqual(data.cost_confidence, undefined);
   });
 });

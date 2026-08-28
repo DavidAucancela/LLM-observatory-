@@ -270,10 +270,26 @@ function pickLabelIndices(count) {
 // buildGrid trims leading/trailing empty buckets, every grid.hours index hi
 // must be offset by grid.labelOffset to land back on the right xLabels entry.
 // `?? ''` below is just a guard, not the real defense.
-function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels, providerIndices }) {
-  const { hours, models, values, rawValues, max, labelOffset } = grid;
-  const [autoRotate, setAutoRotate] = useState(true);
+function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, cameraYRatio, minCameraDistance, barSize, labelFontSize, controlsRef, frameRef, navGoalRef, orbitLocked, autoRotateOn, hovered, pinned, onHoverChange, onUnhoverChange, onPinToggle, hiddenModels, providerIndices }) {
+  const { hours, models, values, rawValues, columnTotals, max, labelOffset } = grid;
+  const [autoRotate, setAutoRotate] = useState(false);
+  const autoRotateOnRef = useRef(autoRotateOn);
   const idleTimerRef = useRef(null);
+
+  // Auto-rotation is opt-in now (a toggle in the on-canvas nav cluster) — a
+  // scene that quietly starts drifting under the cursor was the single most
+  // disorienting part of the old free-orbit-only navigation. When the user
+  // turns it on we mirror that into local state; when off we also cancel any
+  // pending idle-resume timer so it can't sneak back.
+  useEffect(() => {
+    autoRotateOnRef.current = autoRotateOn;
+    if (autoRotateOn) {
+      setAutoRotate(true);
+    } else {
+      setAutoRotate(false);
+      clearTimeout(idleTimerRef.current);
+    }
+  }, [autoRotateOn]);
   const { size, camera } = useThree();
   const aspect = size.width / Math.max(size.height, 1);
   const aspectScale = aspect > 0 && aspect < REFERENCE_ASPECT
@@ -336,13 +352,40 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
     controls.update();
   });
 
+  // Smoothly flies the camera to a goal set by the on-canvas nav cluster
+  // (preset viewpoints, step zoom, 45° rotate). Same damp-for-a-settle-window
+  // pattern as the pin dolly above: it only runs while performance.now() is
+  // before goal.until, then clears itself so it never fights a subsequent
+  // manual orbit/pan.
+  useFrame((_, delta) => {
+    const goal = navGoalRef?.current;
+    if (!goal) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    if (performance.now() > goal.until) { navGoalRef.current = null; return; }
+    camera.position.set(
+      THREE.MathUtils.damp(camera.position.x, goal.position.x, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(camera.position.y, goal.position.y, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(camera.position.z, goal.position.z, DAMP_LAMBDA, delta),
+    );
+    controls.target.set(
+      THREE.MathUtils.damp(controls.target.x, goal.target.x, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(controls.target.y, goal.target.y, DAMP_LAMBDA, delta),
+      THREE.MathUtils.damp(controls.target.z, goal.target.z, DAMP_LAMBDA, delta),
+    );
+    controls.update();
+  });
+
   const pauseAutoRotate = () => {
     clearTimeout(idleTimerRef.current);
     setAutoRotate(false);
   };
   const scheduleAutoRotate = () => {
     clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => setAutoRotate(true), AUTO_ROTATE_IDLE_MS);
+    if (!autoRotateOnRef.current) return;
+    idleTimerRef.current = setTimeout(() => {
+      if (autoRotateOnRef.current) setAutoRotate(true);
+    }, AUTO_ROTATE_IDLE_MS);
   };
 
   useEffect(() => {
@@ -423,7 +466,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
           const { provider, index } = providerIndices[mi];
           const barColor = new THREE.Color(colorForModel(provider, index, { forThreeJs: true }))
             .lerp(new THREE.Color(palette.surface), hasValue ? (1 - ratio) * 0.45 : 0.78);
-          const cellInfo = { key, model, provider, hour: xLabels[labelOffset + hi] ?? '', value, x, z, height, color: barColor, raw: rawValues[mi][hi] };
+          const cellInfo = { key, model, provider, hour: xLabels[labelOffset + hi] ?? '', value, x, z, height, color: barColor, raw: rawValues[mi][hi], bucketTotal: columnTotals?.[hi], metric };
           const isActiveCell = !!active && active.key === key;
           const isActiveRow = !!active && active.model === model;
           return (
@@ -470,6 +513,7 @@ function Scene({ grid, metric, xLabels, palette, gridSpan, cameraDistance, camer
       <OrbitControls
         ref={controlsRef}
         enablePan
+        enableRotate={!orbitLocked}
         autoRotate={autoRotate}
         autoRotateSpeed={AUTO_ROTATE_SPEED}
         onStart={pauseAutoRotate}
@@ -501,7 +545,7 @@ function useThemePalette() {
   return palette;
 }
 
-export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D, modelToProvider = {} }) {
+export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D, modelToProvider = {}, otherModels = [] }) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const webglOk = useMemo(() => checkWebGLSupport(), []);
@@ -515,6 +559,13 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   const providerIndices = useMemo(() => modelProviderIndices(grid.models, modelToProvider), [grid.models, modelToProvider]);
   const [hovered, setHovered] = useState(null);
   const [pinned, setPinned] = useState(null);
+  // Free drag-to-orbit stays available but the nav cluster's lock button can
+  // switch it off — the preset viewpoint buttons are meant to be the primary
+  // way to reframe, with dragging as the opt-in "I know what I'm doing" mode.
+  const [orbitLocked, setOrbitLocked] = useState(false);
+  const [autoRotateOn, setAutoRotateOn] = useState(false);
+  // Set by the nav-cluster handlers, consumed by Scene's fly-to useFrame.
+  const navGoalRef = useRef(null);
 
   const handlePinToggle = (cellInfo) => {
     setPinned(prev => (prev && prev.key === cellInfo.key ? null : cellInfo));
@@ -583,6 +634,44 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
     controls.update();
   };
 
+  // On-canvas nav cluster handlers. All of them just stage a goal in
+  // navGoalRef and let Scene's fly-to useFrame damp the camera there over a
+  // short settle window — no snapping, and it yields to a manual orbit/pan
+  // the moment the user starts one.
+  const framing = () => (frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio });
+
+  const flyToView = (kind) => {
+    setPinned(null);
+    const { distance: d, yRatio } = framing();
+    const target = new THREE.Vector3(0, MAX_HEIGHT / 3, 0);
+    let position;
+    switch (kind) {
+      case 'front': position = new THREE.Vector3(0, d * 0.32, d * 0.98); break;
+      case 'top':   position = new THREE.Vector3(0.001, d * 1.45, 0.001); break;
+      case 'side':  position = new THREE.Vector3(d * 0.98, d * 0.32, 0); break;
+      default:      position = new THREE.Vector3(d * 0.7, d * yRatio, d * 0.7); break; // iso / 3-quarter
+    }
+    navGoalRef.current = { position, target, until: performance.now() + 700 };
+  };
+
+  const nudgeZoom = (factor) => {
+    const c = controlsRef.current;
+    if (!c) return;
+    const target = c.target.clone();
+    const offset = c.object.position.clone().sub(target);
+    const maxLen = framing().distance * 1.8;
+    const len = THREE.MathUtils.clamp(offset.length() * factor, minCameraDistance, maxLen);
+    navGoalRef.current = { position: target.clone().add(offset.setLength(len)), target, until: performance.now() + 450 };
+  };
+
+  const nudgeRotate = (radians) => {
+    const c = controlsRef.current;
+    if (!c) return;
+    const target = c.target.clone();
+    const offset = c.object.position.clone().sub(target).applyAxisAngle(new THREE.Vector3(0, 1, 0), radians);
+    navGoalRef.current = { position: target.clone().add(offset), target, until: performance.now() + 550 };
+  };
+
   return (
     <div className="ms3d-wrap">
       <Canvas3DErrorBoundary fallback={<Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />}>
@@ -606,6 +695,9 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
             barSize={barSize}
             controlsRef={controlsRef}
             frameRef={frameRef}
+            navGoalRef={navGoalRef}
+            orbitLocked={orbitLocked}
+            autoRotateOn={autoRotateOn}
             hovered={hovered}
             pinned={pinned}
             onHoverChange={setHovered}
@@ -659,9 +751,112 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
               <span>{t('dashboard.cellSummaryErrorRate')}</span>
               <strong>{formatMetricValue(pinned.raw.errorRate, 'errorRate')}</strong>
             </div>
+            <div className="ms3d-summary-row ms3d-summary-row--sub">
+              <span>{t('dashboard.cellSummaryInputTokens')}</span>
+              <strong>{formatMetricValue(pinned.raw.inputTokens, 'tokens')}</strong>
+            </div>
+            <div className="ms3d-summary-row ms3d-summary-row--sub">
+              <span>{t('dashboard.cellSummaryOutputTokens')}</span>
+              <strong>{formatMetricValue(pinned.raw.outputTokens, 'tokens')}</strong>
+            </div>
+            {pinned.raw.cacheReadTokens > 0 && (
+              <div className="ms3d-summary-row ms3d-summary-row--sub">
+                <span>{t('dashboard.cellSummaryCacheRead')}</span>
+                <strong>{formatMetricValue(pinned.raw.cacheReadTokens, 'tokens')}</strong>
+              </div>
+            )}
+            {pinned.raw.cacheWriteTokens > 0 && (
+              <div className="ms3d-summary-row ms3d-summary-row--sub">
+                <span>{t('dashboard.cellSummaryCacheWrite')}</span>
+                <strong>{formatMetricValue(pinned.raw.cacheWriteTokens, 'tokens')}</strong>
+              </div>
+            )}
+            {['requests', 'tokens', 'cost'].includes(pinned.metric) && pinned.bucketTotal?.[pinned.metric] > 0 && (
+              <div className="ms3d-summary-row ms3d-summary-row--sub">
+                <span>{t('dashboard.cellSummaryBucketShare')}</span>
+                <strong>{formatMetricValue(pinned.value / pinned.bucketTotal[pinned.metric], 'errorRate')}</strong>
+              </div>
+            )}
           </div>
+          {pinned.model === 'Other' && otherModels.length > 0 && (
+            <div className="ms3d-summary-other">
+              <div className="ms3d-summary-other-label" title={t('dashboard.cellSummaryOtherModelsHint')}>
+                {t('dashboard.cellSummaryOtherModels')}
+              </div>
+              <ul className="ms3d-summary-other-list">
+                {otherModels.slice(0, 5).map(m => (
+                  <li key={m.model}><span>{m.model}</span><em>{formatMetricValue(m.requests, 'requests')}</em></li>
+                ))}
+              </ul>
+              {otherModels.length > 5 && (
+                <div className="ms3d-summary-other-more">
+                  {t('dashboard.cellSummaryOtherMore', { count: otherModels.length - 5 })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
+
+      <div className="ms3d-nav" role="group" aria-label={t('dashboard.nav3dLabel')}>
+        <div className="ms3d-nav-views">
+          <button type="button" onClick={() => flyToView('iso')} title={t('dashboard.view3dIso')}>{t('dashboard.view3dIsoShort')}</button>
+          <button type="button" onClick={() => flyToView('front')} title={t('dashboard.view3dFront')}>{t('dashboard.view3dFrontShort')}</button>
+          <button type="button" onClick={() => flyToView('top')} title={t('dashboard.view3dTop')}>{t('dashboard.view3dTopShort')}</button>
+          <button type="button" onClick={() => flyToView('side')} title={t('dashboard.view3dSide')}>{t('dashboard.view3dSideShort')}</button>
+        </div>
+        <div className="ms3d-nav-row">
+          <button type="button" onClick={() => nudgeRotate(Math.PI / 4)} title={t('dashboard.rotateLeft')} aria-label={t('dashboard.rotateLeft')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+            </svg>
+          </button>
+          <button type="button" onClick={() => nudgeRotate(-Math.PI / 4)} title={t('dashboard.rotateRight')} aria-label={t('dashboard.rotateRight')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+            </svg>
+          </button>
+          <button type="button" onClick={() => nudgeZoom(0.8)} title={t('dashboard.zoomIn')} aria-label={t('dashboard.zoomIn')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+          <button type="button" onClick={() => nudgeZoom(1.25)} title={t('dashboard.zoomOut')} aria-label={t('dashboard.zoomOut')}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
+            </svg>
+          </button>
+        </div>
+        <div className="ms3d-nav-row">
+          <button
+            type="button"
+            className={orbitLocked ? 'is-active' : ''}
+            aria-pressed={orbitLocked}
+            onClick={() => setOrbitLocked(v => !v)}
+            title={orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
+            aria-label={orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="11" width="16" height="10" rx="2" />
+              {orbitLocked
+                ? <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                : <path d="M8 11V7a4 4 0 0 1 7.5-2" />}
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={autoRotateOn ? 'is-active' : ''}
+            aria-pressed={autoRotateOn}
+            onClick={() => setAutoRotateOn(v => !v)}
+            title={t('dashboard.autoRotateToggle')}
+            aria-label={t('dashboard.autoRotateToggle')}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 4 21 9 16 9" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <button
         type="button"
