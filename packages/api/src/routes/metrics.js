@@ -71,24 +71,17 @@ router.post('/', async (req, res) => {
         + `(org ${orgId}) — recording as-is; possible mislabeled provider/model row.`);
     }
 
-    // Never silently trust an unlabeled $0 on a failed call — a client that
-    // didn't explicitly assert cost_confidence:'known' almost certainly never
-    // computed a real cost for this call (e.g. a timeout after retries), not
-    // that the call genuinely cost nothing. Only override the client's default;
-    // an explicit 'known' from the client (a real $0, e.g. a 400 rejected
-    // before any provider call) is always respected.
-    if (data.status_code >= 400 && data.cost_usd === 0 && req.body.cost_confidence === undefined) {
-      data.cost_confidence = 'unknown';
-    }
-
-    // A request the provider rejected (4xx) or failed to complete (5xx) is not
-    // billed — never store a positive cost on it, even if the client sent one.
-    // Disjoint from the block above (that only fires when cost_usd === 0). No
-    // 429/408 exception: keep it simple — a failed call books $0. Token fields
-    // are left as received (tokens may genuinely have been sent).
-    if (data.status_code >= 400 && data.cost_usd > 0) {
-      data.cost_usd = 0;
-      data.cost_confidence = 'known';
+    // A failed call (4xx/5xx) is not billed. Never trust a cost on it: zero any
+    // positive value the client sent, and — unless the client explicitly
+    // asserted 'known' — mark the $0 as unverified (a client that didn't assert
+    // 'known' almost certainly never computed a real cost, e.g. a timeout after
+    // retries). An explicit 'known' from the client (a real $0, e.g. a 400
+    // rejected before any provider call) is always respected. No 429/408
+    // exception: keep it simple — a failed call books $0. Token fields are left
+    // as received (tokens may genuinely have been sent).
+    if (data.status_code >= 400) {
+      if (data.cost_usd > 0) data.cost_usd = 0;
+      if (req.body.cost_confidence === undefined) data.cost_confidence = 'unknown';
     }
 
     // Heuristic likely-retry detection: same (provider, model, prompt_preview,

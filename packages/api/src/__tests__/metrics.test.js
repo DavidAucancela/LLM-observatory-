@@ -134,14 +134,14 @@ describe('POST /api/metrics', () => {
     expect(res.body.data.cost_confidence).toBe('known');
   });
 
-  it('zeroes a positive cost_usd on a 5xx error (a failed request is not billed)', async () => {
+  it('zeroes a positive cost_usd on a 5xx error and marks it unverified', async () => {
     const { obsToken } = await createOrg('CostConfidence Org 4');
     const res = await request(app)
       .post('/api/metrics')
       .set('Authorization', `Bearer ${obsToken}`)
       .send({ ...VALID_METRIC, cost_usd: 0.002, status_code: 500, error_type: 'server_error' });
     expect(Number(res.body.data.cost_usd)).toBe(0);
-    expect(res.body.data.cost_confidence).toBe('known');
+    expect(res.body.data.cost_confidence).toBe('unknown');
   });
 
   it('zeroes a positive cost_usd on a 4xx rejection (e.g. Whisper 413)', async () => {
@@ -150,6 +150,16 @@ describe('POST /api/metrics', () => {
       .post('/api/metrics')
       .set('Authorization', `Bearer ${obsToken}`)
       .send({ ...VALID_METRIC, provider: 'openai', model: 'whisper-1', cost_usd: 1.02, status_code: 413 });
+    expect(Number(res.body.data.cost_usd)).toBe(0);
+    expect(res.body.data.cost_confidence).toBe('unknown');
+  });
+
+  it('zeroes the cost but respects an explicit cost_confidence:known on a failed call', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 5b');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 1.02, status_code: 400, cost_confidence: 'known' });
     expect(Number(res.body.data.cost_usd)).toBe(0);
     expect(res.body.data.cost_confidence).toBe('known');
   });
