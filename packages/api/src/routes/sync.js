@@ -62,6 +62,12 @@ function extractBucketTokens(provider, result) {
 // live rows accumulate.
 async function importBuckets(buckets, provider, orgId, windowStartISO, windowEndISO) {
   const tag    = `sync:${provider}`;
+
+  // A healthy usage-API response always has one bucket per day in the range
+  // (even zero-usage days). An empty array means the fetch degraded — do
+  // nothing rather than wipe the window's existing reconciling rows.
+  if (!Array.isArray(buckets) || buckets.length === 0) return 0;
+
   const client = await pool.connect();
   let imported = 0;
 
@@ -140,7 +146,7 @@ async function importBuckets(buckets, provider, orgId, windowStartISO, windowEnd
 
     await client.query('COMMIT');
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {}); // don't mask the original error
     throw err;
   } finally {
     client.release();

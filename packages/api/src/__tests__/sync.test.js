@@ -105,6 +105,17 @@ describe('importBuckets — gap-based reconciling import', () => {
     expect(Number(row.cost_usd)).toBeCloseTo(expected, 5);
   });
 
+  it('leaves existing sync rows untouched when the usage fetch returns no buckets', async () => {
+    const { orgId } = await createOrg('Empty Fetch Org');
+    await importBuckets(
+      bucket({ uncached_input_tokens: 1_000_000, output_tokens: 0 }), 'anthropic', orgId, WIN_START, WIN_END);
+    expect(await syncRows(orgId)).toHaveLength(1);
+
+    const imported = await importBuckets([], 'anthropic', orgId, WIN_START, WIN_END);
+    expect(imported).toBe(0);
+    expect(await syncRows(orgId)).toHaveLength(1); // not wiped
+  });
+
   it('converges — a later live row that closes the gap removes the sync row', async () => {
     const { orgId } = await createOrg('Converge Org');
     const b = bucket({ uncached_input_tokens: 1_000_000, output_tokens: 0 }); // ~$3 bucket
