@@ -326,6 +326,17 @@ ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS likely_retry_of INTEGER REFERENCE
 CREATE INDEX IF NOT EXISTS idx_api_calls_retry_lookup ON api_calls(org_id, provider, model, prompt_preview, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_api_calls_likely_retry ON api_calls(likely_retry_of) WHERE likely_retry_of IS NOT NULL;
 
+-- ── Speeds up the sync-reconciliation "gap" rollup in routes/sync.js: the sum of
+--    an org's LIVE (non-sync, non-ping, non-judge) api_calls per provider+model+day.
+--    Predicate matches that query's WHERE exactly; LIKE/<> on constants are
+--    IMMUTABLE so this is a valid partial-index predicate. ────────────────────
+CREATE INDEX IF NOT EXISTS idx_api_calls_live_rollup
+  ON api_calls (org_id, provider, model, timestamp)
+  WHERE prompt_preview IS NULL
+     OR (prompt_preview NOT LIKE 'sync:%'
+     AND prompt_preview NOT LIKE 'test:%'
+     AND prompt_preview <> 'eval:judge');
+
 -- ── Insight dismissals — insights themselves are computed on-demand from
 --    api_calls (see services/insights.js), never persisted. The only state
 --    kept is which insight_key an org muted and until when, so "Silenciar
