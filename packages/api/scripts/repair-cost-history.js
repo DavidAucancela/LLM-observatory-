@@ -12,12 +12,16 @@
 //            ese org+provider+modelo+día). Elimina la fila si el gap es 0.
 //
 // Dry-run por defecto. --apply escribe. --org=<id> acota a un org.
+// Lee la DB de process.env.DATABASE_URL (igual que el resto de la API).
 //
+// En el contenedor de Railway (DATABASE_URL ya seteada), desde /app:
 //   node scripts/repair-cost-history.js
 //   node scripts/repair-cost-history.js --apply --org=3
+// En local contra otra DB:
+//   DATABASE_URL='postgresql://…' node packages/api/scripts/repair-cost-history.js
 
-const pool = require('../packages/api/src/db/pool');
-const { costForProviderUsage } = require('../packages/api/src/services/pricingBridge');
+const pool = require('../src/db/pool');
+const { costForProviderUsage } = require('../src/services/pricingBridge');
 
 const args   = process.argv.slice(2);
 const APPLY  = args.includes('--apply');
