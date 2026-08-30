@@ -2,7 +2,8 @@ const express = require('express');
 const pool = require('../db/pool');
 const { decrypt } = require('../db/crypto');
 const { requireAdmin } = require('../middleware/auth');
-const { calcCost, fetchAnthropicUsage, fetchOpenAIUsage } = require('../services/providerUsage');
+const { fetchAnthropicUsage, fetchOpenAIUsage } = require('../services/providerUsage');
+const { costForProviderUsage } = require('../services/pricingBridge');
 
 const router = express.Router();
 
@@ -52,7 +53,9 @@ async function importBuckets(buckets, provider, orgId) {
       const totalTokens = inputTokens + outputTokens;
       if (totalTokens === 0) continue;
 
-      const costUsd = calcCost(provider, model, inputTokens, outputTokens);
+      const costUsd = costForProviderUsage(provider, model, {
+        uncachedInput: inputTokens, output: outputTokens,
+      });
 
       const existing = await pool.query(
         `SELECT id FROM api_calls

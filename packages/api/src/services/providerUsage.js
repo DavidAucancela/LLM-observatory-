@@ -3,9 +3,9 @@
 //
 // Two kinds of provider integration live here:
 //  - fetch{Anthropic,OpenAI}Usage + summarizeBuckets: TOKEN usage, recomputed
-//    to a dollar estimate locally via PRICING below. Used by sync.js (bulk
-//    historical import) and as reconciliation's fallback when a real Costs
-//    API call fails.
+//    to a dollar estimate via @llm-observatory/sdk pricing (through
+//    services/pricingBridge). Used by sync.js (bulk historical import) and as
+//    reconciliation's fallback when a real Costs API call fails.
 //  - fetch{Anthropic,OpenAI}RealCost: the actual provider-billed dollar total
 //    (OpenAI's /v1/organization/costs, Anthropic's
 //    /v1/organizations/cost_report) — genuine ground truth, not a local
@@ -18,36 +18,22 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
     .finally(() => clearTimeout(id));
 }
 
-const PRICING = {
-  anthropic: {
-    'claude-opus-4-6':            { input:  5.0, output: 25.0 },
-    'claude-sonnet-4-6':          { input:  3.0, output: 15.0 },
-    'claude-haiku-4-5-20251001':  { input:  0.8, output:  4.0 },
-    'claude-3-5-sonnet-20241022': { input:  3.0, output: 15.0 },
-    'claude-3-5-haiku-20241022':  { input:  0.8, output:  4.0 },
-    'claude-3-opus-20240229':     { input: 15.0, output: 75.0 },
-    'claude-3-haiku-20240307':    { input:  0.25, output: 1.25 },
-  },
-  openai: {
-    'gpt-4o':        { input:  2.5, output: 10.0 },
-    'gpt-4o-mini':   { input:  0.15, output: 0.6 },
-    'gpt-4-turbo':   { input: 10.0, output: 30.0 },
-    'gpt-4':         { input: 30.0, output: 60.0 },
-    'gpt-3.5-turbo': { input:  0.5, output:  1.5 },
-    'o1':            { input: 15.0, output: 60.0 },
-    'o1-mini':       { input:  3.0, output: 12.0 },
-    'o3-mini':       { input:  1.1, output:  4.4 },
-    'o3':            { input: 10.0, output: 40.0 },
-  },
-};
+const { costForProviderUsage } = require('./pricingBridge');
 
-function calcCost(provider, model, inputTokens, outputTokens) {
-  const pricing = (PRICING[provider] || {})[model];
-  if (!pricing) {
-    console.warn(`[providerUsage] Unknown model pricing: ${provider}/${model} — cost set to $0`);
-    return 0;
+// The Anthropic org usage_report/messages result-row field for cache-write
+// (cache_creation) tokens isn't pinned down in our fixtures, so accept both the
+// flat `cache_creation_input_tokens` and a nested
+// `cache_creation: { ephemeral_5m_input_tokens, ephemeral_1h_input_tokens }`.
+function anthropicCacheCreationTokens(result) {
+  if (result.cache_creation_input_tokens != null) {
+    return parseInt(result.cache_creation_input_tokens, 10) || 0;
   }
-  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
+  const cc = result.cache_creation;
+  if (cc && typeof cc === 'object') {
+    return (parseInt(cc.ephemeral_5m_input_tokens, 10) || 0)
+         + (parseInt(cc.ephemeral_1h_input_tokens, 10) || 0);
+  }
+  return 0;
 }
 
 async function fetchAnthropicUsage(adminKey, startDate, endDate) {
@@ -106,28 +92,43 @@ async function fetchOpenAIUsage(apiKey, startDate, endDate) {
   return allBuckets;
 }
 
-// Sums token-usage buckets into a single { inputTokens, outputTokens, costUsd }
-// via PRICING, per-model, for the given provider.
+// Sums token-usage buckets into a single
+// { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd },
+// per-model, for the given provider. Pricing comes from services/pricingBridge
+// (the SDK tables). `inputTokens` includes cache-read and cache-creation tokens;
+// cache-creation carries the 1.25x Anthropic surcharge inside the bridge.
 function summarizeBuckets(buckets, provider) {
-  let inputTokens = 0, outputTokens = 0, costUsd = 0;
+  let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheWriteTokens = 0, costUsd = 0;
 
   for (const bucket of buckets) {
     for (const result of (bucket.results || [])) {
       const model = result.model || 'unknown';
-      let inTok, outTok;
+      let uncachedInput, cacheReadInput, cacheCreationInput, output;
+
       if (provider === 'anthropic') {
-        inTok  = parseInt(result.uncached_input_tokens || 0) + parseInt(result.cache_read_input_tokens || 0);
-        outTok = parseInt(result.output_tokens || 0);
+        uncachedInput      = parseInt(result.uncached_input_tokens || 0, 10);
+        cacheReadInput     = parseInt(result.cache_read_input_tokens || 0, 10);
+        cacheCreationInput = anthropicCacheCreationTokens(result);
+        output             = parseInt(result.output_tokens || 0, 10);
       } else {
-        inTok  = parseInt(result.input_tokens  || 0);
-        outTok = parseInt(result.output_tokens || 0);
+        // OpenAI's usage API input_tokens already includes cached input; it has
+        // no separate cache-write concept here.
+        uncachedInput      = parseInt(result.input_tokens || 0, 10);
+        cacheReadInput     = 0;
+        cacheCreationInput = 0;
+        output             = parseInt(result.output_tokens || 0, 10);
       }
-      inputTokens  += inTok;
-      outputTokens += outTok;
-      costUsd      += calcCost(provider, model, inTok, outTok);
+
+      inputTokens      += uncachedInput + cacheReadInput + cacheCreationInput;
+      outputTokens     += output;
+      cacheReadTokens  += cacheReadInput;
+      cacheWriteTokens += cacheCreationInput;
+      costUsd += costForProviderUsage(provider, model, {
+        uncachedInput, cacheReadInput, cacheCreationInput, output,
+      });
     }
   }
-  return { inputTokens, outputTokens, costUsd };
+  return { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd };
 }
 
 // Real provider-billed cost (USD) for the window — NOT a local recomputation.
@@ -198,7 +199,7 @@ async function fetchOpenAIRealCost(apiKey, startDate, endDate) {
 }
 
 module.exports = {
-  fetchWithTimeout, PRICING, calcCost,
+  fetchWithTimeout, anthropicCacheCreationTokens,
   fetchAnthropicUsage, fetchOpenAIUsage, summarizeBuckets,
   fetchAnthropicRealCost, fetchOpenAIRealCost,
 };

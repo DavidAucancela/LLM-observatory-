@@ -3,6 +3,7 @@ const { z } = require('zod');
 const pool = require('../db/pool');
 const { deliverWebhooks } = require('../services/webhooks');
 const { getRangeIntervals } = require('../utils/dateRange');
+const { isKnownModel } = require('../services/pricingBridge');
 
 const router = express.Router();
 
@@ -60,6 +61,16 @@ router.post('/', async (req, res) => {
   try {
     const { orgId } = req.user;
     const data = MetricSchema.parse(req.body);
+
+    // Soft check: a model the pricing tables don't recognize is usually a brand
+    // new model (add it to the SDK tables) — but a model that belongs to a
+    // different provider (e.g. provider:'anthropic' + model:'gpt-4o') is a
+    // mislabeled row. Warn, never reject, never rewrite data.model.
+    if (!isKnownModel(data.provider, data.model)) {
+      console.warn(`[metrics] Unrecognized model "${data.model}" for provider "${data.provider}" `
+        + `(org ${orgId}) — recording as-is; possible mislabeled provider/model row.`);
+    }
+
     // Never silently trust an unlabeled $0 on a failed call — a client that
     // didn't explicitly assert cost_confidence:'known' almost certainly never
     // computed a real cost for this call (e.g. a timeout after retries), not
@@ -68,6 +79,16 @@ router.post('/', async (req, res) => {
     // before any provider call) is always respected.
     if (data.status_code >= 400 && data.cost_usd === 0 && req.body.cost_confidence === undefined) {
       data.cost_confidence = 'unknown';
+    }
+
+    // A request the provider rejected (4xx) or failed to complete (5xx) is not
+    // billed — never store a positive cost on it, even if the client sent one.
+    // Disjoint from the block above (that only fires when cost_usd === 0). No
+    // 429/408 exception: keep it simple — a failed call books $0. Token fields
+    // are left as received (tokens may genuinely have been sent).
+    if (data.status_code >= 400 && data.cost_usd > 0) {
+      data.cost_usd = 0;
+      data.cost_confidence = 'known';
     }
 
     // Heuristic likely-retry detection: same (provider, model, prompt_preview,
@@ -565,7 +586,10 @@ router.get('/export', async (req, res) => {
       const line = headers.map(h => {
         const val = row[h] ?? '';
         const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
-        return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+        // Quote per RFC-4180: any field with a comma, a quote, OR a newline —
+        // prompt_preview routinely contains newlines and would otherwise split
+        // one record across multiple physical lines.
+        return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
       }).join(',');
       res.write(line + '\n');
     }
