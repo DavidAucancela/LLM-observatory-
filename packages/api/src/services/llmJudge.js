@@ -6,9 +6,11 @@
 // no separate "judge key" concept. Default judge model per provider is the
 // same fast/cheap tier routes/credentials.js already uses for PING_MODEL.
 //
-// Local pricing table (not imported from packages/sdk — packages/api has no
-// workspace dependency on it; services/providerUsage.js already established
-// the same "small local PRICING table" pattern for this exact reason).
+// Local pricing table: deliberately NOT delegated to @llm-observatory/sdk.
+// Unlike services/providerUsage.js (which now prices historical sync through
+// services/pricingBridge over the SDK tables), llmJudge only needs the single
+// default judge model's rate per provider — a 5-line table, not a full pricing
+// surface. Folding JUDGE_MODEL into pricingBridge is possible future cleanup.
 
 function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   const controller = new AbortController();

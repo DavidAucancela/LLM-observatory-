@@ -134,13 +134,52 @@ describe('POST /api/metrics', () => {
     expect(res.body.data.cost_confidence).toBe('known');
   });
 
-  it('does not override cost_confidence when cost_usd is genuinely non-zero on an error', async () => {
+  it('zeroes a positive cost_usd on a 5xx error and marks it unverified', async () => {
     const { obsToken } = await createOrg('CostConfidence Org 4');
     const res = await request(app)
       .post('/api/metrics')
       .set('Authorization', `Bearer ${obsToken}`)
       .send({ ...VALID_METRIC, cost_usd: 0.002, status_code: 500, error_type: 'server_error' });
+    expect(Number(res.body.data.cost_usd)).toBe(0);
+    expect(res.body.data.cost_confidence).toBe('unknown');
+  });
+
+  it('zeroes a positive cost_usd on a 4xx rejection (e.g. Whisper 413)', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 5');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, provider: 'openai', model: 'whisper-1', cost_usd: 1.02, status_code: 413 });
+    expect(Number(res.body.data.cost_usd)).toBe(0);
+    expect(res.body.data.cost_confidence).toBe('unknown');
+  });
+
+  it('zeroes the cost but respects an explicit cost_confidence:known on a failed call', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 5b');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 1.02, status_code: 400, cost_confidence: 'known' });
+    expect(Number(res.body.data.cost_usd)).toBe(0);
     expect(res.body.data.cost_confidence).toBe('known');
+  });
+
+  it('zeroes a positive cost_usd on a 429 (no retryable exception)', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 6');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0.5, status_code: 429, error_type: 'rate_limit' });
+    expect(Number(res.body.data.cost_usd)).toBe(0);
+  });
+
+  it('leaves a positive cost_usd untouched on a successful call', async () => {
+    const { obsToken } = await createOrg('CostConfidence Org 7');
+    const res = await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, cost_usd: 0.002, status_code: 200 });
+    expect(Number(res.body.data.cost_usd)).toBeCloseTo(0.002, 6);
   });
 });
 
@@ -337,5 +376,65 @@ describe('GET /api/metrics/summary — org scoping', () => {
       .filter(r => r.model === 'Other')
       .reduce((sum, r) => sum + parseInt(r.requests), 0);
     expect(otherTotalRequests).toBe(3); // model-f (2) + model-g (1)
+  });
+});
+
+describe('GET /api/metrics/export — CSV is RFC-4180 safe', () => {
+  it('quotes fields containing newlines so one record stays on one row', async () => {
+    const { obsToken, jwt } = await createOrg('CSV Export Org');
+    await request(app)
+      .post('/api/metrics')
+      .set('Authorization', `Bearer ${obsToken}`)
+      .send({ ...VALID_METRIC, prompt_preview: 'line one\nline two, with comma' });
+
+    const res = await request(app)
+      .get('/api/metrics/export?range=24h')
+      .set('Authorization', `Bearer ${jwt}`);
+    expect(res.status).toBe(200);
+
+    // The multi-line preview must be wrapped in quotes.
+    expect(res.text).toContain('"line one\nline two, with comma"');
+
+    // Count records by splitting only on newlines that are OUTSIDE quotes.
+    const rows = [];
+    let field = '', inQuotes = false, row = 1;
+    for (const ch of res.text) {
+      if (ch === '"') inQuotes = !inQuotes;
+      if (ch === '\n' && !inQuotes) { row++; field = ''; continue; }
+      field += ch;
+    }
+    // header + exactly one data record + trailing newline => row === 3
+    expect(row).toBe(3);
+  });
+});
+
+describe('POST /api/metrics — mislabeled provider/model warning (bug 6)', () => {
+  it('warns but still records a row when model does not belong to the provider', async () => {
+    const { obsToken } = await createOrg('Mislabel Org');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await request(app)
+        .post('/api/metrics')
+        .set('Authorization', `Bearer ${obsToken}`)
+        .send({ ...VALID_METRIC, provider: 'anthropic', model: 'gpt-4o' });
+      expect(res.status).toBe(201);
+      expect(warnSpy.mock.calls.some(c => String(c[0]).includes('Unrecognized model "gpt-4o"'))).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not warn for a recognized model', async () => {
+    const { obsToken } = await createOrg('Wellabeled Org');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await request(app)
+        .post('/api/metrics')
+        .set('Authorization', `Bearer ${obsToken}`)
+        .send({ ...VALID_METRIC, provider: 'anthropic', model: 'claude-sonnet-4-6' });
+      expect(warnSpy.mock.calls.some(c => String(c[0]).includes('Unrecognized model'))).toBe(false);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
