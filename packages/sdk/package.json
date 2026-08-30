@@ -1,10 +1,23 @@
 {
   "name": "@llm-observatory/sdk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Drop-in Node.js wrapper for Anthropic, OpenAI, Gemini, Grok, and Kimi SDKs with zero-latency observability",
   "main": "src/index.js",
   "license": "MIT",
-  "keywords": ["llm", "observability", "anthropic", "openai", "gemini", "grok", "xai", "kimi", "moonshot", "monitoring", "claude", "sdk"],
+  "keywords": [
+    "llm",
+    "observability",
+    "anthropic",
+    "openai",
+    "gemini",
+    "grok",
+    "xai",
+    "kimi",
+    "moonshot",
+    "monitoring",
+    "claude",
+    "sdk"
+  ],
   "author": "LLM Observatory",
   "repository": {
     "type": "git",
