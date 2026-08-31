@@ -2,6 +2,8 @@
 
 **Entry point:** `src/index.js` — published to npm as `@llm-observatory/sdk`
 
+> **`packages/api` consumes this from npm** (`"@llm-observatory/sdk": "*"`, installed by `packages/api/Dockerfile`). Keep the **published** version current: npm `1.1.0` was left stale after `normalizeModelId` + Grok/Kimi tables + `calculate{Grok,Kimi}Cost` landed, so prod ran without them. `package.json` is at **`1.2.0`** — run `npm publish` from this dir (needs npm auth), then redeploy the API. `pricingBridge.js` inlines its own `normalizeModelId` as a stopgap; once `1.2.0`+ is live that mirror can go.
+
 **Exports:**
 - `MonitoredAnthropic` — Wraps `@anthropic-ai/sdk`, intercepts `messages.create()`
 - `MonitoredOpenAI` — Wraps `openai` SDK (optional peer dep), intercepts `chat.completions.create()`, plus embeddings/Whisper/TTS/Responses
