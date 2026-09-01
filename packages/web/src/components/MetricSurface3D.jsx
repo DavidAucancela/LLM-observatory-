@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, Grid, ContactShadows } from '@react-three/drei';
 import { useTranslation } from 'react-i18next';
@@ -545,7 +545,18 @@ function useThemePalette() {
   return palette;
 }
 
-export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, loading, range, hiddenModels = new Set(), onSwitchTo2D, modelToProvider = {}, otherModels = [] }) {
+// Camera controls (preset viewpoints, step zoom/rotate, orbit-lock,
+// auto-rotate, reset) used to render as an on-canvas overlay here. They now
+// live in the shared ChartToolbar rail alongside the model legend and the
+// 2D/3D switch, so every dashboard-chart control sits in one panel. Dashboard
+// owns `orbitLocked`/`autoRotateOn` (passed back down as props) and drives the
+// imperative camera actions through the ref exposed by useImperativeHandle
+// below.
+function MetricSurface3D({
+  modelTimeSeries, metric, xLabels, loading, range,
+  hiddenModels = new Set(), onSwitchTo2D, modelToProvider = {}, otherModels = [],
+  orbitLocked = false, autoRotateOn = false,
+}, ref) {
   const { t } = useTranslation();
   const palette = useThemePalette();
   const webglOk = useMemo(() => checkWebGLSupport(), []);
@@ -559,13 +570,23 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   const providerIndices = useMemo(() => modelProviderIndices(grid.models, modelToProvider), [grid.models, modelToProvider]);
   const [hovered, setHovered] = useState(null);
   const [pinned, setPinned] = useState(null);
-  // Free drag-to-orbit stays available but the nav cluster's lock button can
-  // switch it off — the preset viewpoint buttons are meant to be the primary
-  // way to reframe, with dragging as the opt-in "I know what I'm doing" mode.
-  const [orbitLocked, setOrbitLocked] = useState(false);
-  const [autoRotateOn, setAutoRotateOn] = useState(false);
-  // Set by the nav-cluster handlers, consumed by Scene's fly-to useFrame.
+  // Staged by the camera-control handlers (exposed via ref), consumed by
+  // Scene's fly-to useFrame.
   const navGoalRef = useRef(null);
+
+  // The pinned/hovered cell references a specific grid coordinate (`mi-hi`) and
+  // caches that cell's values at pin time. When the grid's shape changes — a
+  // date-range switch, a metric switch, buildGrid re-trimming empty buckets —
+  // that key now points at a different cell (or none), so the summary card and
+  // its focus ring were left highlighting a bar that no longer represents what
+  // the card shows. Drop both whenever the bucket/model structure changes. This
+  // key intentionally ignores value-only updates (live socket refetches keep
+  // the same buckets/models) so a pinned card survives a real-time refresh.
+  const structureKey = `${grid.hours.join(',')}|${grid.models.join(',')}`;
+  useEffect(() => {
+    setPinned(null);
+    setHovered(null);
+  }, [structureKey]);
 
   const handlePinToggle = (cellInfo) => {
     setPinned(prev => (prev && prev.key === cellInfo.key ? null : cellInfo));
@@ -577,22 +598,11 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
   // column — that's still real data worth showing, not "not enough data".
   const hasEnoughData = grid.hours.length >= 1 && totalActivity > 0;
 
-  if (loading) {
-    return <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />;
-  }
-
-  if (!webglOk) {
-    return <Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />;
-  }
-
-  if (!hasEnoughData) {
-    return (
-      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
-      </div>
-    );
-  }
-
+  // ── Camera framing constants + imperative controls ──
+  // Computed before the early returns (and the useImperativeHandle below) so
+  // the ref the ChartToolbar rail calls into is always populated, even on the
+  // loading / unsupported / no-data renders. Only `grid` and `range` feed
+  // these, both valid at this point.
   const gridSpan = Math.max(grid.hours.length, grid.models.length, 1) * SPACING;
   const zoomFactor = ZOOM_FACTOR_BY_RANGE[range] ?? 1;
   const minCameraDistance = MIN_CAMERA_DISTANCE_BY_RANGE[range] ?? MIN_CAMERA_DISTANCE;
@@ -613,33 +623,30 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
     BASE_LABEL_FONT_SIZE * Math.sqrt(gridSpan / BASE_LABEL_GRID_SPAN)
   );
 
-  // Panning lets the user drag the OrbitControls target away from the data —
-  // useful for scrubbing across many time buckets, but easy to get lost in.
-  // Don't rely on OrbitControls' own reset() here: it restores whatever
-  // position/target existed the moment the controls were constructed, which
-  // is only this range's default framing if the user hasn't switched ranges
-  // since mount (the Canvas persists across range switches, it doesn't
-  // remount). Recomputing the intended position/target from the current
-  // gridSpan/cameraDistance instead always reframes correctly for whatever
-  // range is showing right now. Read from frameRef (Scene's aspect-compensated
-  // values) rather than the raw cameraDistance/cameraYRatio computed below —
-  // those are tuned for the desktop box and would under-frame a narrower one.
+  // Read Scene's aspect-compensated framing when it's available, else the raw
+  // desktop-tuned defaults above.
+  const framing = () => (frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio });
+
+  // Don't rely on OrbitControls' own reset() — it restores whatever
+  // position/target existed when the controls were constructed, which is only
+  // this range's default framing if the user hasn't switched ranges since
+  // mount (the Canvas persists across range switches, it doesn't remount).
+  // Recomputing from the current framing always reframes correctly for
+  // whatever range is showing right now.
   const resetView = () => {
     setPinned(null);
     const controls = controlsRef.current;
     if (!controls) return;
-    const { distance, yRatio } = frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio };
+    const { distance, yRatio } = framing();
     controls.object.position.set(distance * 0.7, distance * yRatio, distance * 0.7);
     controls.target.set(0, MAX_HEIGHT / 3, 0);
     controls.update();
   };
 
-  // On-canvas nav cluster handlers. All of them just stage a goal in
-  // navGoalRef and let Scene's fly-to useFrame damp the camera there over a
-  // short settle window — no snapping, and it yields to a manual orbit/pan
-  // the moment the user starts one.
-  const framing = () => (frameRef.current.distance ? frameRef.current : { distance: cameraDistance, yRatio: cameraYRatio });
-
+  // The fly-to / nudge handlers just stage a goal in navGoalRef and let
+  // Scene's fly-to useFrame damp the camera there over a short settle window —
+  // no snapping, and it yields to a manual orbit/pan the moment the user
+  // starts one.
   const flyToView = (kind) => {
     setPinned(null);
     const { distance: d, yRatio } = framing();
@@ -671,6 +678,24 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
     const offset = c.object.position.clone().sub(target).applyAxisAngle(new THREE.Vector3(0, 1, 0), radians);
     navGoalRef.current = { position: target.clone().add(offset), target, until: performance.now() + 550 };
   };
+
+  useImperativeHandle(ref, () => ({ flyToView, nudgeZoom, nudgeRotate, resetView }));
+
+  if (loading) {
+    return <div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />;
+  }
+
+  if (!webglOk) {
+    return <Unsupported3DFallback onSwitchTo2D={onSwitchTo2D} t={t} />;
+  }
+
+  if (!hasEnoughData) {
+    return (
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('dashboard.notEnoughData')}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="ms3d-wrap">
@@ -798,78 +823,8 @@ export default function MetricSurface3D({ modelTimeSeries, metric, xLabels, load
         </div>
       )}
 
-      <div className="ms3d-nav" role="group" aria-label={t('dashboard.nav3dLabel')}>
-        <div className="ms3d-nav-views">
-          <button type="button" onClick={() => flyToView('iso')} title={t('dashboard.view3dIso')}>{t('dashboard.view3dIsoShort')}</button>
-          <button type="button" onClick={() => flyToView('front')} title={t('dashboard.view3dFront')}>{t('dashboard.view3dFrontShort')}</button>
-          <button type="button" onClick={() => flyToView('top')} title={t('dashboard.view3dTop')}>{t('dashboard.view3dTopShort')}</button>
-          <button type="button" onClick={() => flyToView('side')} title={t('dashboard.view3dSide')}>{t('dashboard.view3dSideShort')}</button>
-        </div>
-        <div className="ms3d-nav-row">
-          <button type="button" onClick={() => nudgeRotate(Math.PI / 4)} title={t('dashboard.rotateLeft')} aria-label={t('dashboard.rotateLeft')}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" />
-            </svg>
-          </button>
-          <button type="button" onClick={() => nudgeRotate(-Math.PI / 4)} title={t('dashboard.rotateRight')} aria-label={t('dashboard.rotateRight')}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" />
-            </svg>
-          </button>
-          <button type="button" onClick={() => nudgeZoom(0.8)} title={t('dashboard.zoomIn')} aria-label={t('dashboard.zoomIn')}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
-            </svg>
-          </button>
-          <button type="button" onClick={() => nudgeZoom(1.25)} title={t('dashboard.zoomOut')} aria-label={t('dashboard.zoomOut')}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
-            </svg>
-          </button>
-        </div>
-        <div className="ms3d-nav-row">
-          <button
-            type="button"
-            className={orbitLocked ? 'is-active' : ''}
-            aria-pressed={orbitLocked}
-            onClick={() => setOrbitLocked(v => !v)}
-            title={orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
-            aria-label={orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="4" y="11" width="16" height="10" rx="2" />
-              {orbitLocked
-                ? <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                : <path d="M8 11V7a4 4 0 0 1 7.5-2" />}
-            </svg>
-          </button>
-          <button
-            type="button"
-            className={autoRotateOn ? 'is-active' : ''}
-            aria-pressed={autoRotateOn}
-            onClick={() => setAutoRotateOn(v => !v)}
-            title={t('dashboard.autoRotateToggle')}
-            aria-label={t('dashboard.autoRotateToggle')}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 4 21 9 16 9" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="ms3d-reset-btn"
-        title={t('dashboard.resetView')}
-        aria-label={t('dashboard.resetView')}
-        onClick={resetView}
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="23 4 23 10 17 10" />
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-        </svg>
-      </button>
     </div>
   );
 }
+
+export default forwardRef(MetricSurface3D);

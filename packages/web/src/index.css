@@ -862,6 +862,50 @@ body {
 .dash-chart-rail-hint-btn:hover { color: var(--text); background: var(--hover); }
 .dash-chart-rail-hint-btn.is-active { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
+/* ── 3D camera controls (3D view only) ──
+   Moved out of MetricSurface3D's on-canvas .ms3d-nav overlay into the rail so
+   every chart control shares one panel. Mirrors .dash-chart-rail-foot: a
+   bordered block introduced by an obs-section-label, then rows of equal-size
+   cells laid out on a 4-column grid so it stays symmetric with the rail. */
+.dash-chart-rail-3d {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dash-chart-rail-3d-label { margin-bottom: 1px; }
+.dash-chart-rail-3d-views,
+.dash-chart-rail-3d-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.dash-chart-rail-3d button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.dash-chart-rail-3d button:hover { color: var(--text); background: var(--hover); }
+.dash-chart-rail-3d button.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 /* Usage-hint content itself (rotate/zoom/pan/legend-click) now renders as
    .dash-chart-hint-banner, overlaid on the chart plot in .dash-chart-body —
    see ChartHintBanner in ChartToolbar.jsx. Anchoring it to the plot instead
@@ -1015,69 +1059,10 @@ body {
 .ms3d-fallback svg { color: var(--muted); opacity: 0.6; }
 .ms3d-fallback p { font-size: 12px; max-width: 320px; line-height: 1.5; margin: 0; }
 
-.ms3d-reset-btn {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-raised, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s;
-}
-.ms3d-reset-btn:hover { color: var(--text); background: var(--hover); }
-
-/* On-canvas navigation cluster — preset viewpoints, step zoom, 45° rotate,
-   orbit lock and auto-rotate toggles. Bottom-left so it clears the reset
-   button (bottom-right) and the pinned summary card (top-right). */
-.ms3d-nav {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px;
-  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 88%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  backdrop-filter: blur(4px);
-}
-.ms3d-nav-views,
-.ms3d-nav-row {
-  display: flex;
-  gap: 3px;
-}
-.ms3d-nav button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 26px;
-  height: 24px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: var(--muted);
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-}
-.ms3d-nav-views button { flex: 1; }
-.ms3d-nav button:hover { color: var(--text); background: var(--hover); }
-.ms3d-nav button.is-active {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
+/* The 3D camera controls (preset viewpoints, step zoom/rotate, orbit-lock,
+   auto-rotate, reset) used to be on-canvas overlays here (.ms3d-nav /
+   .ms3d-reset-btn). They now render inside the ChartToolbar rail — see
+   .dash-chart-rail-3d above — so every chart control shares one panel. */
 
 .ms3d-tooltip {
   background: var(--surface-raised, var(--surface));
@@ -2243,6 +2228,18 @@ body {
     padding-top: 10px;
     border-top: 1px solid var(--border);
   }
+  /* Horizontal rail here — the 3D controls become another full-width row, its
+     three grids sitting side by side instead of stacked. */
+  .dash-chart-rail-3d {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 10px;
+  }
+  .dash-chart-rail-3d-label { flex: 1 0 100%; margin-bottom: 0; }
+  .dash-chart-rail-3d-views,
+  .dash-chart-rail-3d-row { flex: 0 1 auto; grid-template-columns: repeat(4, minmax(34px, 1fr)); }
   .dash-chart-hint-banner { padding: 8px 12px; gap: 4px 10px; }
   .dash-chart-body {
     /* Override the base rule's `flex: 1` (flex-basis: 0%) — in this column
