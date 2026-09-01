@@ -33,6 +33,112 @@ function IconRefresh({ spinning }) {
   );
 }
 
+// ── 3D camera-control icons ── (moved here with the nav cluster itself from
+// MetricSurface3D's old on-canvas .ms3d-nav overlay)
+function IconRotateLeft() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+    </svg>
+  );
+}
+function IconRotateRight() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+    </svg>
+  );
+}
+function IconZoomIn() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" />
+    </svg>
+  );
+}
+function IconZoomOut() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" />
+    </svg>
+  );
+}
+function IconOrbitLock({ locked }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      {locked ? <path d="M8 11V7a4 4 0 0 1 8 0v4" /> : <path d="M8 11V7a4 4 0 0 1 7.5-2" />}
+    </svg>
+  );
+}
+function IconAutoRotate() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 4 21 9 16 9" />
+    </svg>
+  );
+}
+function IconResetView() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  );
+}
+
+// Preset viewpoints + step zoom/rotate + orbit-lock/auto-rotate/reset for the
+// 3D view. `chart3d` is the control surface Dashboard wires to MetricSurface3D
+// (imperative camera actions via ref + the orbitLocked/autoRotateOn state it
+// owns); the whole block only renders in 3D mode. Laid out as a grid so it
+// stays symmetric with the rest of the rail — a labelled block matching
+// .dash-chart-rail-foot, three 4-column rows of equal-size cells.
+function Chart3DControls({ chart3d, collapsed, t }) {
+  const tab = collapsed ? -1 : 0;
+  return (
+    <div className="dash-chart-rail-3d" role="group" aria-label={t('dashboard.nav3dLabel')}>
+      <div className="obs-section-label dash-chart-rail-3d-label">{t('dashboard.nav3dLabel')}</div>
+      <div className="dash-chart-rail-3d-views">
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onView('iso')} title={t('dashboard.view3dIso')}>{t('dashboard.view3dIsoShort')}</button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onView('front')} title={t('dashboard.view3dFront')}>{t('dashboard.view3dFrontShort')}</button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onView('top')} title={t('dashboard.view3dTop')}>{t('dashboard.view3dTopShort')}</button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onView('side')} title={t('dashboard.view3dSide')}>{t('dashboard.view3dSideShort')}</button>
+      </div>
+      <div className="dash-chart-rail-3d-row">
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onRotate(Math.PI / 4)} title={t('dashboard.rotateLeft')} aria-label={t('dashboard.rotateLeft')}><IconRotateLeft /></button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onRotate(-Math.PI / 4)} title={t('dashboard.rotateRight')} aria-label={t('dashboard.rotateRight')}><IconRotateRight /></button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onZoom(0.8)} title={t('dashboard.zoomIn')} aria-label={t('dashboard.zoomIn')}><IconZoomIn /></button>
+        <button type="button" tabIndex={tab} onClick={() => chart3d.onZoom(1.25)} title={t('dashboard.zoomOut')} aria-label={t('dashboard.zoomOut')}><IconZoomOut /></button>
+      </div>
+      <div className="dash-chart-rail-3d-row">
+        <button
+          type="button"
+          tabIndex={tab}
+          className={chart3d.orbitLocked ? 'is-active' : ''}
+          aria-pressed={chart3d.orbitLocked}
+          onClick={chart3d.onToggleOrbitLock}
+          title={chart3d.orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
+          aria-label={chart3d.orbitLocked ? t('dashboard.orbitUnlock') : t('dashboard.orbitLock')}
+        >
+          <IconOrbitLock locked={chart3d.orbitLocked} />
+        </button>
+        <button
+          type="button"
+          tabIndex={tab}
+          className={chart3d.autoRotateOn ? 'is-active' : ''}
+          aria-pressed={chart3d.autoRotateOn}
+          onClick={chart3d.onToggleAutoRotate}
+          title={t('dashboard.autoRotateToggle')}
+          aria-label={t('dashboard.autoRotateToggle')}
+        >
+          <IconAutoRotate />
+        </button>
+        <button type="button" tabIndex={tab} onClick={chart3d.onReset} title={t('dashboard.resetView')} aria-label={t('dashboard.resetView')}><IconResetView /></button>
+      </div>
+    </div>
+  );
+}
+
 // Points "right" — the rail sits on the card's right edge, so collapsing
 // tucks it away in that direction.
 function IconCollapse() {
@@ -167,6 +273,7 @@ export default function ChartToolbar({
   hintOpen, onToggleHint,
   showCompare, comparePrev, onToggleCompare, compareDelta,
   modelToProvider = {},
+  chart3d = null,
 }) {
   const { t } = useTranslation();
   const providerIndices = React.useMemo(
@@ -238,6 +345,8 @@ export default function ChartToolbar({
             </>
           )}
         </div>
+
+        {chart3d && <Chart3DControls chart3d={chart3d} collapsed={collapsed} t={t} />}
 
         <div className="dash-chart-rail-foot">
           <ViewToggle

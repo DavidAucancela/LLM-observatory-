@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
 import Sparkline from '../components/Sparkline';
@@ -408,6 +408,13 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
   // Usage-hint banner shown along the bottom of the chart plot (not a popover
   // in the rail — see ChartHintBanner). Session-only, no localStorage.
   const [chartHintOpen, setChartHintOpen] = useState(false);
+  // 3D camera controls now live in the ChartToolbar rail (not an on-canvas
+  // overlay). This state is owned here so it survives a 3D→2D→3D toggle and is
+  // passed both to the rail (buttons) and down to MetricSurface3D (scene);
+  // the imperative camera actions go through surface3dRef. Session-only.
+  const [orbitLocked, setOrbitLocked] = useState(false);
+  const [autoRotateOn, setAutoRotateOn] = useState(false);
+  const surface3dRef = useRef(null);
   // 2D-only, additive metrics only (requests/tokens/cost) — see ChartToolbar's
   // showCompare prop below for where the restriction is enforced.
   const [comparePrev, setComparePrev] = useState(
@@ -647,11 +654,22 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
             comparePrev={comparePrev}
             onToggleCompare={toggleComparePrev}
             compareDelta={compareDelta}
+            chart3d={chartView === '3d' ? {
+              onView: (kind) => surface3dRef.current?.flyToView(kind),
+              onRotate: (radians) => surface3dRef.current?.nudgeRotate(radians),
+              onZoom: (factor) => surface3dRef.current?.nudgeZoom(factor),
+              onReset: () => surface3dRef.current?.resetView(),
+              orbitLocked,
+              autoRotateOn,
+              onToggleOrbitLock: () => setOrbitLocked(v => !v),
+              onToggleAutoRotate: () => setAutoRotateOn(v => !v),
+            } : null}
           />
           <div className="dash-chart-body">
             <Suspense fallback={<div className="obs-skeleton" style={{ height: '100%', borderRadius: 4 }} />}>
               {chartView === '3d' ? (
                 <MetricSurface3D
+                  ref={surface3dRef}
                   modelTimeSeries={modelTimeSeries}
                   metric={activeMetric}
                   xLabels={xLabels}
@@ -660,6 +678,8 @@ export default function Dashboard({ darkMode, onToggleDarkMode }) {
                   hiddenModels={hiddenModels}
                   modelToProvider={modelToProvider}
                   otherModels={otherModels}
+                  orbitLocked={orbitLocked}
+                  autoRotateOn={autoRotateOn}
                   onSwitchTo2D={() => { setChartView('2d'); localStorage.setItem('obs-chart-view', '2d'); }}
                 />
               ) : (

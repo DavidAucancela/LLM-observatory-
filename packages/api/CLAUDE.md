@@ -33,7 +33,7 @@ src/
 │   ├── email.js        Resend integration: activation, password reset, invitations
 │   ├── webhooks.js     deliverWebhooks() — HMAC-SHA256 signed POST, fire-and-forget
 │   ├── insights.js     computeInsights() — rule-based detectors over api_calls, stateless (no cron, no snapshot table)
-│   ├── pricingBridge.js costForProviderUsage / isKnownModel / canonicalModelId — the ONLY place packages/api turns tokens into a $ estimate. Wraps @llm-observatory/sdk's calculate* fns + *_PRICING tables; adds the provider→fn dispatch, the Anthropic cache-write 1.25× surcharge, and an inlined snapshot-suffix normalizeModelId (the npm SDK can lag the source). Used by providerUsage.js and metrics.js.
+│   ├── pricingBridge.js costForProviderUsage / isKnownModel / canonicalModelId — the ONLY place packages/api turns tokens into a $ estimate. Wraps @llm-observatory/sdk's calculate* fns + *_PRICING tables + normalizeModelId; adds only the provider→fn dispatch and the Anthropic cache-write 1.25× surcharge. Used by providerUsage.js and metrics.js.
 │   ├── providerUsage.js fetch{Anthropic,OpenAI}{Usage,RealCost} + summarizeBuckets (prices via pricingBridge, counts cache_creation tokens). No local pricing table anymore.
 │   └── llmJudge.js     judgeApiCall(provider, apiKey, {promptText, responseText}) — scores one request via a second LLM call. Covers all 5 providers via 3 request shapes (Anthropic /v1/messages; OpenAI-shaped /v1/chat/completions for openai/grok/kimi; Gemini generateContent). Keeps its own 5-line JUDGE_MODEL table on purpose (one model per provider, not a full surface) — not folded into pricingBridge.
 ├── utils/
