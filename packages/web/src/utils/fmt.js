@@ -26,6 +26,14 @@ export function formatCost(usd, { small = false } = {}) {
   return `$${n.toFixed(small ? 4 : 2)}`;
 }
 
+/** "1.2M" / "12.4K" / "845" — compact counts (tokens, requests) */
+export function fmtCompact(n) {
+  const v = Number(n) || 0;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
+  return Math.round(v).toString();
+}
+
 /** "845ms" under a second, "1.52s" from there up */
 export function fmtLatency(ms) {
   const n = Math.round(ms ?? 0);

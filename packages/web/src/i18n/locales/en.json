@@ -277,6 +277,9 @@
     "view2D": "2D view",
     "resetView": "Reset view",
     "nav3dLabel": "3D chart navigation",
+    "nav3dShort": "3D camera",
+    "railModels": "Models",
+    "railView": "View",
     "view3dIso": "3/4 view",
     "view3dIsoShort": "3/4",
     "view3dFront": "Front view",
@@ -379,7 +382,17 @@
     "efficiencySubtitle": "Cost per 1K tokens vs. average latency — bubble size is request volume",
     "axisLatency": "average latency →",
     "axisCostPer1k": "cost per 1K tokens →",
-    "efficiencyBestValue": "{{model}} has the best cost/latency ratio in this range."
+    "efficiencyBestValue": "{{model}} has the best cost/latency ratio in this range.",
+    "costBreakdownSubtitle": "Where each model's spend goes — input vs. output tokens",
+    "rangeTotal": "range total",
+    "segUnattributed": "Unattributed",
+    "segUnattributedHint": "Spend the token counts can't explain: rows imported by sync, models with no rate in the catalog, and Anthropic's cache-write surcharge.",
+    "chipRequests": "requests",
+    "chipCacheReadHint": "Tokens served from the prompt cache, billed at the standard input rate.",
+    "chipCacheWriteHint": "Tokens written to the prompt cache. Anthropic bills these at 1.25x input; the SDK does not price them, so they land in Unattributed.",
+    "chipErrors": "errors",
+    "chipErrorsHint": "Failed calls (status >= 400). They are never billed — their cost is forced to $0.",
+    "outputShare": "Output is {{pct}}% of the range's spend."
   },
   "finance": {
     "title": "Finance",

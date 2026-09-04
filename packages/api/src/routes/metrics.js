@@ -3,9 +3,33 @@ const { z } = require('zod');
 const pool = require('../db/pool');
 const { deliverWebhooks } = require('../services/webhooks');
 const { getRangeIntervals } = require('../utils/dateRange');
-const { isKnownModel } = require('../services/pricingBridge');
+const { isKnownModel, splitRecordedCost } = require('../services/pricingBridge');
 
 const router = express.Router();
+
+// Adds the input/output cost split to every by_model row of GET /summary, so
+// /models can draw a stacked bar per model ("where did this model's money go")
+// instead of one opaque total. Costs come back as numbers (the pg driver hands
+// DECIMAL back as a string, and these are derived values, not column reads);
+// the token/request counts stay exactly as the driver returned them so existing
+// consumers keep parsing them the way they already do.
+function enrichByModel(rows) {
+  return rows.map(row => {
+    const split = splitRecordedCost(row.provider, row.model, {
+      inputTokens:  Number(row.input_tokens)  || 0,
+      outputTokens: Number(row.output_tokens) || 0,
+      recordedCost: Number(row.total_cost)    || 0,
+    });
+    return {
+      ...row,
+      input_cost:        split.inputCost,
+      output_cost:       split.outputCost,
+      unattributed_cost: split.unattributedCost,
+      cost_split_priced: split.priced,
+      cost_split_approx: split.approx,
+    };
+  });
+}
 
 const MetricSchema = z.object({
   provider:           z.enum(['anthropic', 'openai', 'gemini', 'grok', 'kimi']).default('anthropic'),
@@ -326,11 +350,19 @@ router.get('/summary', async (req, res) => {
         currParams
       ),
       pool.query(
+        // Token columns come along so the /models cost breakdown can split each
+        // model's spend into input vs output (see enrichByModel below) instead
+        // of showing one opaque bar per model.
         `SELECT model, provider,
                 COUNT(*) as requests,
-                COALESCE(SUM(total_tokens),0) as total_tokens,
+                COALESCE(SUM(total_tokens),0)       as total_tokens,
+                COALESCE(SUM(input_tokens),0)       as input_tokens,
+                COALESCE(SUM(output_tokens),0)      as output_tokens,
+                COALESCE(SUM(cache_read_tokens),0)  as cache_read_tokens,
+                COALESCE(SUM(cache_write_tokens),0) as cache_write_tokens,
                 COALESCE(SUM(cost_usd),0)     as total_cost,
-                COALESCE(AVG(latency_ms),0)   as avg_latency
+                COALESCE(AVG(latency_ms),0)   as avg_latency,
+                COUNT(*) FILTER (WHERE status_code >= 400) as error_count
          FROM api_calls WHERE ${dateFilter}
          GROUP BY model, provider ORDER BY total_cost DESC`,
         currParams
@@ -432,7 +464,7 @@ router.get('/summary', async (req, res) => {
     res.json({
       summary:            summary.rows[0],
       prev_summary:       prevSummary.rows[0],
-      by_model:           byModel.rows,
+      by_model:           enrichByModel(byModel.rows),
       by_provider:        byProvider.rows,
       time_series:        timeSeries.rows,
       model_time_series:  modelTimeSeries.rows,

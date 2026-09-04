@@ -277,6 +277,9 @@
     "view2D": "Vista 2D",
     "resetView": "Restablecer vista",
     "nav3dLabel": "Navegación del gráfico 3D",
+    "nav3dShort": "Cámara 3D",
+    "railModels": "Modelos",
+    "railView": "Vista",
     "view3dIso": "Vista 3/4",
     "view3dIsoShort": "3/4",
     "view3dFront": "Vista frontal",
@@ -379,7 +382,17 @@
     "efficiencySubtitle": "Costo por 1K tokens vs. latencia promedio — el tamaño de la burbuja es volumen de solicitudes",
     "axisLatency": "latencia promedio →",
     "axisCostPer1k": "costo por 1K tokens →",
-    "efficiencyBestValue": "{{model}} tiene la mejor relación costo/latencia del rango."
+    "efficiencyBestValue": "{{model}} tiene la mejor relación costo/latencia del rango.",
+    "costBreakdownSubtitle": "En qué se va el gasto de cada modelo — tokens de entrada vs. de salida",
+    "rangeTotal": "total del rango",
+    "segUnattributed": "Sin desglosar",
+    "segUnattributedHint": "Gasto que los tokens no explican: filas importadas por sincronización, modelos sin tarifa en el catálogo y el recargo de escritura de caché de Anthropic.",
+    "chipRequests": "solicitudes",
+    "chipCacheReadHint": "Tokens servidos desde la caché de prompt, facturados a la tarifa estándar de entrada.",
+    "chipCacheWriteHint": "Tokens escritos en la caché de prompt. Anthropic los cobra a 1.25x la entrada; el SDK no los tarifica, así que caen en Sin desglosar.",
+    "chipErrors": "errores",
+    "chipErrorsHint": "Llamadas fallidas (status >= 400). Nunca se facturan — su costo se fuerza a $0.",
+    "outputShare": "La salida es el {{pct}}% del gasto del rango."
   },
   "finance": {
     "title": "Finanzas",
