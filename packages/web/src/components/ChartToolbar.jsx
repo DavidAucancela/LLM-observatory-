@@ -90,14 +90,17 @@ function IconResetView() {
 // Preset viewpoints + step zoom/rotate + orbit-lock/auto-rotate/reset for the
 // 3D view. `chart3d` is the control surface Dashboard wires to MetricSurface3D
 // (imperative camera actions via ref + the orbitLocked/autoRotateOn state it
-// owns); the whole block only renders in 3D mode. Laid out as a grid so it
-// stays symmetric with the rest of the rail — a labelled block matching
-// .dash-chart-rail-foot, three 4-column rows of equal-size cells.
+// owns); the whole block only renders in 3D mode. It is a
+// .dash-chart-rail-section like the legend and the foot — same border-top,
+// same short section label, same control height — so the merged camera cluster
+// reads as one more block of the panel rather than a transplanted overlay.
+// Rows are full-width grids of equal-size cells (4 / 4 / 3), never a 4-column
+// row left with a hole in it.
 function Chart3DControls({ chart3d, collapsed, t }) {
   const tab = collapsed ? -1 : 0;
   return (
-    <div className="dash-chart-rail-3d" role="group" aria-label={t('dashboard.nav3dLabel')}>
-      <div className="obs-section-label dash-chart-rail-3d-label">{t('dashboard.nav3dLabel')}</div>
+    <div className="dash-chart-rail-section dash-chart-rail-3d" role="group" aria-label={t('dashboard.nav3dLabel')}>
+      <div className="obs-section-label dash-chart-rail-section-label">{t('dashboard.nav3dShort')}</div>
       <div className="dash-chart-rail-3d-views">
         <button type="button" tabIndex={tab} onClick={() => chart3d.onView('iso')} title={t('dashboard.view3dIso')}>{t('dashboard.view3dIsoShort')}</button>
         <button type="button" tabIndex={tab} onClick={() => chart3d.onView('front')} title={t('dashboard.view3dFront')}>{t('dashboard.view3dFrontShort')}</button>
@@ -110,7 +113,7 @@ function Chart3DControls({ chart3d, collapsed, t }) {
         <button type="button" tabIndex={tab} onClick={() => chart3d.onZoom(0.8)} title={t('dashboard.zoomIn')} aria-label={t('dashboard.zoomIn')}><IconZoomIn /></button>
         <button type="button" tabIndex={tab} onClick={() => chart3d.onZoom(1.25)} title={t('dashboard.zoomOut')} aria-label={t('dashboard.zoomOut')}><IconZoomOut /></button>
       </div>
-      <div className="dash-chart-rail-3d-row">
+      <div className="dash-chart-rail-3d-row dash-chart-rail-3d-row--trio">
         <button
           type="button"
           tabIndex={tab}
@@ -298,57 +301,61 @@ export default function ChartToolbar({
           </button>
         </div>
 
-        <div className="dash-chart-rail-legend">
-          {models.map((model, mi) => (
-            <button
-              key={model}
-              type="button"
-              className="dash-chart-rail-legend-item"
-              style={{ opacity: hiddenModels.has(model) ? 0.4 : 1 }}
-              title={model === 'Other' ? t('dashboard.other') : model}
-              tabIndex={collapsed ? -1 : 0}
-              onClick={() => onToggleModel(model)}
-              onDoubleClick={() => onIsolateModel?.(model)}
-            >
-              <span
-                className="dash-chart-rail-legend-dot"
-                style={{ background: colorForModel(providerIndices[mi].provider, providerIndices[mi].index) }}
-              />
-              <span className="dash-chart-rail-legend-name">
-                {model === 'Other' ? t('dashboard.other') : shortModelName(model)}
-              </span>
-            </button>
-          ))}
-
-          {showCompare && (
-            <>
-              <div className="dash-chart-rail-legend-separator" />
+        <div className="dash-chart-rail-section dash-chart-rail-legend-block">
+          <div className="obs-section-label dash-chart-rail-section-label">{t('dashboard.railModels')}</div>
+          <div className="dash-chart-rail-legend">
+            {models.map((model, mi) => (
               <button
+                key={model}
                 type="button"
-                className={`dash-chart-rail-legend-compare${comparePrev ? ' active' : ''}`}
-                title={t('dashboard.comparePrevToggle')}
+                className="dash-chart-rail-legend-item"
+                style={{ opacity: hiddenModels.has(model) ? 0.4 : 1 }}
+                title={model === 'Other' ? t('dashboard.other') : model}
                 tabIndex={collapsed ? -1 : 0}
-                onClick={onToggleCompare}
+                onClick={() => onToggleModel(model)}
+                onDoubleClick={() => onIsolateModel?.(model)}
               >
-                <span className="dash-chart-rail-legend-compare-check">
-                  {comparePrev ? '✓' : ''}
-                </span>
+                <span
+                  className="dash-chart-rail-legend-dot"
+                  style={{ background: colorForModel(providerIndices[mi].provider, providerIndices[mi].index) }}
+                />
                 <span className="dash-chart-rail-legend-name">
-                  {t('dashboard.comparePrevToggle')}
+                  {model === 'Other' ? t('dashboard.other') : shortModelName(model)}
                 </span>
-                {comparePrev && typeof compareDelta === 'number' && !isNaN(compareDelta) && (
-                  <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 600, color: compareDelta > 0 ? 'var(--error)' : 'var(--success)' }}>
-                    {compareDelta > 0 ? '↑' : '↓'} {Math.abs(compareDelta).toFixed(1)}%
-                  </span>
-                )}
               </button>
-            </>
-          )}
+            ))}
+
+            {showCompare && (
+              <>
+                <div className="dash-chart-rail-legend-separator" />
+                <button
+                  type="button"
+                  className={`dash-chart-rail-legend-compare${comparePrev ? ' active' : ''}`}
+                  title={t('dashboard.comparePrevToggle')}
+                  tabIndex={collapsed ? -1 : 0}
+                  onClick={onToggleCompare}
+                >
+                  <span className="dash-chart-rail-legend-compare-check">
+                    {comparePrev ? '✓' : ''}
+                  </span>
+                  <span className="dash-chart-rail-legend-name">
+                    {t('dashboard.comparePrevToggle')}
+                  </span>
+                  {comparePrev && typeof compareDelta === 'number' && !isNaN(compareDelta) && (
+                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 600, color: compareDelta > 0 ? 'var(--error)' : 'var(--success)' }}>
+                      {compareDelta > 0 ? '↑' : '↓'} {Math.abs(compareDelta).toFixed(1)}%
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {chart3d && <Chart3DControls chart3d={chart3d} collapsed={collapsed} t={t} />}
 
-        <div className="dash-chart-rail-foot">
+        <div className="dash-chart-rail-section dash-chart-rail-foot">
+          <div className="obs-section-label dash-chart-rail-section-label">{t('dashboard.railView')}</div>
           <ViewToggle
             chartView={chartView}
             onSetChartView={onSetChartView}

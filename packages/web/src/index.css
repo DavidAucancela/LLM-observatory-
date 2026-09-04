@@ -694,6 +694,9 @@ body {
 /* ── Chart rail — vertical toolbar down the chart card's right edge
    (legend, usage hint, refresh, 2D/3D toggle) ── */
 .dash-chart-rail {
+  /* One height for every control in the rail (2D/3D toggle, refresh, hint,
+     3D camera buttons) so rows line up whichever blocks are visible. */
+  --rail-ctrl-h: 28px;
   flex-shrink: 0;
   width: 178px;
   min-height: 0;
@@ -702,7 +705,10 @@ body {
   gap: 12px;
   padding: 16px 16px 14px 12px;
   border-left: 1px solid var(--border);
-  overflow: hidden;
+  /* x hidden keeps the collapse (width → 0) clean; y scrolls so that on short
+     viewports the 3D block never pushes the foot's controls out of reach. */
+  overflow-x: hidden;
+  overflow-y: auto;
   transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.16s ease, border-color 0.22s ease;
 }
@@ -732,6 +738,30 @@ body {
 .dash-chart-rail-title {
   min-width: 0;
   line-height: 1.35;
+}
+
+/* Every block under the head shares one anatomy — border-top, an
+   obs-section-label, then full-width controls. The legend, the 3D camera
+   cluster and the view/actions foot are all .dash-chart-rail-section, so the
+   camera controls merged in from the old on-canvas overlay read as another
+   block of the same panel instead of a transplant. */
+.dash-chart-rail-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.dash-chart-rail-section-label { margin-bottom: 1px; }
+
+/* The legend is the only block that grows — it absorbs whatever height the
+   fixed blocks below it leave over. */
+.dash-chart-rail-legend-block {
+  flex: 1;
+  /* Keeps a couple of models visible even when the 3D block is open on a short
+     card; past that the rail itself scrolls. */
+  min-height: 60px;
 }
 
 .dash-chart-rail-legend {
@@ -830,25 +860,28 @@ body {
   color: var(--page);
 }
 
-.dash-chart-rail-foot {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+.dash-chart-rail-views { align-self: stretch; }
+/* -2px so the picker's own border lands the whole control on --rail-ctrl-h,
+   flush with the refresh/hint row below it. */
+.dash-chart-rail-views .obs-range-btn {
+  flex: 1;
+  text-align: center;
+  height: calc(var(--rail-ctrl-h) - 2px);
+  padding: 0 10px;
 }
 
-.dash-chart-rail-views { align-self: stretch; }
-.dash-chart-rail-views .obs-range-btn { flex: 1; text-align: center; }
-
 .dash-chart-rail-actions { display: flex; align-items: center; gap: 6px; }
-.dash-chart-rail-refresh { flex: 1; justify-content: center; }
+.dash-chart-rail-refresh {
+  flex: 1;
+  justify-content: center;
+  height: var(--rail-ctrl-h);
+  padding: 0 10px;
+}
 
 .dash-chart-rail-hint-btn {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: var(--rail-ctrl-h);
+  height: var(--rail-ctrl-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -864,30 +897,23 @@ body {
 
 /* ── 3D camera controls (3D view only) ──
    Moved out of MetricSurface3D's on-canvas .ms3d-nav overlay into the rail so
-   every chart control shares one panel. Mirrors .dash-chart-rail-foot: a
-   bordered block introduced by an obs-section-label, then rows of equal-size
-   cells laid out on a 4-column grid so it stays symmetric with the rail. */
-.dash-chart-rail-3d {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.dash-chart-rail-3d-label { margin-bottom: 1px; }
+   every chart control shares one panel. Same .dash-chart-rail-section anatomy
+   as the legend and the foot; rows are full-width grids of equal cells — four
+   for viewpoints and rotate/zoom, three for the toggles (--trio), so no row is
+   a 4-column track left with an empty cell. */
 .dash-chart-rail-3d-views,
 .dash-chart-rail-3d-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
+.dash-chart-rail-3d-row--trio { grid-template-columns: repeat(3, 1fr); }
 .dash-chart-rail-3d button {
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
-  height: 26px;
+  height: var(--rail-ctrl-h);
   padding: 0 4px;
   font-size: 10px;
   font-weight: 600;
@@ -1374,6 +1400,137 @@ body {
 .delta-up   { color: var(--success); background: color-mix(in oklab, var(--success) 10%, transparent); }
 .delta-down { color: var(--error);   background: color-mix(in oklab, var(--error)   10%, transparent); }
 .delta-flat { color: var(--muted); }
+
+/* ── Model cost breakdown (/models) ──────────────────────────────────────────
+   Stacked cost bar per model: the fill's width is the model's share of the
+   biggest spender, and inside it the segments split that spend into input /
+   output / unattributed. Segment widths come from the API's cost split
+   (pricingBridge.splitRecordedCost) and always sum to the recorded cost, so a
+   bar is never wider than the money it represents. */
+.mcost-card {
+  padding: 16px 20px 14px;
+  margin-bottom: 28px;
+}
+
+.mcost-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mcost-subtitle { font-size: 11px; color: var(--faint); margin-top: 4px; }
+.mcost-total-block { text-align: right; }
+.mcost-total-value {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1.1;
+}
+.mcost-total-caption { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.mcost-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 12px 0 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.mcost-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.mcost-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+/* Neutral swatches: the per-model hue lives on the bars, the legend only has
+   to say which tone means input vs output. */
+.mcost-swatch--in  { background: color-mix(in srgb, var(--text) 42%, transparent); }
+.mcost-swatch--out { background: var(--text); }
+/* Hatched, and opaque enough to read on its own: a row whose whole cost is
+   unattributed (a sync-imported model) is drawn entirely with this. */
+.mcost-swatch--other,
+.mcost-seg--other {
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--text) 34%, transparent) 0 3px,
+    color-mix(in srgb, var(--text) 13%, transparent) 3px 6px
+  );
+}
+
+.mcost-rows { display: flex; flex-direction: column; gap: 14px; }
+.mcost-row { display: flex; flex-direction: column; gap: 5px; }
+
+.mcost-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.mcost-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; align-self: center; }
+.mcost-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Cost and share are pinned right so the eye can scan the column. */
+.mcost-cost {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.mcost-share {
+  width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  flex-shrink: 0;
+}
+
+.mcost-track {
+  height: 14px;
+  background: var(--border-soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mcost-fill {
+  height: 100%;
+  display: flex;
+  border-radius: 3px;
+  overflow: hidden;
+  transition: width 0.4s ease;
+}
+.mcost-seg { height: 100%; display: block; min-width: 0; }
+
+.mcost-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.mcost-chip {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mcost-foot {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .mcost-card { padding: 14px; }
+  .mcost-head { flex-direction: column; }
+  .mcost-total-block { text-align: left; }
+}
 
 /* ── Tables ── */
 .obs-table {
@@ -2203,8 +2360,16 @@ body {
     padding-bottom: 0;
   }
   .dash-chart-rail-head { flex: 1 0 100%; }
-  .dash-chart-rail-legend {
+  /* Horizontal rail here: every section becomes a full-width row of the wrap
+     layout, its label spanning the row above its controls. */
+  .dash-chart-rail-section {
     flex: 1 1 100%;
+    padding-top: 10px;
+  }
+  .dash-chart-rail-section-label { flex: 1 0 100%; margin-bottom: 0; }
+  .dash-chart-rail-legend {
+    flex: 0 1 auto;
+    width: 100%;
     flex-direction: row;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -2222,24 +2387,20 @@ body {
   .dash-mobile-tabbar { display: flex; }
   .dash-mobile-tab-hidden { display: none; }
   .dash-chart-rail-foot {
-    flex: 1 1 100%;
-    flex-direction: row;
-    align-items: center;
-    padding-top: 10px;
-    border-top: 1px solid var(--border);
-  }
-  /* Horizontal rail here — the 3D controls become another full-width row, its
-     three grids sitting side by side instead of stacked. */
-  .dash-chart-rail-3d {
-    flex: 1 1 100%;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    padding-top: 10px;
   }
-  .dash-chart-rail-3d-label { flex: 1 0 100%; margin-bottom: 0; }
+  /* The 3D controls become another full-width row, their three grids sitting
+     side by side instead of stacked. */
+  .dash-chart-rail-3d {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
   .dash-chart-rail-3d-views,
   .dash-chart-rail-3d-row { flex: 0 1 auto; grid-template-columns: repeat(4, minmax(34px, 1fr)); }
+  .dash-chart-rail-3d-row--trio { grid-template-columns: repeat(3, minmax(34px, 1fr)); }
   .dash-chart-hint-banner { padding: 8px 12px; gap: 4px 10px; }
   .dash-chart-body {
     /* Override the base rule's `flex: 1` (flex-basis: 0%) — in this column

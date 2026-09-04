@@ -33,7 +33,7 @@ src/
 │   ├── email.js        Resend integration: activation, password reset, invitations
 │   ├── webhooks.js     deliverWebhooks() — HMAC-SHA256 signed POST, fire-and-forget
 │   ├── insights.js     computeInsights() — rule-based detectors over api_calls, stateless (no cron, no snapshot table)
-│   ├── pricingBridge.js costForProviderUsage / isKnownModel / canonicalModelId — the ONLY place packages/api turns tokens into a $ estimate. Wraps @llm-observatory/sdk's calculate* fns + *_PRICING tables + normalizeModelId; adds only the provider→fn dispatch and the Anthropic cache-write 1.25× surcharge. Used by providerUsage.js and metrics.js.
+│   ├── pricingBridge.js costForProviderUsage / splitRecordedCost / isKnownModel / canonicalModelId — the ONLY place packages/api turns tokens into a $ estimate. Wraps @llm-observatory/sdk's calculate* fns + *_PRICING tables + normalizeModelId; adds only the provider→fn dispatch and the Anthropic cache-write 1.25× surcharge. `splitRecordedCost(provider, model, {inputTokens, outputTokens, recordedCost})` reconciles a modelled input/output split against an already-recorded cost for the /models breakdown chart: the parts ALWAYS sum to `recordedCost` — a positive residual (sync-imported rows, models with no rate, the cache-write surcharge) comes back as `unattributedCost`, a negative one scales input/output down and flags `approx`. Used by providerUsage.js and metrics.js.
 │   ├── providerUsage.js fetch{Anthropic,OpenAI}{Usage,RealCost} + summarizeBuckets (prices via pricingBridge, counts cache_creation tokens). No local pricing table anymore.
 │   └── llmJudge.js     judgeApiCall(provider, apiKey, {promptText, responseText}) — scores one request via a second LLM call. Covers all 5 providers via 3 request shapes (Anthropic /v1/messages; OpenAI-shaped /v1/chat/completions for openai/grok/kimi; Gemini generateContent). Keeps its own 5-line JUDGE_MODEL table on purpose (one model per provider, not a full surface) — not folded into pricingBridge.
 ├── utils/
@@ -131,7 +131,7 @@ Auth tables:
 |-------|--------|------|-------------|
 | `/api/metrics` | POST | Observatory token | Record metric from SDK |
 | `/api/metrics` | GET | JWT | List (paginated + filtered) |
-| `/api/metrics/summary` | GET | JWT | Aggregated stats + time series |
+| `/api/metrics/summary` | GET | JWT | Aggregated stats + time series. `by_model` rows carry the token split (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `error_count`) plus the cost split added by `enrichByModel` (`input_cost`, `output_cost`, `unattributed_cost`, `cost_split_priced`, `cost_split_approx`) — the three costs always sum to `total_cost` |
 | `/api/metrics/projection` | GET | JWT | Monthly spend projection |
 | `/api/metrics/export` | GET | JWT | CSV download |
 | `/api/metrics/:id` | GET | JWT | Single metric detail |

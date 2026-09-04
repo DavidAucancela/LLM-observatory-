@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ProviderBadge from '../components/ProviderBadge';
-import HBar from '../components/HBar';
+import ModelCostBreakdown from '../components/ModelCostBreakdown';
 import TopBar from '../components/TopBar';
-import { formatCost, fmtLatency } from '../utils/fmt';
+import { formatCost, fmtLatency, fmtCompact } from '../utils/fmt';
 import { useApi } from '../hooks/useApi';
 
 const RANGES = ['24h', '7d', '30d', '90d'];
@@ -13,17 +13,21 @@ const PROVIDER_COLORS = { anthropic: '#D97706', openai: '#059669', gemini: '#428
 function parseModel(m) {
   return {
     ...m,
-    total_cost:   parseFloat(m.total_cost)   || 0,
-    requests:     parseInt(m.requests, 10)   || 0,
-    total_tokens: parseInt(m.total_tokens, 10) || 0,
-    avg_latency:  parseFloat(m.avg_latency)  || 0,
+    total_cost:        parseFloat(m.total_cost)   || 0,
+    requests:          parseInt(m.requests, 10)   || 0,
+    total_tokens:      parseInt(m.total_tokens, 10) || 0,
+    avg_latency:       parseFloat(m.avg_latency)  || 0,
+    // Cost split + token detail behind the breakdown chart (added to
+    // GET /api/metrics/summary's by_model rows).
+    input_tokens:       parseInt(m.input_tokens, 10)       || 0,
+    output_tokens:      parseInt(m.output_tokens, 10)      || 0,
+    cache_read_tokens:  parseInt(m.cache_read_tokens, 10)  || 0,
+    cache_write_tokens: parseInt(m.cache_write_tokens, 10) || 0,
+    error_count:        parseInt(m.error_count, 10)        || 0,
+    input_cost:         parseFloat(m.input_cost)         || 0,
+    output_cost:        parseFloat(m.output_cost)        || 0,
+    unattributed_cost:  parseFloat(m.unattributed_cost)  || 0,
   };
-}
-
-function fmt(n) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return Math.round(n).toString();
 }
 
 const PROVIDER_LABELS = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', grok: 'Grok', kimi: 'Kimi' };
@@ -142,8 +146,6 @@ export default function Models({ darkMode, onToggleDarkMode }) {
   };
 
   const allModels = (summary?.by_model || []).map(parseModel);
-  const maxCost = Math.max(...allModels.map(m => m.total_cost), 0.001);
-  const sorted  = [...allModels].sort((a, b) => b.total_cost - a.total_cost);
 
   return (
     <main className="obs-main obs-fade-in">
@@ -167,23 +169,7 @@ export default function Models({ darkMode, onToggleDarkMode }) {
           <>
             <EfficiencyScatter models={allModels} />
 
-            {sorted.length > 0 && (
-              <>
-                <div className="obs-section-label" style={{ marginBottom: 12 }}>{t('activity.costByModel')} · {range}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 32 }}>
-                  {sorted.map((m, i) => (
-                    <HBar
-                      key={i}
-                      label={m.model}
-                      value={m.total_cost}
-                      max={maxCost}
-                      color={PROVIDER_COLORS[m.provider] ?? 'var(--text)'}
-                      valueLabel={formatCost(m.total_cost, { small: true })}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+            <ModelCostBreakdown models={allModels} range={range} />
 
             <div className="obs-section-label" style={{ marginBottom: 8 }}>{t('activity.allModels')}</div>
             <div className="obs-table-wrap">
@@ -206,7 +192,7 @@ export default function Models({ darkMode, onToggleDarkMode }) {
                       <td className="col-mono">{m.model}</td>
                       <td><ProviderBadge provider={m.provider} /></td>
                       <td className="col-num">{m.requests.toLocaleString()}</td>
-                      <td className="col-num">{fmt(m.total_tokens)}</td>
+                      <td className="col-num">{fmtCompact(m.total_tokens)}</td>
                       <td className="col-num">{formatCost(m.total_cost, { small: true })}</td>
                       <td className="col-num col-muted">{fmtLatency(m.avg_latency)}</td>
                     </tr>
